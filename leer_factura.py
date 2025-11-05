@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import os
 import hashlib
 from datetime import datetime
+from email.utils import parsedate_to_datetime
 
 # Cargar variables del .env
 load_dotenv()
@@ -115,28 +116,39 @@ def procesar_correos():
     # Buscar solo correos desde la última fecha procesada
     if ultima_fecha:
         # Formato IMAP: DD-MMM-YYYY (ejemplo: 12-Oct-2025)
-        fecha_busqueda = ultima_fecha.strftime("%d-%b-%Y")
+        # Restamos 1 día para asegurarnos de no perder correos del mismo día
+        fecha_busqueda = (ultima_fecha.replace(hour=0, minute=0, second=0, microsecond=0)).strftime("%d-%b-%Y")
         result, data = mail.search(None, f'SINCE {fecha_busqueda}')
+        print(f"🔍 Buscando correos desde: {fecha_busqueda}")
     else:
         result, data = mail.search(None, 'ALL')
+        print("🔍 Buscando todos los correos")
 
     correos = data[0].split()
+    print(f"📧 Encontrados {len(correos)} correos para revisar")
 
     for num in correos:
         result, data = mail.fetch(num, "(RFC822)")
         raw_email = data[0][1]
         msg = email.message_from_bytes(raw_email)
 
-        # Obtener fecha del correo
+        # Obtener fecha del correo usando parsedate_to_datetime (más robusto)
         fecha_email = msg.get("Date")
         fecha_email_dt = None
-        try:
-            fecha_email_dt = datetime.strptime(fecha_email[:31], "%a, %d %b %Y %H:%M:%S %z")
-        except Exception:
-            pass
+        if fecha_email:
+            try:
+                fecha_email_dt = parsedate_to_datetime(fecha_email)
+                # Convertir a naive datetime para comparar con ultima_fecha
+                if fecha_email_dt.tzinfo:
+                    fecha_email_dt = fecha_email_dt.replace(tzinfo=None)
+            except Exception as e:
+                print(f"⚠️  No se pudo parsear fecha del correo {num}: {fecha_email} - {e}")
+                # Si no podemos parsear, procesamos el correo de todas formas
+                fecha_email_dt = None
 
-        # Si hay última fecha, saltar correos anteriores
-        if ultima_fecha and fecha_email_dt and fecha_email_dt.replace(tzinfo=None) <= ultima_fecha:
+        # Si hay última fecha y pudimos parsear, saltar correos anteriores
+        # Pero solo si la fecha es anterior (no igual, para procesar del mismo día)
+        if ultima_fecha and fecha_email_dt and fecha_email_dt < ultima_fecha:
             continue
 
         for part in msg.walk():
