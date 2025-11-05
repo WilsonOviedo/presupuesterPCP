@@ -12,6 +12,7 @@ services:
       # Sobre-escribir host/puerto para DB dentro de la red de docker
       DB_HOST: postgres
       DB_PORT: 5432
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-300}
     depends_on:
       - postgres
     restart: unless-stopped

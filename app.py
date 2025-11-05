@@ -1,6 +1,8 @@
-from flask import Flask, request, render_template_string, redirect, url_for
+from flask import Flask, request, render_template_string, redirect, url_for, jsonify
 import io
 from contextlib import redirect_stdout
+from threading import Thread, Lock
+import time
 
 # Reutilizamos la lógica existente sin levantar su servidor
 import buscar_precios_web as precios
@@ -141,14 +143,39 @@ LEER_FACTURAS_HTML = """
 <body>
   <a class="button" href="{{ url_for('menu') }}">← Volver</a>
   <h2>Leer facturas (IMAP)</h2>
-  <form method="post" action="{{ url_for('leer_facturas_page') }}">
-    <button type="submit">Ejecutar procesamiento</button>
+  <form id="run-form" method="post" action="{{ url_for('leer_facturas_page') }}">
+    <button type="submit" id="run-btn">{{ 'Procesando…' if running else 'Ejecutar procesamiento' }}</button>
   </form>
 
-  {% if salida is not none %}
-    <h3>Resultado</h3>
-    <pre>{{ salida }}</pre>
-  {% endif %}
+  <div id="status" style="margin-top:10px;">Estado: {{ 'En ejecución' if running else ('Finalizado' if finished else 'Idle') }}</div>
+
+  <h3>Resultado</h3>
+  <pre id="log" style="white-space: pre-wrap;">{{ salida or '' }}</pre>
+
+  <script>
+    (function(){
+      const statusEl = document.getElementById('status');
+      const logEl = document.getElementById('log');
+      const btn = document.getElementById('run-btn');
+      let polling = true;
+
+      function tick(){
+        fetch('{{ url_for('leer_facturas_status') }}').then(r=>r.json()).then(j=>{
+          statusEl.textContent = 'Estado: ' + (j.running ? 'En ejecución' : (j.finished ? 'Finalizado' : 'Idle'));
+          if(j.running){ btn.disabled = true; btn.textContent = 'Procesando…'; }
+          else { btn.disabled = false; btn.textContent = 'Ejecutar procesamiento'; }
+          if(typeof j.output === 'string'){
+            logEl.textContent = j.output;
+            // Auto-scroll al final
+            logEl.scrollTop = logEl.scrollHeight;
+          }
+        }).catch(()=>{}).finally(()=>{
+          if(polling) setTimeout(tick, 1500);
+        });
+      }
+      tick();
+    })();
+  </script>
 </body>
 </html>
 """
@@ -279,6 +306,21 @@ def _template_precios():
 @app.route("/")
 def menu():
     return render_template_string(MENU_HTML)
+_job_state = {"running": False, "output": "", "finished": False, "started_at": None}
+_job_lock = Lock()
+
+def _run_leer_facturas_job():
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        try:
+            facturas.procesar_correos()
+        except Exception as e:
+            print(f"❌ Error: {e}")
+    # Guardar salida y marcar fin
+    with _job_lock:
+        _job_state["output"] = buf.getvalue()
+        _job_state["running"] = False
+        _job_state["finished"] = True
 
 
 @app.route("/precios", methods=["GET"])
@@ -335,16 +377,29 @@ def precios_index():
 
 @app.route("/leer-facturas", methods=["GET", "POST"])
 def leer_facturas_page():
-    salida = None
     if request.method == "POST":
-        buf = io.StringIO()
-        try:
-            with redirect_stdout(buf):
-                facturas.procesar_correos()
-        except Exception as e:
-            print(f"❌ Error: {e}")
-        salida = buf.getvalue()
-    return render_template_string(LEER_FACTURAS_HTML, salida=salida)
+        with _job_lock:
+            if not _job_state["running"]:
+                _job_state["running"] = True
+                _job_state["finished"] = False
+                _job_state["output"] = ""
+                _job_state["started_at"] = time.time()
+                t = Thread(target=_run_leer_facturas_job, daemon=True)
+                t.start()
+    with _job_lock:
+        running = _job_state["running"]
+        finished = _job_state["finished"]
+        salida = _job_state["output"]
+    return render_template_string(LEER_FACTURAS_HTML, salida=salida, running=running, finished=finished)
+
+@app.route("/leer-facturas/status", methods=["GET"])
+def leer_facturas_status():
+    with _job_lock:
+        return jsonify({
+            "running": _job_state["running"],
+            "finished": _job_state["finished"],
+            "output": _job_state["output"],
+        })
 
 
 @app.route("/calculadora", methods=["GET"])

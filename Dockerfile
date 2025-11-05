@@ -18,7 +18,8 @@ COPY . /app
 
 EXPOSE 5000
 
-# Ejecutar con gunicorn en 0.0.0.0:5000
-CMD ["gunicorn", "-b", "0.0.0.0:5000", "app:app"]
+# Ejecutar con gunicorn en 0.0.0.0:5000 (timeout configurable)
+ENV GUNICORN_TIMEOUT=300
+CMD ["gunicorn", "-b", "0.0.0.0:5000", "--workers", "2", "--threads", "4", "--timeout", "${GUNICORN_TIMEOUT}", "app:app"]
 
 
