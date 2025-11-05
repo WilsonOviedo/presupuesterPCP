@@ -20,6 +20,7 @@ EXPOSE 5000
 
 # Ejecutar con gunicorn en 0.0.0.0:5000 (timeout configurable)
 ENV GUNICORN_TIMEOUT=300
-CMD ["gunicorn", "-b", "0.0.0.0:5000", "--workers", "2", "--threads", "4", "--timeout", "${GUNICORN_TIMEOUT}", "app:app"]
+# Usamos sh -c para que se expanda la variable de entorno
+CMD ["sh", "-c", "gunicorn -b 0.0.0.0:5000 --workers 2 --threads 4 --timeout ${GUNICORN_TIMEOUT:-300} app:app"]
 
 
