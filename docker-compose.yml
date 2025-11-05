@@ -1,0 +1,35 @@
+version: "3.9"
+
+services:
+  web:
+    build: .
+    container_name: scrapper_web
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    environment:
+      # Sobre-escribir host/puerto para DB dentro de la red de docker
+      DB_HOST: postgres
+      DB_PORT: 5432
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15
+    container_name: scrapper_db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-scrapper}
+      POSTGRES_USER: ${DB_USER:-scrapper}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-scrapper}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+
+
