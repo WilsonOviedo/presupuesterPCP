@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% block title %}Buscar precios{% endblock %}
+{% block head %}
+  <style>
+    .form-grid { display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 10px 14px; align-items: start; }
+    .field { display: flex; flex-direction: column; min-width: 0; }
+    .form-grid label { font-weight: 600; display: block; margin-bottom: 6px; }
+    .form-grid input, .form-grid select { width: 100%; box-sizing: border-box; padding: 6px 8px; height: 34px; }
+    .actions-row { grid-column: 1 / -1; display: flex; gap: 10px; }
+  </style>
+{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('menu') }}">← Volver</a>
+  </div>
+  <h2>Buscar en la base de datos de precios</h2>
+
+  <form method="get" action="{{ url_for('precios_index') }}" class="form-grid">
+    <div class="field">
+      <label>Proveedor (parcial):</label>
+      <input name="proveedor" value="{{request.args.get('proveedor','')}}" placeholder="Ej: Everest, Proveedor X">
+    </div>
+    <div class="field">
+      <label>Producto (parcial):</label>
+      <input name="producto" value="{{request.args.get('producto','')}}" placeholder="Ej: PLC, cable, motor">
+    </div>
+    <div class="field">
+      <label>Fecha inicio (YYYY-MM-DD [HH:MM[:SS]]):</label>
+      <input name="fecha_inicio" value="{{request.args.get('fecha_inicio','')}}" placeholder="YYYY-MM-DD [HH:MM[:SS]]">
+    </div>
+    <div class="field">
+      <label>Fecha fin (YYYY-MM-DD [HH:MM[:SS]]):</label>
+      <input name="fecha_fin" value="{{request.args.get('fecha_fin','')}}" placeholder="YYYY-MM-DD [HH:MM[:SS]]">
+    </div>
+    <div class="field">
+      <label>Límite:</label>
+      <input name="limite" value="{{request.args.get('limite','200')}}">
+    </div>
+    <div class="field">
+      <label>Filtro:</label>
+      <select name="filtro">
+        <option value="sin" {% if request.args.get('filtro','sin') == 'sin' %}selected{% endif %}>SIN FILTRO</option>
+        <option value="actual" {% if request.args.get('filtro') == 'actual' %}selected{% endif %}>PRECIO MÁS ACTUAL</option>
+        <option value="alto" {% if request.args.get('filtro') == 'alto' %}selected{% endif %}>PRECIO MÁS ALTO</option>
+        <option value="bajo" {% if request.args.get('filtro') == 'bajo' %}selected{% endif %}>PRECIO MÁS BAJO</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Margen %:</label>
+      <input name="margen" value="{{request.args.get('margen','0')}}" placeholder="% margen">
+    </div>
+    <div class="actions-row">
+      <a class="button button-secondary" href="{{ url_for('precios_index') }}">Limpiar</a>
+      <button type="submit" class="button">Buscar</button>
+    </div>
+  </form>
+
+  {% if rows is not none %}
+    <h3>Resultados ({{rows|length}})</h3>
+    {% if rows|length == 0 %}
+      <p>No se encontraron resultados.</p>
+    {% else %}
+      <table>
+        <tr><th>Proveedor</th><th>Fecha</th><th>Producto</th><th>Precio</th><th>Precio de venta</th></tr>
+        {% for r in rows %}
+          <tr>
+            <td>{{ r.proveedor }}</td>
+            <td>{{ r.fecha.strftime("%Y-%m-%d %H:%M:%S") if r.fecha else "" }}</td>
+            <td>{{ r.producto }}</td>
+            <td style="text-align:right;">{{ "{:,.2f}".format(r.precio) if r.precio is not none else "" }}</td>
+            <td style="text-align:right;">{{ "{:,.2f}".format(r.precio_venta) if r.precio_venta is not none else "" }}</td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% endif %}
+  {% endif %}
+{% endblock %}
+{% block scripts %}
+  <script>
+    (function(){
+      const locale = 'es-ES';
+      const nf0 = new Intl.NumberFormat(locale);
+      function unformat(val){ if(val==null) return ''; val=String(val).trim().replace(/\s/g,''); if(/,\d{1,2}$/.test(val)){ val=val.replace(/\./g,'').replace(/,/g,'.'); } else { val=val.replace(/\./g,''); } return val; }
+      function parseNum(v){ const n = parseFloat(unformat(v)); return isNaN(n)?null:n; }
+      function formatEl(el){ const n=parseNum(el.value); if(n!=null){ if(el.name==='limite'){ el.value=nf0.format(Math.trunc(n)); } else { el.value=nf0.format(n); } } }
+      const form=document.querySelector('form[action="{{ url_for('precios_index') }}"]'); if(!form) return;
+      const inputs=Array.from(form.querySelectorAll('input[name="margen"], input[name="limite"]'));
+      inputs.forEach(el=>{ el.addEventListener('blur', ()=>formatEl(el)); el.addEventListener('focus', ()=>{ el.value=unformat(el.value); }); if(el.value) formatEl(el); });
+      form.addEventListener('submit', ()=>{ inputs.forEach(el=>{ el.value=unformat(el.value); }); });
+    })();
+  </script>
+{% endblock %}
+
+

@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title %}Calculadora{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;"><a class="button button-secondary" href="{{ url_for('menu') }}">← Volver</a></div>
+  <h2>Calculadora de precio</h2>
+  <form method="get" action="{{ url_for('calculadora') }}">
+    <div class="field">
+      <label>Precio (costo)</label>
+      <input type="text" inputmode="decimal" autocomplete="off" name="precio" value="{{ request.args.get('precio','') }}" placeholder="Ej: 1.000,50">
+    </div>
+    <div class="field">
+      <label>Margen %</label>
+      <input type="text" inputmode="decimal" autocomplete="off" name="margen" value="{{ request.args.get('margen','') }}" placeholder="Ej: 20">
+    </div>
+    <div class="actions">
+      <button type="submit" class="button">Calcular</button>
+      <a class="button button-secondary" href="{{ url_for('calculadora') }}">Limpiar</a>
+    </div>
+  </form>
+  {% if resultado is not none %}
+  <div class="result" style="margin-top:16px;background:#f7f7f7;padding:12px;border-radius:6px;">
+    <div><strong>Precio de venta:</strong> {{ "{:,.2f}".format(resultado) }}</div>
+    <div><small>Fórmula: precio × 100 / (100 − margen)</small></div>
+  </div>
+  {% endif %}
+{% endblock %}
+{% block scripts %}
+  <script>
+    (function(){
+      const locale = 'es-ES';
+      const nf0 = new Intl.NumberFormat(locale);
+      function unformat(val){ if(val==null) return ''; val=String(val).trim().replace(/\s/g,''); if(/,\d{1,2}$/.test(val)){ val=val.replace(/\./g,'').replace(/,/g,'.'); } else { val=val.replace(/\./g,''); } return val; }
+      function parseNum(v){ const n = parseFloat(unformat(v)); return isNaN(n)?null:n; }
+      function formatEl(el){ const n=parseNum(el.value); if(n!=null){ el.value=nf0.format(n); } }
+      const f = document.querySelector('form[action="{{ url_for('calculadora') }}"]'); if(!f) return;
+      const precio = f.querySelector('input[name=precio]');
+      const margen = f.querySelector('input[name=margen]');
+      [precio, margen].forEach(el=>{ el.addEventListener('blur', ()=>formatEl(el)); el.addEventListener('focus', ()=>{ el.value = unformat(el.value); }); if(el.value) formatEl(el); });
+      f.addEventListener('submit', ()=>{ [precio, margen].forEach(el=>{ el.value = unformat(el.value); }); });
+    })();
+  </script>
+{% endblock %}
+
+

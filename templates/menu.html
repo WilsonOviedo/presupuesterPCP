@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}Menú{% endblock %}
+{% block content %}
+  <h2>Menú principal</h2>
+
+  <div class="card">
+    <h3>Buscar precios</h3>
+    <p>Consultar precios guardados en la base de datos.</p>
+    <a class="button" href="{{ url_for('precios_index') }}">Abrir búsqueda</a>
+  </div>
+
+  <div class="card">
+    <h3>Leer facturas</h3>
+    <p>Procesar facturas XML desde el correo IMAP y cargar precios.</p>
+    <a class="button" href="{{ url_for('leer_facturas_page') }}">Abrir lector</a>
+  </div>
+
+  <div class="card">
+    <h3>Calculadora de precio</h3>
+    <p>Ingresa precio y margen para calcular el precio de venta.</p>
+    <a class="button" href="{{ url_for('calculadora') }}">Abrir calculadora</a>
+  </div>
+
+  <div class="card">
+    <h3>Historial de precios</h3>
+    <p>Selecciona un producto para ver un gráfico de su evolución de precio.</p>
+    <a class="button" href="{{ url_for('historial') }}">Abrir historial</a>
+  </div>
+{% endblock %}
+
+

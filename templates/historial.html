@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+{% block title %}Historial de precios{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('menu') }}">← Volver</a>
+  </div>
+  <h2>Historial de precios</h2>
+  <form method="get" action="{{ url_for('historial') }}" style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;max-width:700px;">
+    <div class="field">
+      <label>Producto (parcial)</label>
+      <input name="producto" value="{{ producto or '' }}" placeholder="Ej: PLC, cable, motor">
+    </div>
+    <div>
+      <button type="submit" class="button">Buscar ítems</button>
+    </div>
+  </form>
+
+  {% if items is not none %}
+    {% if items %}
+      <h3>Selecciona ítems para graficar</h3>
+      <style>
+        .hist-layout { display: grid; grid-template-columns: 1fr 4fr; gap: 14px; align-items: start; }
+        .items-list { display: grid; grid-template-columns: repeat(auto-fill,minmax(280px,1fr)); gap: 8px; }
+        .item-row { display:flex; gap:8px; align-items:center; border:1px solid #eee; padding:8px; border-radius:6px; }
+        .chart-wrap { position: sticky; top: 8px; margin-right: 4px; }
+        #chart { width: 100% !important; height: 420px !important; }
+      </style>
+      <div class="hist-layout">
+        <div>
+          <div id="items" class="items-list">
+            {% for it in items %}
+            <label class="item-row">
+              <input type="checkbox" class="item-check" value="{{ it.producto }}" data-proveedor="{{ it.proveedor }}">
+              <span>{{ it.producto }} — {{ it.proveedor }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chart" height="360"></canvas>
+        </div>
+      </div>
+    {% else %}
+      <p>No se encontraron ítems.</p>
+    {% endif %}
+  {% endif %}
+{% endblock %}
+{% block scripts %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    (function(){
+      const chartEl = document.getElementById('chart');
+      if(!chartEl) return;
+      const ctx = chartEl.getContext('2d');
+      const colors = ['#1976d2', '#d32f2f', '#388e3c', '#f57c00', '#7b1fa2', '#00796b', '#5d4037', '#455a64', '#c2185b', '#303f9f'];
+      let colorIdx = 0;
+      let labelsUnion = [];
+      const dsMap = new Map();
+      const chart = new Chart(ctx, {
+        type: 'line',
+        data: { labels: labelsUnion, datasets: [] },
+        options: {
+          spanGaps: true,
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: { padding: { right: 36, left: 8, top: 8, bottom: 8 } },
+          scales: {
+            x: { ticks: { autoSkip: true, maxTicksLimit: 14 } },
+            y: { beginAtZero: false }
+          },
+          interaction: { mode: 'nearest', axis: 'x', intersect: false },
+          plugins: { tooltip: { mode: 'index', intersect: false, position: 'nearest' } },
+          elements: { point: { radius: 4, hitRadius: 20, hoverRadius: 8 } }
+        }
+      });
+
+      function pickColor(){ const c = colors[colorIdx % colors.length]; colorIdx++; return c; }
+
+      function mergeLabels(newLabels){
+        const set = new Set(labelsUnion);
+        newLabels.forEach(l => set.add(l));
+        labelsUnion = Array.from(set).sort();
+        chart.data.labels = labelsUnion;
+      }
+
+      async function fetchSeries(producto, proveedor){
+        const url = new URL('{{ url_for('historial_data') }}', window.location.origin);
+        url.searchParams.set('producto', producto);
+        if(proveedor){ url.searchParams.set('proveedor', proveedor); }
+        const res = await fetch(url);
+        return await res.json();
+      }
+
+      function alignData(labels, labelsUnion, data){
+        const idxMap = new Map(labels.map((l,i)=>[l,i]));
+        return labelsUnion.map(l => idxMap.has(l) ? data[idxMap.get(l)] : null);
+      }
+
+      async function addSeries(producto, proveedor){
+        const key = producto + ' — ' + (proveedor || '');
+        if(dsMap.has(key)) return;
+        const j = await fetchSeries(producto, proveedor);
+        mergeLabels(j.labels);
+        const color = pickColor();
+        const aligned = alignData(j.labels, labelsUnion, j.data);
+        const label = (j.producto || producto) + (j.proveedor ? (' — ' + j.proveedor) : '');
+        const ds = { label, data: aligned, borderColor: color, tension: 0.15, fill: false };
+        dsMap.set(key, { raw: j, color, ds });
+        chart.data.datasets.push(ds);
+        // Re-alinear todas las demás series a las nuevas labels usando el label como clave
+        chart.data.datasets.forEach(d => {
+          const meta = Array.from(dsMap.values()).find(x => x.ds.label === d.label);
+          if(meta){ d.data = alignData(meta.raw.labels, labelsUnion, meta.raw.data); }
+        });
+        chart.update();
+      }
+
+      function removeSeries(producto, proveedor){
+        const key = producto + ' — ' + (proveedor || '');
+        if(!dsMap.has(key)) return;
+        const label = (producto) + (proveedor ? (' — ' + proveedor) : '');
+        const idx = chart.data.datasets.findIndex(d=>d.label===label);
+        if(idx>=0){ chart.data.datasets.splice(idx,1); }
+        dsMap.delete(key);
+        chart.update();
+      }
+
+      document.querySelectorAll('.item-check').forEach(cb=>{
+        cb.addEventListener('change', ()=>{
+          const proveedor = cb.dataset.proveedor || '';
+          if(cb.checked) addSeries(cb.value, proveedor); else removeSeries(cb.value, proveedor);
+        });
+      });
+    })();
+  </script>
+{% endblock %}
+
+

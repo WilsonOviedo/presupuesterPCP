@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}App{% endblock %}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 8px; zoom: 0.8; }
+    .container { max-width: 98vw; width: 100%; margin: 0 auto; }
+    .card { border: 1px solid #ddd; padding: 16px; border-radius: 8px; margin: 12px 0; }
+    a.button, button.button { display: inline-block; padding: 8px 14px; background: #1976d2; color: #fff; text-decoration: none; border-radius: 6px; border: none; cursor: pointer; }
+    a.button:hover, button.button:hover { background: #125a9e; }
+    a.button-secondary { background: #777; }
+    a.button-secondary:hover { background: #5b5b5b; }
+    table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+    th, td { border: 1px solid #ddd; padding: 8px; }
+    th { background: #f2f2f2; text-align: left; }
+    table tr:nth-child(even) { background: #fafafa; }
+    .actions { margin-top: 8px; display: flex; gap: 10px; align-items: center; }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
+
+

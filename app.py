@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template_string, redirect, url_for, jsonify
+from flask import Flask, request, render_template, render_template_string, redirect, url_for, jsonify
 import io
 from contextlib import redirect_stdout
 from threading import Thread, Lock
@@ -305,7 +305,7 @@ def _template_precios():
 
 @app.route("/")
 def menu():
-    return render_template_string(MENU_HTML)
+    return render_template('menu.html')
 _job_state = {"running": False, "output": "", "finished": False, "started_at": None}
 _job_lock = Lock()
 
@@ -372,7 +372,7 @@ def precios_index():
                 "precio_venta": precio_venta,
             })
 
-    return render_template_string(_template_precios(), rows=rows, request=request, margen_val=margen_val)
+    return render_template('precios.html', rows=rows, request=request, margen_val=margen_val)
 
 
 @app.route("/leer-facturas", methods=["GET", "POST"])
@@ -390,7 +390,7 @@ def leer_facturas_page():
         running = _job_state["running"]
         finished = _job_state["finished"]
         salida = _job_state["output"]
-    return render_template_string(LEER_FACTURAS_HTML, salida=salida, running=running, finished=finished)
+    return render_template('leer_facturas.html', salida=salida, running=running, finished=finished)
 
 @app.route("/leer-facturas/status", methods=["GET"])
 def leer_facturas_status():
@@ -415,7 +415,67 @@ def calculadora():
                 resultado = precio_val * 100.0 / (100.0 - margen_val)
     except ValueError:
         resultado = None
-    return render_template_string(CALCULADORA_HTML, request=request, resultado=resultado)
+    return render_template('calculadora.html', request=request, resultado=resultado)
+
+@app.route("/historial", methods=["GET"])
+def historial():
+    producto = request.args.get('producto')
+    items = None
+    if producto:
+        conn, cur = precios.conectar()
+        try:
+            cur.execute(
+                """
+                SELECT DISTINCT producto, proveedor
+                FROM precios
+                WHERE producto ILIKE %s
+                ORDER BY producto ASC, proveedor ASC
+                LIMIT 50
+                """,
+                (f"%{producto}%",)
+            )
+            rows = cur.fetchall()
+            items = [{"producto": r['producto'], "proveedor": r['proveedor']} for r in rows]
+        finally:
+            cur.close(); conn.close()
+    return render_template('historial.html', items=items, producto=producto)
+
+@app.route("/historial/data", methods=["GET"])
+def historial_data():
+    producto = request.args.get('producto')
+    proveedor = request.args.get('proveedor')
+    if not producto:
+        return jsonify({"labels": [], "data": []})
+    conn, cur = precios.conectar()
+    try:
+        if proveedor:
+            cur.execute(
+                """
+                SELECT fecha, precio
+                FROM precios
+                WHERE producto = %s AND proveedor = %s
+                ORDER BY fecha ASC NULLS LAST
+                LIMIT 5000
+                """,
+                (producto, proveedor)
+            )
+        else:
+            cur.execute(
+                """
+                SELECT fecha, precio
+                FROM precios
+                WHERE producto = %s
+                ORDER BY fecha ASC NULLS LAST
+                LIMIT 5000
+                """,
+                (producto,)
+            )
+        rows = cur.fetchall()
+    finally:
+        cur.close(); conn.close()
+    labels = [r['fecha'].strftime('%Y-%m-%d') if r['fecha'] else '' for r in rows]
+    data = [float(r['precio']) if r['precio'] is not None else None for r in rows]
+    return jsonify({"labels": labels, "data": data, "producto": producto, "proveedor": proveedor})
 
 
 if __name__ == "__main__":

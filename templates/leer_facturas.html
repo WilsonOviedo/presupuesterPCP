@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}Leer facturas{% endblock %}
+{% block content %}
+  <a class="button" href="{{ url_for('menu') }}">← Volver</a>
+  <h2>Leer facturas (IMAP)</h2>
+  <form id="run-form" method="post" action="{{ url_for('leer_facturas_page') }}">
+    <button type="submit" id="run-btn">{{ 'Procesando…' if running else 'Ejecutar procesamiento' }}</button>
+  </form>
+
+  <div id="status" style="margin-top:10px;">Estado: {{ 'En ejecución' if running else ('Finalizado' if finished else 'Idle') }}</div>
+
+  <h3>Resultado</h3>
+  <pre id="log" style="white-space: pre-wrap;">{{ salida or '' }}</pre>
+{% endblock %}
+{% block scripts %}
+  <script>
+    (function(){
+      const statusEl = document.getElementById('status');
+      const logEl = document.getElementById('log');
+      const btn = document.getElementById('run-btn');
+      let polling = true;
+      function tick(){
+        fetch('{{ url_for('leer_facturas_status') }}').then(r=>r.json()).then(j=>{
+          statusEl.textContent = 'Estado: ' + (j.running ? 'En ejecución' : (j.finished ? 'Finalizado' : 'Idle'));
+          if(j.running){ btn.disabled = true; btn.textContent = 'Procesando…'; }
+          else { btn.disabled = false; btn.textContent = 'Ejecutar procesamiento'; }
+          if(typeof j.output === 'string'){
+            logEl.textContent = j.output;
+            logEl.scrollTop = logEl.scrollHeight;
+          }
+        }).catch(()=>{}).finally(()=>{ if(polling) setTimeout(tick, 1500); });
+      }
+      tick();
+    })();
+  </script>
+{% endblock %}
+
+
