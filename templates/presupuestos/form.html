@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% block title %}{% if presupuesto %}Editar{% else %}Nuevo{% endif %} Presupuesto{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('presupuestos_index') }}">← Volver</a>
+  </div>
+  <h2>{% if presupuesto %}Editar{% else %}Nuevo{% endif %} Presupuesto</h2>
+
+  <form method="post" action="{% if presupuesto %}{{ url_for('presupuestos_editar', id=presupuesto.id) }}{% else %}{{ url_for('presupuestos_nuevo') }}{% endif %}" style="max-width:800px;">
+    <div style="display:grid; gap:15px;">
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Número de presupuesto:</label>
+        <input type="text" name="numero_presupuesto" value="{{ presupuesto.numero_presupuesto if presupuesto else numero_presupuesto }}" 
+               required style="width:100%; padding:8px;">
+      </div>
+
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Cliente:</label>
+        <select name="cliente_id" style="width:100%; padding:8px; height:38px;">
+          <option value="">Sin cliente</option>
+          {% for cliente in clientes %}
+            <option value="{{ cliente.id }}" {% if presupuesto and presupuesto.cliente_id == cliente.id %}selected{% endif %}>{{ cliente.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Título:</label>
+        <input type="text" name="titulo" value="{{ presupuesto.titulo if presupuesto else '' }}" 
+               style="width:100%; padding:8px;" placeholder="Ej: Tablero de control para línea de producción">
+      </div>
+
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Descripción:</label>
+        <textarea name="descripcion" rows="3" style="width:100%; padding:8px;">{{ presupuesto.descripcion if presupuesto else '' }}</textarea>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
+        <div>
+          <label style="display:block; margin-bottom:5px; font-weight:600;">Estado:</label>
+          <select name="estado" style="width:100%; padding:8px; height:38px;">
+            <option value="borrador" {% if not presupuesto or presupuesto.estado == 'borrador' %}selected{% endif %}>Borrador</option>
+            <option value="enviado" {% if presupuesto and presupuesto.estado == 'enviado' %}selected{% endif %}>Enviado</option>
+            <option value="aprobado" {% if presupuesto and presupuesto.estado == 'aprobado' %}selected{% endif %}>Aprobado</option>
+            <option value="rechazado" {% if presupuesto and presupuesto.estado == 'rechazado' %}selected{% endif %}>Rechazado</option>
+            <option value="facturado" {% if presupuesto and presupuesto.estado == 'facturado' %}selected{% endif %}>Facturado</option>
+          </select>
+        </div>
+
+        <div>
+          <label style="display:block; margin-bottom:5px; font-weight:600;">Fecha:</label>
+          <input type="date" name="fecha_presupuesto" 
+                 value="{{ presupuesto.fecha_presupuesto.strftime('%Y-%m-%d') if presupuesto and presupuesto.fecha_presupuesto else '' }}" 
+                 style="width:100%; padding:8px;">
+        </div>
+
+        <div>
+          <label style="display:block; margin-bottom:5px; font-weight:600;">Validez (días):</label>
+          <input type="number" name="validez_dias" 
+                 value="{{ presupuesto.validez_dias if presupuesto else 30 }}" 
+                 min="1" style="width:100%; padding:8px;">
+        </div>
+      </div>
+
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">IVA (%):</label>
+        <input type="number" name="iva_porcentaje" step="0.01" 
+               value="{{ presupuesto.iva_porcentaje if presupuesto else 21.0 }}" 
+               style="width:200px; padding:8px;">
+      </div>
+
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Notas:</label>
+        <textarea name="notas" rows="3" style="width:100%; padding:8px;">{{ presupuesto.notas if presupuesto else '' }}</textarea>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="button">{% if presupuesto %}Actualizar{% else %}Crear{% endif %}</button>
+        <a href="{{ url_for('presupuestos_index') }}" class="button button-secondary">Cancelar</a>
+      </div>
+    </div>
+  </form>
+{% endblock %}
+

@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}Materiales{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('presupuestos_index') }}">← Volver</a>
+    <a class="button" href="{{ url_for('precios_index') }}">Importar desde precios</a>
+  </div>
+  <h2>Materiales eléctricos</h2>
+
+  <form method="get" action="{{ url_for('materiales_index') }}" style="margin-bottom:20px; padding:15px; background:#f7f7f7; border-radius:6px;">
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:12px; align-items:end;">
+      <div>
+        <label style="display:block; margin-bottom:6px; font-weight:600;">Descripción:</label>
+        <input type="text" name="descripcion" value="{{ descripcion_filtro }}" placeholder="Buscar por descripción" style="width:100%; padding:6px;">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:6px; font-weight:600;">Proveedor:</label>
+        <input type="text" name="proveedor" value="{{ proveedor_filtro }}" placeholder="Buscar por proveedor" style="width:100%; padding:6px;">
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button type="submit" class="button">Buscar</button>
+        <a href="{{ url_for('materiales_index') }}" class="button button-secondary">Limpiar</a>
+      </div>
+    </div>
+  </form>
+
+  {% if materiales %}
+    <table>
+      <tr>
+        <th>Descripción</th>
+        <th>Proveedor</th>
+        <th>Precio</th>
+        <th>Tiempo instalación (h)</th>
+        <th>Actualizado</th>
+        <th>Acciones</th>
+      </tr>
+      {% for mat in materiales %}
+        <tr>
+          <td>{{ mat.descripcion }}</td>
+          <td>{{ mat.proveedor or '-' }}</td>
+          <td style="text-align:right;">$ {{ "{:,.2f}".format(mat.precio) if mat.precio is not none else '0.00' }}</td>
+          <td style="text-align:right;">{{ "{:,.2f}".format(mat.tiempo_instalacion) if mat.tiempo_instalacion is not none else '0.00' }}</td>
+          <td>{{ mat.actualizado_en.strftime('%d/%m/%Y %H:%M') if mat.actualizado_en else '-' }}</td>
+          <td style="white-space:nowrap;">
+            <a href="{{ url_for('materiales_editar', id=mat.id) }}" class="button" style="padding:4px 8px; font-size:0.85em;">Editar</a>
+            <form method="post" action="{{ url_for('materiales_eliminar', id=mat.id) }}" style="display:inline;">
+              <button type="submit" class="button button-secondary" style="padding:4px 8px; font-size:0.85em; background:#dc3545;" onclick="return confirm('¿Eliminar este material?')">Eliminar</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p>No se encontraron materiales.</p>
+  {% endif %}
+{% endblock %}

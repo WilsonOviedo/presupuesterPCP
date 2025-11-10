@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% block title %}Presupuestos{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('menu') }}">← Volver</a>
+    <a class="button" href="{{ url_for('presupuestos_nuevo') }}">+ Nuevo presupuesto</a>
+    <a class="button button-secondary" href="{{ url_for('items_index') }}">Items</a>
+    <a class="button button-secondary" href="{{ url_for('clientes_index') }}">Clientes</a>
+  </div>
+  <h2>Presupuestos</h2>
+
+  <form method="get" action="{{ url_for('presupuestos_index') }}" style="margin-bottom:20px; padding:15px; background:#f7f7f7; border-radius:6px;">
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:10px; align-items:end;">
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Estado:</label>
+        <select name="estado" style="width:100%; padding:6px; height:34px;">
+          <option value="">Todos</option>
+          <option value="borrador" {% if estado_filtro == 'borrador' %}selected{% endif %}>Borrador</option>
+          <option value="enviado" {% if estado_filtro == 'enviado' %}selected{% endif %}>Enviado</option>
+          <option value="aprobado" {% if estado_filtro == 'aprobado' %}selected{% endif %}>Aprobado</option>
+          <option value="rechazado" {% if estado_filtro == 'rechazado' %}selected{% endif %}>Rechazado</option>
+          <option value="facturado" {% if estado_filtro == 'facturado' %}selected{% endif %}>Facturado</option>
+        </select>
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Cliente:</label>
+        <select name="cliente_id" style="width:100%; padding:6px; height:34px;">
+          <option value="">Todos</option>
+          {% for cliente in clientes %}
+            <option value="{{ cliente.id }}" {% if cliente_filtro == cliente.id %}selected{% endif %}>{{ cliente.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <button type="submit" class="button">Filtrar</button>
+        <a href="{{ url_for('presupuestos_index') }}" class="button button-secondary">Limpiar</a>
+      </div>
+    </div>
+  </form>
+
+  {% if presupuestos %}
+    <table>
+      <tr>
+        <th>Número</th>
+        <th>Título</th>
+        <th>Cliente</th>
+        <th>Proveedor</th>
+        <th>Fecha</th>
+        <th>Items</th>
+        <th>Subtotal</th>
+        <th>IVA</th>
+        <th>Total</th>
+        <th>Estado</th>
+        <th>Acciones</th>
+      </tr>
+      {% for p in presupuestos %}
+        <tr>
+          <td><strong>{{ p.numero_presupuesto }}</strong></td>
+          <td>{{ p.titulo or '-' }}</td>
+          <td>{{ p.nombre_cliente }}</td>
+          <td>{{ p.nombre_proveedor or '-' }}</td>
+          <td>{{ p.fecha_presupuesto.strftime('%d/%m/%Y') if p.fecha_presupuesto else '-' }}</td>
+          <td style="text-align:center;">{{ p.cantidad_items }}</td>
+          <td style="text-align:right;">$ {{ "{:,.2f}".format(p.subtotal) if p.subtotal else '0.00' }}</td>
+          <td style="text-align:right;">$ {{ "{:,.2f}".format(p.iva_monto) if p.iva_monto else '0.00' }}</td>
+          <td style="text-align:right;"><strong>$ {{ "{:,.2f}".format(p.total) if p.total else '0.00' }}</strong></td>
+          <td>
+            <span style="padding:4px 8px; border-radius:4px; font-size:0.85em; 
+              {% if p.estado == 'aprobado' %}background:#d4edda; color:#155724;
+              {% elif p.estado == 'enviado' %}background:#d1ecf1; color:#0c5460;
+              {% elif p.estado == 'rechazado' %}background:#f8d7da; color:#721c24;
+              {% elif p.estado == 'facturado' %}background:#d1ecf1; color:#0c5460;
+              {% else %}background:#fff3cd; color:#856404;{% endif %}">
+              {{ p.estado|upper }}
+            </span>
+          </td>
+          <td>
+            <a href="{{ url_for('presupuestos_ver', id=p.id) }}" class="button" style="padding:4px 8px; font-size:0.85em;">Ver</a>
+            <a href="{{ url_for('presupuestos_editar', id=p.id) }}" class="button button-secondary" style="padding:4px 8px; font-size:0.85em;">Editar</a>
+          </td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p>No hay presupuestos.</p>
+  {% endif %}
+{% endblock %}
+

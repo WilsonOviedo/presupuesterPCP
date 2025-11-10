@@ -4,14 +4,19 @@
   <meta charset="utf-8">
   <title>{% block title %}App{% endblock %}</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 8px; zoom: 0.8; }
-    .container { max-width: 98vw; width: 100%; margin: 0 auto; }
-    .card { border: 1px solid #ddd; padding: 16px; border-radius: 8px; margin: 12px 0; }
+    body { font-family: Arial, sans-serif; margin: 0; background:#f6f7fb; }
+    .navbar { background:#0d47a1; color:white; padding:10px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 6px rgba(0,0,0,0.15); position:sticky; top:0; z-index:1000; }
+    .navbar .brand { font-weight:700; font-size:1.1rem; }
+    .navbar a { color:white; text-decoration:none; font-weight:500; padding:6px 10px; border-radius:4px; }
+    .navbar a:hover { background:rgba(255,255,255,0.18); }
+    .navbar .spacer { flex:1; }
+    .container { max-width: 1200px; width: 100%; margin: 20px auto; padding: 0 20px 40px; }
+    .card { border: 1px solid #ddd; padding: 16px; border-radius: 8px; margin: 12px 0; background:white; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
     a.button, button.button { display: inline-block; padding: 8px 14px; background: #1976d2; color: #fff; text-decoration: none; border-radius: 6px; border: none; cursor: pointer; }
     a.button:hover, button.button:hover { background: #125a9e; }
     a.button-secondary { background: #777; }
     a.button-secondary:hover { background: #5b5b5b; }
-    table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 12px; background:white; }
     th, td { border: 1px solid #ddd; padding: 8px; }
     th { background: #f2f2f2; text-align: left; }
     table tr:nth-child(even) { background: #fafafa; }
@@ -20,6 +25,16 @@
   {% block head %}{% endblock %}
 </head>
 <body>
+  <nav class="navbar">
+    <a class="brand" href="{{ url_for('menu') }}">Scrapper Facturas</a>
+    <a href="{{ url_for('menu') }}">Inicio</a>
+    <a href="{{ url_for('precios_index') }}">Buscar Precios</a>
+    <a href="{{ url_for('presupuestos_index') }}">Presupuestos</a>
+    <a href="{{ url_for('items_index') }}">Items</a>
+    <a href="{{ url_for('materiales_index') }}">Materiales</a>
+    <a href="{{ url_for('clientes_index') }}">Clientes</a>
+    <div class="spacer"></div>
+  </nav>
   <div class="container">
     {% block content %}{% endblock %}
   </div>

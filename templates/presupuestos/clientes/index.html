@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title %}Clientes{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('presupuestos_index') }}">← Volver</a>
+    <a class="button" href="{{ url_for('clientes_nuevo') }}">+ Nuevo cliente</a>
+  </div>
+  <h2>Clientes</h2>
+
+  {% if clientes %}
+    <table>
+      <tr>
+        <th>Nombre</th>
+        <th>Razón Social</th>
+        <th>CUIT</th>
+        <th>Dirección</th>
+        <th>Teléfono</th>
+        <th>Email</th>
+        <th>Acciones</th>
+      </tr>
+      {% for cliente in clientes %}
+        <tr>
+          <td><strong>{{ cliente.nombre }}</strong></td>
+          <td>{{ cliente.razon_social or '-' }}</td>
+          <td>{{ cliente.cuit or '-' }}</td>
+          <td>{{ cliente.direccion or '-' }}</td>
+          <td>{{ cliente.telefono or '-' }}</td>
+          <td>{{ cliente.email or '-' }}</td>
+          <td>
+            <a href="#" class="button button-secondary" style="padding:4px 8px; font-size:0.85em;">Editar</a>
+          </td>
+        </tr>
+        {% if cliente.notas %}
+        <tr>
+          <td colspan="7" style="padding-left:30px; font-style:italic; color:#666; font-size:0.9em;">Nota: {{ cliente.notas }}</td>
+        </tr>
+        {% endif %}
+      {% endfor %}
+    </table>
+  {% else %}
+    <p>No hay clientes.</p>
+  {% endif %}
+{% endblock %}
+

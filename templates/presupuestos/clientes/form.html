@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% block title %}{% if cliente %}Editar{% else %}Nuevo{% endif %} Cliente{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('clientes_index') }}">← Volver</a>
+  </div>
+  <h2>{% if cliente %}Editar{% else %}Nuevo{% endif %} Cliente</h2>
+
+  <form method="post" action="{% if cliente %}{{ url_for('clientes_editar', id=cliente.id) }}{% else %}{{ url_for('clientes_nuevo') }}{% endif %}" style="max-width:600px;">
+    <div style="display:grid; gap:15px;">
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Nombre: *</label>
+        <input type="text" name="nombre" value="{{ cliente.nombre if cliente else '' }}" 
+               required style="width:100%; padding:8px;">
+      </div>
+
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Razón Social:</label>
+        <input type="text" name="razon_social" value="{{ cliente.razon_social if cliente else '' }}" 
+               style="width:100%; padding:8px;">
+      </div>
+
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">CUIT:</label>
+        <input type="text" name="cuit" value="{{ cliente.cuit if cliente else '' }}" 
+               style="width:100%; padding:8px;">
+      </div>
+
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Dirección:</label>
+        <input type="text" name="direccion" value="{{ cliente.direccion if cliente else '' }}" 
+               style="width:100%; padding:8px;">
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+        <div>
+          <label style="display:block; margin-bottom:5px; font-weight:600;">Teléfono:</label>
+          <input type="text" name="telefono" value="{{ cliente.telefono if cliente else '' }}" 
+                 style="width:100%; padding:8px;">
+        </div>
+
+        <div>
+          <label style="display:block; margin-bottom:5px; font-weight:600;">Email:</label>
+          <input type="email" name="email" value="{{ cliente.email if cliente else '' }}" 
+                 style="width:100%; padding:8px;">
+        </div>
+      </div>
+
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Notas:</label>
+        <textarea name="notas" rows="3" style="width:100%; padding:8px;">{{ cliente.notas if cliente else '' }}</textarea>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="button">{% if cliente %}Actualizar{% else %}Crear{% endif %}</button>
+        <a href="{{ url_for('clientes_index') }}" class="button button-secondary">Cancelar</a>
+      </div>
+    </div>
+  </form>
+{% endblock %}
+

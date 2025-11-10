@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block title %}{% if item %}Editar{% else %}Nuevo{% endif %} Item{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('items_index') }}">← Volver</a>
+  </div>
+  <h2>{% if item %}Editar{% else %}Nuevo{% endif %} Item</h2>
+
+  <form method="post" action="{% if item %}{{ url_for('items_editar', id=item.id) }}{% else %}{{ url_for('items_nuevo') }}{% endif %}" style="max-width:600px;">
+    <div style="display:grid; gap:15px;">
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Código:</label>
+        <input type="text" name="codigo" value="{{ item.codigo if item else '' }}" 
+               style="width:100%; padding:8px;" placeholder="Opcional">
+      </div>
+
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Descripción: *</label>
+        <input type="text" name="descripcion" value="{{ item.descripcion if item else '' }}" 
+               required style="width:100%; padding:8px;" placeholder="Ej: Montaje de tablero eléctrico">
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+        <div>
+          <label style="display:block; margin-bottom:5px; font-weight:600;">Tipo: *</label>
+          <select name="tipo" required style="width:100%; padding:8px; height:38px;">
+            {% if tipos %}
+              {% for tipo in tipos %}
+                <option value="{{ tipo }}" {% if item and item.tipo == tipo %}selected{% endif %}>{{ tipo }}</option>
+              {% endfor %}
+            {% else %}
+              <option value="Montaje" {% if item and item.tipo == 'Montaje' %}selected{% endif %}>Montaje</option>
+              <option value="Programación" {% if item and item.tipo == 'Programación' %}selected{% endif %}>Programación</option>
+              <option value="Materiales" {% if item and item.tipo == 'Materiales' %}selected{% endif %}>Materiales</option>
+              <option value="Diseño" {% if item and item.tipo == 'Diseño' %}selected{% endif %}>Diseño</option>
+              <option value="Otros" {% if not item or item.tipo == 'Otros' %}selected{% endif %}>Otros</option>
+            {% endif %}
+          </select>
+        </div>
+
+        <div>
+          <label style="display:block; margin-bottom:5px; font-weight:600;">Unidad:</label>
+          <input type="text" name="unidad" value="{{ item.unidad if item else 'unidad' }}" 
+                 style="width:100%; padding:8px;" placeholder="unidad, hora, metro, kg">
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+        <div>
+          <label style="display:block; margin-bottom:5px; font-weight:600;">Precio Base: *</label>
+          <input type="number" name="precio_base" step="0.01" min="0" 
+                 value="{{ item.precio_base if item else '0' }}" 
+                 required style="width:100%; padding:8px;">
+        </div>
+
+        <div>
+          <label style="display:block; margin-bottom:5px; font-weight:600;">Margen (%):</label>
+          <input type="number" name="margen_porcentaje" step="0.01" min="0" 
+                 value="{{ item.margen_porcentaje if item else '0' }}" 
+                 style="width:100%; padding:8px;">
+        </div>
+      </div>
+
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Notas:</label>
+        <textarea name="notas" rows="3" style="width:100%; padding:8px;">{{ item.notas if item else '' }}</textarea>
+      </div>
+
+      {% if item %}
+      <div>
+        <label style="display:flex; align-items:center; gap:8px; margin-bottom:5px;">
+          <input type="checkbox" name="activo" {% if item.activo %}checked{% endif %} style="width:auto;">
+          <span style="font-weight:600;">Item activo</span>
+        </label>
+        <small style="color:#666;">Los items inactivos no aparecerán en las listas al crear presupuestos.</small>
+      </div>
+      {% endif %}
+
+      <div class="actions">
+        <button type="submit" class="button">{% if item %}Actualizar{% else %}Crear{% endif %}</button>
+        <a href="{{ url_for('items_index') }}" class="button button-secondary">Cancelar</a>
+      </div>
+    </div>
+  </form>
+{% endblock %}
+

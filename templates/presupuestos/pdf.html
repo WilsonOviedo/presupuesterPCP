@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+{% block title %}Presupuesto {{ presupuesto.numero_presupuesto }}{% endblock %}
+{% block head %}
+  <style>
+    body { font-family: "Arial", sans-serif; font-size: 12px; }
+    h1, h2, h3, h4 { margin: 0; }
+    .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
+    .totals { border:1px solid #ddd; padding:10px; border-radius:6px; width: 240px; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; }
+    th, td { border:1px solid #ddd; padding:6px; }
+    th { background:#f0f0f0; text-align:left; }
+    .subgrupo { margin-top:16px; border:1px solid #1976d2; border-radius:6px; }
+    .subgrupo-header { background:#1976d2; color:white; padding:8px 12px; display:flex; justify-content:space-between; }
+    .subgrupo-body { padding:8px 12px; }
+    .items-table th, .items-table td { border:1px solid #e0e0e0; }
+    .items-table th { background:#fafafa; }
+    .no-items { font-style:italic; color:#666; padding:8px 0; }
+    .footer-note { margin-top:20px; font-size:11px; color:#666; }
+  </style>
+{% endblock %}
+{% block content %}
+  <div class="header">
+    <div>
+      <h2>Presupuesto: {{ presupuesto.numero_presupuesto }}</h2>
+      <p><strong>Título:</strong> {{ presupuesto.titulo or '-' }}</p>
+      <p><strong>Cliente:</strong> {{ presupuesto.nombre_cliente }}</p>
+      <p><strong>Fecha:</strong> {{ presupuesto.fecha_presupuesto.strftime('%d/%m/%Y') if presupuesto.fecha_presupuesto else '-' }}</p>
+      <p><strong>Validez:</strong> {{ presupuesto.validez_dias }} días</p>
+      <p><strong>Estado:</strong> {{ presupuesto.estado|upper }}</p>
+    </div>
+    <div class="totals">
+      <h4>Totales</h4>
+      <p><strong>Items:</strong> {{ presupuesto.cantidad_items }}</p>
+      <p><strong>Subtotal:</strong> $ {{ "{:,.2f}".format(presupuesto.subtotal) if presupuesto.subtotal else '0.00' }}</p>
+      <p><strong>IVA ({{ presupuesto.iva_porcentaje }}%):</strong> $ {{ "{:,.2f}".format(presupuesto.iva_monto) if presupuesto.iva_monto else '0.00' }}</p>
+      <p><strong>Total:</strong> $ {{ "{:,.2f}".format(presupuesto.total) if presupuesto.total else '0.00' }}</p>
+      <p><strong>Tiempo total:</strong> {{ "{:,.2f}".format(presupuesto.tiempo_ejecucion_total) if presupuesto.tiempo_ejecucion_total else '0.00' }} horas</p>
+    </div>
+  </div>
+
+  {% if presupuesto.descripcion %}
+    <p><strong>Descripción:</strong> {{ presupuesto.descripcion }}</p>
+  {% endif %}
+
+  {% if presupuesto.notas %}
+    <p><strong>Notas:</strong> {{ presupuesto.notas }}</p>
+  {% endif %}
+
+  {% if presupuesto.get('subgrupos') %}
+    {% for subgrupo in presupuesto.get('subgrupos', []) %}
+      <div class="subgrupo">
+        <div class="subgrupo-header">
+          <div>
+            <strong>{{ subgrupo.numero }} - {{ subgrupo.nombre }}</strong>
+          </div>
+          <div>
+            <strong>Subtotal:</strong> $ {{ "{:,.2f}".format(subgrupo.subtotal) if subgrupo.subtotal else '0.00' }}
+            &nbsp;|&nbsp;
+            <strong>Tiempo:</strong> {{ "{:,.2f}".format(subgrupo.tiempo_ejecucion_horas) if subgrupo.tiempo_ejecucion_horas else '0.00' }} h
+          </div>
+        </div>
+        <div class="subgrupo-body">
+          {% if subgrupo.get('items') %}
+            <table class="items-table">
+              <tr>
+                <th style="width:60px;">Nº</th>
+                <th>Descripción</th>
+                <th style="width:70px;">Cant.</th>
+                <th style="width:90px;">Precio Unit.</th>
+                <th style="width:90px;">Subtotal</th>
+                <th style="width:80px;">Tiempo (h)</th>
+                <th>Notas</th>
+              </tr>
+              {% for item in subgrupo.get('items', []) %}
+                <tr>
+                  <td>{{ item.numero_subitem or subgrupo.numero ~ '.' ~ loop.index }}</td>
+                  <td>{{ item.descripcion }}</td>
+                  <td style="text-align:right;">{{ "{:,.2f}".format(item.cantidad) }}</td>
+                  <td style="text-align:right;">$ {{ "{:,.2f}".format(item.precio_unitario) if item.precio_unitario else '0.00' }}</td>
+                  <td style="text-align:right;">$ {{ "{:,.2f}".format(item.subtotal) if item.subtotal else '0.00' }}</td>
+                  <td style="text-align:right;">{{ "{:,.2f}".format(item.tiempo_ejecucion_horas) if item.tiempo_ejecucion_horas else '0.00' }}</td>
+                  <td>{{ item.notas or '' }}</td>
+                </tr>
+              {% endfor %}
+            </table>
+          {% else %}
+            <p class="no-items">No hay items en este subgrupo.</p>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  {% if presupuesto.get('items_sin_subgrupo') %}
+    <div style="margin-top:20px;">
+      <h4>Items sin subgrupo</h4>
+      <table>
+        <tr>
+          <th>Descripción</th>
+          <th style="width:70px;">Cant.</th>
+          <th style="width:90px;">Precio Unit.</th>
+          <th style="width:90px;">Subtotal</th>
+          <th style="width:80px;">Tiempo (h)</th>
+          <th>Notas</th>
+        </tr>
+        {% for item in presupuesto.get('items_sin_subgrupo', []) %}
+          <tr>
+            <td>{{ item.descripcion }}</td>
+            <td style="text-align:right;">{{ "{:,.2f}".format(item.cantidad) }}</td>
+            <td style="text-align:right;">$ {{ "{:,.2f}".format(item.precio_unitario) if item.precio_unitario else '0.00' }}</td>
+            <td style="text-align:right;">$ {{ "{:,.2f}".format(item.subtotal) if item.subtotal else '0.00' }}</td>
+            <td style="text-align:right;">{{ "{:,.2f}".format(item.tiempo_ejecucion_horas) if item.tiempo_ejecucion_horas else '0.00' }}</td>
+            <td>{{ item.notas or '' }}</td>
+          </tr>
+        {% endfor %}
+      </table>
+    </div>
+  {% endif %}
+
+  <div class="footer-note">
+    <p>Generado el {{ datetime.utcnow().strftime('%d/%m/%Y %H:%M') }} - Este documento es una representación del presupuesto solicitado.</p>
+  </div>
+{% endblock %}
+

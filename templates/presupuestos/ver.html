@@ -1,0 +1,436 @@
+{% extends 'base.html' %}
+{% block title %}Presupuesto {{ presupuesto.numero_presupuesto }}{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('presupuestos_index') }}">← Volver</a>
+    <a class="button" href="{{ url_for('presupuestos_editar', id=presupuesto.id) }}">Editar</a>
+    <a class="button button-secondary" href="{{ url_for('presupuestos_pdf', id=presupuesto.id) }}" target="_blank">Ver PDF</a>
+  </div>
+  <h2>Presupuesto: {{ presupuesto.numero_presupuesto }}</h2>
+
+  <div style="display:grid; grid-template-columns: 2fr 1fr; gap:20px; margin-bottom:20px;">
+    <div>
+      <h3>Información</h3>
+      <table style="width:100%;">
+        <tr><td style="font-weight:600; width:150px;">Título:</td><td>{{ presupuesto.titulo or '-' }}</td></tr>
+        <tr><td style="font-weight:600;">Cliente:</td><td>{{ presupuesto.nombre_cliente }}</td></tr>
+        <tr><td style="font-weight:600;">Fecha:</td><td>{{ presupuesto.fecha_presupuesto.strftime('%d/%m/%Y') if presupuesto.fecha_presupuesto else '-' }}</td></tr>
+        <tr><td style="font-weight:600;">Validez:</td><td>{{ presupuesto.validez_dias }} días</td></tr>
+        <tr><td style="font-weight:600;">Estado:</td><td>
+          <span style="padding:4px 8px; border-radius:4px; font-size:0.9em; 
+            {% if presupuesto.estado == 'aprobado' %}background:#d4edda; color:#155724;
+            {% elif presupuesto.estado == 'enviado' %}background:#d1ecf1; color:#0c5460;
+            {% elif presupuesto.estado == 'rechazado' %}background:#f8d7da; color:#721c24;
+            {% elif presupuesto.estado == 'facturado' %}background:#d1ecf1; color:#0c5460;
+            {% else %}background:#fff3cd; color:#856404;{% endif %}">
+            {{ presupuesto.estado|upper }}
+          </span>
+        </td></tr>
+        {% if presupuesto.descripcion %}
+        <tr><td style="font-weight:600; vertical-align:top;">Descripción:</td><td>{{ presupuesto.descripcion }}</td></tr>
+        {% endif %}
+        {% if presupuesto.notas %}
+        <tr><td style="font-weight:600; vertical-align:top;">Notas:</td><td>{{ presupuesto.notas }}</td></tr>
+        {% endif %}
+      </table>
+    </div>
+
+    <div style="background:#f7f7f7; padding:15px; border-radius:6px;">
+      <h3>Totales</h3>
+      <table style="width:100%;">
+        <tr><td style="font-weight:600;">Items:</td><td style="text-align:right;">{{ presupuesto.cantidad_items }}</td></tr>
+        <tr><td style="font-weight:600;">Subtotal:</td><td style="text-align:right;">$ {{ "{:,.2f}".format(presupuesto.subtotal) if presupuesto.subtotal else '0.00' }}</td></tr>
+        <tr><td style="font-weight:600;">IVA ({{ presupuesto.iva_porcentaje }}%):</td><td style="text-align:right;">$ {{ "{:,.2f}".format(presupuesto.iva_monto) if presupuesto.iva_monto else '0.00' }}</td></tr>
+        <tr style="border-top:2px solid #333; font-size:1.2em;"><td style="font-weight:bold;">TOTAL:</td><td style="text-align:right; font-weight:bold;">$ {{ "{:,.2f}".format(presupuesto.total) if presupuesto.total else '0.00' }}</td></tr>
+        {% if presupuesto.tiempo_ejecucion_total %}
+        <tr style="border-top:1px solid #ddd; margin-top:10px;"><td style="font-weight:600;">Tiempo total:</td><td style="text-align:right;">{{ "{:,.2f}".format(presupuesto.tiempo_ejecucion_total) }} horas</td></tr>
+        {% endif %}
+      </table>
+    </div>
+  </div>
+
+  <h3>Subgrupos e Items</h3>
+  <datalist id="datalist-servicios">
+    {% for item in items_servicio %}
+      <option value="{{ item.descripcion }}" data-id="{{ item.id }}" data-precio="{{ item.precio_venta or 0 }}" data-tiempo="{{ item.tiempo_instalacion or 0 }}"></option>
+    {% endfor %}
+  </datalist>
+  <datalist id="datalist-materiales">
+    {% for item in items_materiales %}
+      <option value="{{ item.descripcion }}" data-id="{{ item.id }}" data-precio="{{ item.precio_venta or 0 }}" data-tiempo="{{ item.tiempo_instalacion or 0 }}"></option>
+    {% endfor %}
+  </datalist>
+  <div style="background:#f7f7f7; padding:15px; border-radius:6px; margin-bottom:15px;">
+    <h3 style="margin-top:0;">Agregar Subgrupo</h3>
+    <form method="post" action="{{ url_for('presupuestos_agregar_subgrupo', id=presupuesto.id) }}" style="display:flex; gap:10px; align-items:end;">
+      <div style="flex:1;">
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Número:</label>
+        <input type="number" name="numero" value="{{ presupuesto.get('subgrupos', [])|length + 1 }}" min="1" 
+               style="width:100%; padding:6px;">
+      </div>
+      <div style="flex:3;">
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Nombre del subgrupo:</label>
+        <input type="text" name="nombre" required placeholder="Ej: MONTAJE DE BANDEJADO" 
+               style="width:100%; padding:6px;">
+      </div>
+      <div>
+        <button type="submit" class="button">Agregar Subgrupo</button>
+      </div>
+    </form>
+  </div>
+  
+  {% if presupuesto.get('subgrupos') %}
+    {% for subgrupo in presupuesto.get('subgrupos', []) %}
+      <div style="background:#e8f4f8; padding:15px; border-radius:6px; margin-bottom:15px; border-left:4px solid #1976d2;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <div>
+            <h4 style="margin:0;">
+              {{ subgrupo.numero }} - {{ subgrupo.nombre }}
+              <form method="post" action="{{ url_for('presupuestos_actualizar_subgrupo', subgrupo_id=subgrupo.id) }}" style="display:inline-block; margin-left:10px;">
+                <input type="hidden" name="presupuesto_id" value="{{ presupuesto.id }}">
+                <input type="number" name="numero" value="{{ subgrupo.numero }}" min="1" style="width:50px; padding:2px;" onchange="this.form.submit()">
+                <input type="text" name="nombre" value="{{ subgrupo.nombre }}" style="width:300px; padding:4px; margin-left:5px;" onchange="this.form.submit()">
+              </form>
+            </h4>
+          </div>
+          <div style="text-align:right;">
+            <strong>Subtotal: $ {{ "{:,.2f}".format(subgrupo.subtotal) if subgrupo.subtotal else '0.00' }}</strong><br>
+            <small>Tiempo: {{ "{:,.2f}".format(subgrupo.tiempo_ejecucion_horas) if subgrupo.tiempo_ejecucion_horas else '0.00' }} horas</small>
+            <form method="post" action="{{ url_for('presupuestos_eliminar_subgrupo', subgrupo_id=subgrupo.id) }}" style="display:inline; margin-left:10px;">
+              <input type="hidden" name="presupuesto_id" value="{{ presupuesto.id }}">
+              <button type="submit" onclick="return confirm('¿Eliminar este subgrupo? Los items quedarán sin subgrupo.')" 
+                      style="padding:4px 8px; background:#dc3545; color:white; border:none; border-radius:4px; cursor:pointer; font-size:0.85em;">Eliminar</button>
+            </form>
+          </div>
+        </div>
+        
+        {% if subgrupo.get('items') %}
+          <table style="width:100%; background:white; border-radius:4px;">
+            <tr style="background:#f0f0f0;">
+              <th style="width:60px;">Nº</th>
+              <th style="width:45%; text-align:left;">Descripción</th>
+              <th style="width:140px;">Proveedor</th>
+              <th style="width:80px;">Cant.</th>
+              <th style="width:100px;">Precio Unit.</th>
+              <th style="width:100px;">Subtotal</th>
+              <th style="width:80px;">Tiempo (h)</th>
+              <th style="width:100px;">Acciones</th>
+            </tr>
+            {% for item in subgrupo.get('items', []) %}
+              <tr>
+                <td style="text-align:center;">
+                  <form method="post" action="{{ url_for('presupuestos_actualizar_item', item_id=item.id) }}" style="display:inline;">
+                    <input type="hidden" name="presupuesto_id" value="{{ presupuesto.id }}">
+                    <input type="hidden" name="subgrupo_id" value="{{ subgrupo.id }}">
+                    <input type="hidden" name="material_id" value="{{ item.material_id or '' }}">
+                    <input type="text" name="numero_subitem" value="{{ item.numero_subitem or '' }}" 
+                           style="width:50px; padding:2px; text-align:center;" 
+                           placeholder="{{ subgrupo.numero }}.{{ loop.index }}" 
+                           onchange="this.form.submit()">
+                  </form>
+                </td>
+                <td style="text-align:left;">
+                  <form method="post" action="{{ url_for('presupuestos_actualizar_item', item_id=item.id) }}" style="display:inline;">
+                    <input type="hidden" name="presupuesto_id" value="{{ presupuesto.id }}">
+                    <input type="hidden" name="subgrupo_id" value="{{ subgrupo.id }}">
+                    <input type="hidden" name="material_id" value="{{ item.material_id or '' }}">
+                    <input type="text" name="descripcion" value="{{ item.descripcion }}" 
+                           style="width:100%; padding:4px; text-align:left;" onchange="this.form.submit()">
+                  </form>
+                </td>
+                <td style="text-align:left; white-space:nowrap;">{{ item.proveedor or '-' }}</td>
+                <td style="text-align:right;">
+                  <form method="post" action="{{ url_for('presupuestos_actualizar_item', item_id=item.id) }}" style="display:inline;">
+                    <input type="hidden" name="presupuesto_id" value="{{ presupuesto.id }}">
+                    <input type="hidden" name="subgrupo_id" value="{{ subgrupo.id }}">
+                    <input type="hidden" name="material_id" value="{{ item.material_id or '' }}">
+                    <input type="number" name="cantidad" step="0.01" value="{{ item.cantidad }}" 
+                           style="width:70px; padding:4px; text-align:right;" onchange="this.form.submit()">
+                  </form>
+                </td>
+                <td style="text-align:right;">
+                  <form method="post" action="{{ url_for('presupuestos_actualizar_item', item_id=item.id) }}" style="display:inline;">
+                    <input type="hidden" name="presupuesto_id" value="{{ presupuesto.id }}">
+                    <input type="hidden" name="subgrupo_id" value="{{ subgrupo.id }}">
+                    <input type="hidden" name="material_id" value="{{ item.material_id or '' }}">
+                    <input type="number" name="precio_unitario" step="0.01" value="{{ item.precio_unitario }}" 
+                           style="width:90px; padding:4px; text-align:right;" onchange="this.form.submit()">
+                  </form>
+                </td>
+                <td style="text-align:right;"><strong>$ {{ "{:,.2f}".format(item.subtotal) if item.subtotal else '0.00' }}</strong></td>
+                <td style="text-align:right;">
+                  <form method="post" action="{{ url_for('presupuestos_actualizar_item', item_id=item.id) }}" style="display:inline;">
+                    <input type="hidden" name="presupuesto_id" value="{{ presupuesto.id }}">
+                    <input type="hidden" name="subgrupo_id" value="{{ subgrupo.id }}">
+                    <input type="hidden" name="material_id" value="{{ item.material_id or '' }}">
+                    <input type="number" name="tiempo_ejecucion_horas" step="0.01" value="{{ item.tiempo_ejecucion_horas or 0 }}" 
+                           style="width:70px; padding:4px; text-align:right;" onchange="this.form.submit()">
+                  </form>
+                </td>
+                <td>
+                  <form method="post" action="{{ url_for('presupuestos_eliminar_item', item_id=item.id) }}" style="display:inline;">
+                    <input type="hidden" name="presupuesto_id" value="{{ presupuesto.id }}">
+                    <button type="submit" onclick="return confirm('¿Eliminar este item?')" 
+                            style="padding:4px 8px; background:#dc3545; color:white; border:none; border-radius:4px; cursor:pointer; font-size:0.85em;">Eliminar</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </table>
+        {% else %}
+          <p style="color:#666; font-style:italic;">No hay items en este subgrupo.</p>
+        {% endif %}
+
+        <div class="subgrupo-add-item" style="margin-top:12px;">
+          <button type="button" class="button button-secondary btn-toggle-item" data-target="form-subgrupo-{{ subgrupo.id }}">+ Agregar item</button>
+          <form id="form-subgrupo-{{ subgrupo.id }}" method="post" action="{{ url_for('presupuestos_agregar_item', id=presupuesto.id) }}" style="display:none; margin-top:10px; background:#ffffff; padding:12px; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+            <input type="hidden" name="subgrupo_id" value="{{ subgrupo.id }}">
+            <input type="hidden" name="orden" value="{{ (subgrupo.get('items') or [])|length + 1 }}">
+            <input type="hidden" name="item_id" class="hidden-item-id" value="">
+            <input type="hidden" name="material_id" class="hidden-material-id" value="">
+            <div style="display:grid; grid-template-columns: 1.2fr 2fr 1fr 1fr 1fr 1fr auto; gap:10px; align-items:end;">
+              <div>
+                <label style="display:block; margin-bottom:5px; font-weight:600;">Tipo de item:</label>
+                <select class="item-source" style="width:100%; padding:6px; height:34px;">
+                  <option value="material" {% if not items_materiales %}disabled{% else %}selected{% endif %}>Materiales eléctricos</option>
+                  <option value="servicio" {% if not items_servicio %}disabled{% endif %} {% if not items_materiales and items_servicio %}selected{% endif %}>Mano de obra / servicios</option>
+                </select>
+              </div>
+              <div>
+                <label style="display:block; margin-bottom:5px; font-weight:600;">Item:</label>
+                <div class="item-select-wrapper">
+                  <input type="text" class="item-input item-input-servicio" list="datalist-servicios" placeholder="Buscar servicio" style="width:260px; max-width:100%; padding:6px 8px; height:34px; {% if not items_servicio %}display:none;{% endif %}">
+                  <input type="text" class="item-input item-input-material" list="datalist-materiales" placeholder="Buscar material" {% if items_materiales %}style="width:260px; max-width:100%; padding:6px 8px; height:34px; display:block;"{% else %}style="width:260px; max-width:100%; padding:6px 8px; height:34px; display:none;" disabled{% endif %}>
+                </div>
+              </div>
+              <div>
+                <label style="display:block; margin-bottom:5px; font-weight:600;">Nº Subitem:</label>
+                <input type="text" name="numero_subitem" style="width:100%; padding:6px;" placeholder="{{ subgrupo.numero }}.{{ (subgrupo.get('items') or [])|length + 1 }}">
+              </div>
+              <div>
+                <label style="display:block; margin-bottom:5px; font-weight:600;">Cantidad:</label>
+                <input type="number" name="cantidad" step="0.01" value="1" min="0.01" required style="width:100%; padding:6px;">
+              </div>
+              <div>
+                <label style="display:block; margin-bottom:5px; font-weight:600;">Precio Unit.:</label>
+                <input type="number" name="precio_unitario" step="0.01" min="0" class="precio-unitario-input" style="width:100%; padding:6px;">
+              </div>
+              <div>
+                <label style="display:block; margin-bottom:5px; font-weight:600;">Tiempo (h):</label>
+                <input type="number" name="tiempo_ejecucion_horas" step="0.01" min="0" value="0" style="width:100%; padding:6px;">
+              </div>
+              <div>
+                <button type="submit" class="button">Agregar</button>
+              </div>
+            </div>
+            <div style="margin-top:8px;">
+              <label style="display:block; margin-bottom:5px; font-weight:600;">Notas:</label>
+              <input type="text" name="notas" style="width:100%; padding:6px;" placeholder="Notas opcionales del item">
+            </div>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  {% if presupuesto.get('items_sin_subgrupo') %}
+    <div style="background:#fff3cd; padding:15px; border-radius:6px; margin-bottom:15px;">
+      <h4>Items sin subgrupo</h4>
+      <table style="width:100%;">
+        <tr>
+          <th style="width:45%; text-align:left;">Descripción</th>
+          <th style="width:140px;">Proveedor</th>
+          <th>Cantidad</th>
+          <th>Precio Unit.</th>
+          <th>Subtotal</th>
+          <th>Tiempo (h)</th>
+          <th>Acciones</th>
+        </tr>
+        {% for item in presupuesto.get('items_sin_subgrupo', []) %}
+          <tr>
+            <td style="text-align:left;">{{ item.descripcion }}</td>
+            <td style="text-align:left; white-space:nowrap;">{{ item.proveedor or '-' }}</td>
+            <td style="text-align:right;">{{ "{:,.2f}".format(item.cantidad) }}</td>
+            <td style="text-align:right;">$ {{ "{:,.2f}".format(item.precio_unitario) if item.precio_unitario else '0.00' }}</td>
+            <td style="text-align:right;"><strong>$ {{ "{:,.2f}".format(item.subtotal) if item.subtotal else '0.00' }}</strong></td>
+            <td style="text-align:right;">{{ "{:,.2f}".format(item.tiempo_ejecucion_horas) if item.tiempo_ejecucion_horas else '0.00' }}</td>
+            <td>
+              <form method="post" action="{{ url_for('presupuestos_eliminar_item', item_id=item.id) }}" style="display:inline;">
+                <input type="hidden" name="presupuesto_id" value="{{ presupuesto.id }}">
+                <button type="submit" onclick="return confirm('¿Eliminar este item?')" 
+                        style="padding:4px 8px; background:#dc3545; color:white; border:none; border-radius:4px; cursor:pointer; font-size:0.85em;">Eliminar</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
+    </div>
+  {% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    document.querySelectorAll('.btn-toggle-item').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const targetId = btn.getAttribute('data-target');
+        const target = document.getElementById(targetId);
+        if (!target) return;
+        if (target.style.display === 'none' || target.style.display === '') {
+          target.style.display = 'block';
+        } else {
+          target.style.display = 'none';
+        }
+      });
+    });
+
+    document.querySelectorAll('.subgrupo-add-item form').forEach(function(form) {
+      const sourceSelect = form.querySelector('.item-source');
+      const servicioInput = form.querySelector('.item-input-servicio');
+      const materialInput = form.querySelector('.item-input-material');
+      const hiddenItem = form.querySelector('.hidden-item-id');
+      const hiddenMaterial = form.querySelector('.hidden-material-id');
+      const precioInput = form.querySelector('.precio-unitario-input');
+      const tiempoInput = form.querySelector('input[name="tiempo_ejecucion_horas"]');
+
+      function tieneOpciones(input) {
+        if (!input) return false;
+        const listId = input.getAttribute('list');
+        if (!listId) return false;
+        const datalist = document.getElementById(listId);
+        if (!datalist) return false;
+        return Array.from(datalist.options).some(function(opt) {
+          return opt.getAttribute('data-id');
+        });
+      }
+
+      function encontrarOpcion(input) {
+        if (!input) return null;
+        const listId = input.getAttribute('list');
+        if (!listId) return null;
+        const datalist = document.getElementById(listId);
+        if (!datalist) return null;
+        return Array.from(datalist.options).find(function(opt) {
+          return opt.value === input.value;
+        }) || null;
+      }
+
+      function actualizarDesdeInput(input, hiddenField) {
+        if (!input || !hiddenField) return;
+        const opcion = encontrarOpcion(input);
+        if (opcion) {
+          hiddenField.value = opcion.getAttribute('data-id') || '';
+          if (precioInput) {
+            const precio = opcion.getAttribute('data-precio');
+            if (precio !== null && precio !== '') {
+              precioInput.value = precio;
+            }
+          }
+          if (tiempoInput) {
+            const tiempo = opcion.getAttribute('data-tiempo');
+            if (tiempo !== null && tiempo !== '') {
+              tiempoInput.value = tiempo;
+            }
+          }
+        } else {
+          hiddenField.value = '';
+        }
+      }
+
+      function setActivo(tipoDeseado) {
+        const servicioValido = tieneOpciones(servicioInput);
+        const materialValido = tieneOpciones(materialInput);
+        let tipoActual = tipoDeseado;
+
+        if (tipoActual === 'material' && !materialValido && servicioValido) {
+          tipoActual = 'servicio';
+        } else if (tipoActual !== 'material' && !servicioValido && materialValido) {
+          tipoActual = 'material';
+        } else if (!servicioValido && !materialValido) {
+          tipoActual = null;
+        }
+
+        if (tipoActual === 'material') {
+          if (servicioInput) {
+            servicioInput.style.display = 'none';
+            servicioInput.disabled = true;
+            servicioInput.required = false;
+            servicioInput.value = '';
+          }
+          if (hiddenItem) hiddenItem.value = '';
+          if (materialInput) {
+            materialInput.style.display = 'block';
+            materialInput.disabled = false;
+            materialInput.required = true;
+          }
+          if (hiddenMaterial) hiddenMaterial.value = '';
+          form.dataset.activo = 'material';
+          if (sourceSelect) sourceSelect.value = 'material';
+          actualizarDesdeInput(materialInput, hiddenMaterial);
+        } else if (tipoActual === 'servicio') {
+          if (materialInput) {
+            materialInput.style.display = 'none';
+            materialInput.disabled = true;
+            materialInput.required = false;
+            materialInput.value = '';
+          }
+          if (hiddenMaterial) hiddenMaterial.value = '';
+          if (servicioInput) {
+            servicioInput.style.display = 'block';
+            servicioInput.disabled = false;
+            servicioInput.required = true;
+          }
+          if (hiddenItem) hiddenItem.value = '';
+          form.dataset.activo = 'servicio';
+          if (sourceSelect) sourceSelect.value = 'servicio';
+          actualizarDesdeInput(servicioInput, hiddenItem);
+        } else {
+          form.dataset.activo = '';
+          if (servicioInput) {
+            servicioInput.style.display = 'none';
+            servicioInput.disabled = true;
+            servicioInput.required = false;
+            servicioInput.value = '';
+          }
+          if (materialInput) {
+            materialInput.style.display = 'none';
+            materialInput.disabled = true;
+            materialInput.required = false;
+            materialInput.value = '';
+          }
+          if (hiddenItem) hiddenItem.value = '';
+          if (hiddenMaterial) hiddenMaterial.value = '';
+        }
+      }
+
+      if (sourceSelect) {
+        sourceSelect.addEventListener('change', function() {
+          setActivo(this.value);
+        });
+      }
+
+      if (servicioInput && hiddenItem) {
+        servicioInput.addEventListener('input', function() {
+          actualizarDesdeInput(servicioInput, hiddenItem);
+        });
+        servicioInput.addEventListener('change', function() {
+          actualizarDesdeInput(servicioInput, hiddenItem);
+        });
+      }
+
+      if (materialInput && hiddenMaterial) {
+        materialInput.addEventListener('input', function() {
+          actualizarDesdeInput(materialInput, hiddenMaterial);
+        });
+        materialInput.addEventListener('change', function() {
+          actualizarDesdeInput(materialInput, hiddenMaterial);
+        });
+      }
+
+      const tipoInicial = sourceSelect && sourceSelect.value
+        ? sourceSelect.value
+        : (tieneOpciones(servicioInput) ? 'servicio' : 'material');
+      setActivo(tipoInicial);
+    });
+  </script>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block title %}Editar material{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('materiales_index') }}">← Volver</a>
+  </div>
+  <h2>Editar material</h2>
+  <form method="post" style="max-width:520px; background:white; padding:20px; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+    <div style="margin-bottom:12px;">
+      <label style="display:block; margin-bottom:6px; font-weight:600;">Descripción</label>
+      <input type="text" name="descripcion" value="{{ material.descripcion }}" required style="width:100%; padding:8px;">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="display:block; margin-bottom:6px; font-weight:600;">Proveedor</label>
+      <input type="text" name="proveedor" value="{{ material.proveedor or '' }}" style="width:100%; padding:8px;">
+    </div>
+    <div style="display:flex; gap:12px;">
+      <div style="flex:1;">
+        <label style="display:block; margin-bottom:6px; font-weight:600;">Precio</label>
+        <input type="number" name="precio" step="0.01" min="0" value="{{ material.precio or 0 }}" style="width:100%; padding:8px;">
+      </div>
+      <div style="flex:1;">
+        <label style="display:block; margin-bottom:6px; font-weight:600;">Tiempo instalación (h)</label>
+        <input type="number" name="tiempo_instalacion" step="0.01" min="0" value="{{ material.tiempo_instalacion or 0 }}" style="width:100%; padding:8px;">
+      </div>
+    </div>
+    <div style="margin-top:20px; display:flex; gap:10px;">
+      <button type="submit" class="button">Guardar</button>
+      <a href="{{ url_for('materiales_index') }}" class="button button-secondary">Cancelar</a>
+    </div>
+  </form>
+{% endblock %}

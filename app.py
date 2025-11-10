@@ -1,306 +1,19 @@
-from flask import Flask, request, render_template, render_template_string, redirect, url_for, jsonify
+from flask import Flask, request, render_template, redirect, url_for, jsonify
 import io
 from contextlib import redirect_stdout
 from threading import Thread, Lock
 import time
+from urllib.parse import parse_qsl
 
 # Reutilizamos la lógica existente sin levantar su servidor
 import buscar_precios_web as precios
 import leer_factura as facturas
+import presupuestos_db as presupuestos
+from flask import make_response
+from datetime import datetime
 
 
 app = Flask(__name__)
-
-
-MENU_HTML = """
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <title>Menú</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 24px; }
-    .card { border: 1px solid #ddd; padding: 16px; border-radius: 8px; margin: 12px 0; }
-    a.button, button { display: inline-block; padding: 10px 16px; background: #1976d2; color: #fff; text-decoration: none; border-radius: 6px; border: none; cursor: pointer; }
-    a.button:hover, button:hover { background: #125a9e; }
-  </style>
-  </head>
-  <body>
-    <h2>Menú principal</h2>
-
-    <div class="card">
-      <h3>Buscar precios</h3>
-      <p>Consultar precios guardados en la base de datos.</p>
-      <a class="button" href="{{ url_for('precios_index') }}">Abrir búsqueda</a>
-    </div>
-
-    <div class="card">
-      <h3>Leer facturas</h3>
-      <p>Procesar facturas XML desde el correo IMAP y cargar precios.</p>
-      <a class="button" href="{{ url_for('leer_facturas_page') }}">Abrir lector</a>
-    </div>
-
-    <div class="card">
-      <h3>Calculadora de precio</h3>
-      <p>Ingresa precio y margen para calcular el precio de venta.</p>
-      <a class="button" href="{{ url_for('calculadora') }}">Abrir calculadora</a>
-    </div>
-  </body>
-</html>
-"""
-CALCULADORA_HTML = """
-<!doctype html>
-<html lang=\"es\">
-<head>
-  <meta charset=\"utf-8\">
-  <title>Calculadora de precio</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 24px; }
-    .container { max-width: 600px; margin: 0 auto; }
-    .field { display: flex; flex-direction: column; margin-bottom: 12px; }
-    label { font-weight: 600; margin-bottom: 6px; }
-    input { padding: 8px; height: 36px; }
-    .actions { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
-    a.button, button.button { display: inline-block; padding: 8px 14px; background: #1976d2; color: #fff; text-decoration: none; border-radius: 6px; border: none; cursor: pointer; }
-    a.button:hover, button.button:hover { background: #125a9e; }
-    a.button-secondary { background: #777; }
-    a.button-secondary:hover { background: #5b5b5b; }
-    .result { margin-top: 16px; background: #f7f7f7; padding: 12px; border-radius: 6px; }
-  </style>
-</head>
-<body>
-  <div class=\"container\">
-    <div class=\"actions\" style=\"margin-bottom:10px;\"><a class=\"button button-secondary\" href=\"{{ url_for('menu') }}\">← Volver</a></div>
-    <h2>Calculadora de precio</h2>
-    <form method=\"get\" action=\"{{ url_for('calculadora') }}\">
-      <div class=\"field\">
-        <label>Precio (costo)</label>
-        <input type=\"number\" step=\"0.01\" name=\"precio\" value=\"{{ request.args.get('precio','') }}\" placeholder=\"Ej: 1000\">
-      </div>
-      <div class=\"field\">
-        <label>Margen %</label>
-        <input type=\"number\" step=\"0.01\" name=\"margen\" value=\"{{ request.args.get('margen','') }}\" placeholder=\"Ej: 20\">
-      </div>
-      <div class=\"actions\">
-        <button type=\"submit\" class=\"button\">Calcular</button>
-        <a class=\"button button-secondary\" href=\"{{ url_for('calculadora') }}\">Limpiar</a>
-      </div>
-    </form>
-
-    {% if resultado is not none %}
-    <div class=\"result\">
-      <div><strong>Precio de venta:</strong> {{ "{:,.2f}".format(resultado) }}</div>
-      <div><small>Fórmula: precio × 100 / (100 − margen)</small></div>
-    </div>
-    {% endif %}
-  </div>
-</body>
-</html>
-"""
-CALCULADORA_HTML = CALCULADORA_HTML.replace('</body>',
-    '<script>\n'
-    '  (function(){\n'
-    '    const locale = "es-ES";\n'
-    '    const nf0 = new Intl.NumberFormat(locale);\n'
-    '    function unformat(val){\n'
-    '      if(val == null) return "";\n'
-    '      val = String(val).trim().replace(/\s/g, "");\n'
-    '      if(/,\d{1,2}$/.test(val)){ val = val.replace(/\./g, "").replace(/,/g, "."); } else { val = val.replace(/\./g, ""); }\n'
-    '      return val;\n'
-    '    }\n'
-    '    function parseNum(v){ const n = parseFloat(unformat(v)); return isNaN(n) ? null : n; }\n'
-    '    const f = document.querySelector("form[action=\\"' + "{{ url_for('calculadora') }}" + '\\"]");\n'
-    '    if(!f) return;\n'
-    '    const precio = f.querySelector("input[name=precio]");\n'
-    '    const margen = f.querySelector("input[name=margen]");\n'
-    '    function formatEl(el){ const n = parseNum(el.value); if(n!=null) el.value = nf0.format(n); }\n'
-    '    [precio, margen].forEach(el => {\n'
-    '      if(!el) return;\n'
-    '      el.addEventListener("blur", ()=>formatEl(el));\n'
-    '      el.addEventListener("focus", ()=>{ el.value = unformat(el.value); });\n'
-    '      if(el.value) formatEl(el);\n'
-    '    });\n'
-    '    f.addEventListener("submit", ()=>{\n'
-    '      [precio, margen].forEach(el=>{ el.value = unformat(el.value); });\n'
-    '    });\n'
-    '  })();\n'
-    '</script>\n</body>')
-
-
-LEER_FACTURAS_HTML = """
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <title>Leer facturas</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 24px; }
-    a.button, button { display: inline-block; padding: 10px 16px; background: #1976d2; color: #fff; text-decoration: none; border-radius: 6px; border: none; cursor: pointer; }
-    a.button:hover, button:hover { background: #125a9e; }
-    pre { background: #f7f7f7; padding: 12px; border-radius: 6px; overflow: auto; }
-  </style>
-</head>
-<body>
-  <a class="button" href="{{ url_for('menu') }}">← Volver</a>
-  <h2>Leer facturas (IMAP)</h2>
-  <form id="run-form" method="post" action="{{ url_for('leer_facturas_page') }}">
-    <button type="submit" id="run-btn">{{ 'Procesando…' if running else 'Ejecutar procesamiento' }}</button>
-  </form>
-
-  <div id="status" style="margin-top:10px;">Estado: {{ 'En ejecución' if running else ('Finalizado' if finished else 'Idle') }}</div>
-
-  <h3>Resultado</h3>
-  <pre id="log" style="white-space: pre-wrap;">{{ salida or '' }}</pre>
-
-  <script>
-    (function(){
-      const statusEl = document.getElementById('status');
-      const logEl = document.getElementById('log');
-      const btn = document.getElementById('run-btn');
-      let polling = true;
-
-      function tick(){
-        fetch('{{ url_for('leer_facturas_status') }}').then(r=>r.json()).then(j=>{
-          statusEl.textContent = 'Estado: ' + (j.running ? 'En ejecución' : (j.finished ? 'Finalizado' : 'Idle'));
-          if(j.running){ btn.disabled = true; btn.textContent = 'Procesando…'; }
-          else { btn.disabled = false; btn.textContent = 'Ejecutar procesamiento'; }
-          if(typeof j.output === 'string'){
-            logEl.textContent = j.output;
-            // Auto-scroll al final
-            logEl.scrollTop = logEl.scrollHeight;
-          }
-        }).catch(()=>{}).finally(()=>{
-          if(polling) setTimeout(tick, 1500);
-        });
-      }
-      tick();
-    })();
-  </script>
-</body>
-</html>
-"""
-
-
-def _template_precios():
-    # Adaptamos el action="/" a action="/precios" y añadimos margen (%) y columna de venta
-    tpl = precios.HTML_TEMPLATE
-    tpl = tpl.replace('action="/"', 'action="/precios"')
-
-    # Campo de margen debajo del filtro
-    tpl = tpl.replace(
-        '</label>\n    <br><br>',
-        '</label>\n    <br>\n    <label>Margen %:</label>\n    <input name="margen" value="{{request.args.get(\'margen\',\'0\')}}" size="6">\n    <br><br>'
-    )
-
-    # Agregar columna en encabezado
-    tpl = tpl.replace(
-        '<tr><th>Proveedor</th><th>Fecha</th><th>Producto</th><th>Precio</th></tr>',
-        '<tr><th>Proveedor</th><th>Fecha</th><th>Producto</th><th>Precio</th><th>Precio de venta</th></tr>'
-    )
-
-    # Reemplazar el bloque de filas para añadir la celda de precio_venta ya calculado
-    tpl = tpl.replace(
-        '        {% for r in rows %}\n          <tr>\n            <td>{{ r.proveedor }}</td>\n            <td>{{ r.fecha.strftime("%Y-%m-%d %H:%M:%S") if r.fecha else "" }}</td>\n            <td>{{ r.producto }}</td>\n            <td style="text-align:right;">{{ "{:,.2f}".format(r.precio) if r.precio is not none else "" }}</td>\n          </tr>\n        {% endfor %}\n',
-        '        {% for r in rows %}\n          <tr>\n            <td>{{ r.proveedor }}</td>\n            <td>{{ r.fecha.strftime("%Y-%m-%d %H:%M:%S") if r.fecha else "" }}</td>\n            <td>{{ r.producto }}</td>\n            <td style="text-align:right;">{{ "{:,.2f}".format(r.precio) if r.precio is not none else "" }}</td>\n            <td style="text-align:right;">{{ "{:,.2f}".format(r.precio_venta) if r.precio_venta is not none else "" }}</td>\n          </tr>\n        {% endfor %}\n'
-    )
-
-    # Agregar estilos modernos
-    tpl = tpl.replace(
-        '</style>',
-        '  .container { max-width: 1000px; margin: 0 auto; }\n'
-        '  .form-grid { display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 10px 14px; align-items: start; }\n'
-        '  .field { display: flex; flex-direction: column; min-width: 0; }\n'
-        '  .form-grid label { font-weight: 600; display: block; margin-bottom: 6px; }\n'
-        '  .form-grid input, .form-grid select { width: 100%; box-sizing: border-box; padding: 6px 8px; height: 34px; }\n'
-        '  .actions { margin-top: 8px; display: flex; gap: 10px; align-items: center; }\n'
-        '  .actions-row { grid-column: 1 / -1; display: flex; gap: 10px; }\n'
-        '  a.button, button.button { display: inline-block; padding: 8px 14px; background: #1976d2; color: #fff; text-decoration: none; border-radius: 6px; border: none; cursor: pointer; }\n'
-        '  a.button:hover, button.button:hover { background: #125a9e; }\n'
-        '  a.button-secondary { background: #777; }\n'
-        '  a.button-secondary:hover { background: #5b5b5b; }\n'
-        '  table tr:nth-child(even) { background: #fafafa; }\n'
-        '</style>'
-    )
-
-    # Botón volver al menú
-    tpl = tpl.replace(
-        '<body>\n  <h2>',
-        '<body>\n  <div class="container">\n    <div class="actions" style="margin-bottom:10px;">\n      <a class="button button-secondary" href="{{ url_for(\'menu\') }}">← Volver</a>\n    </div>\n    <h2>'
-    )
-
-    # Cerrar container al final del body
-    tpl = tpl.replace('\n</body>', '\n  </div>\n</body>')
-
-    # Convertir el formulario a grid y añadir placeholders y clases
-    tpl = tpl.replace('<form method="get" action="/precios">', '<form method="get" action="/precios" class="form-grid">')
-
-    # Fila 1: Proveedor, Producto
-    tpl = tpl.replace(
-        '    <label>Proveedor (parcial):</label><br>\n    <input name="proveedor"',
-        '    <div class="field">\n      <label>Proveedor (parcial):</label>\n      <input name="proveedor" placeholder="Ej: Everest, Proveedor X"'
-    )
-    tpl = tpl.replace('<br>\n    <label>Producto (parcial):</label><br>\n    <input name="producto"',
-        '</div>\n    <div class="field">\n      <label>Producto (parcial):</label>\n      <input name="producto" placeholder="Ej: PLC, cable, motor"'
-    )
-    tpl = tpl.replace('<br>\n    <label>Fecha inicio', '</div>\n    <div class="field">\n    <label>Fecha inicio')
-
-    # Fila 2: Fecha inicio, Fecha fin
-    tpl = tpl.replace('<input name="fecha_inicio"', '<input name="fecha_inicio" placeholder="YYYY-MM-DD [HH:MM[:SS]]"')
-    tpl = tpl.replace('    <label style="margin-left:12px">Fecha fin (YYYY-MM-DD [HH:MM[:SS]]):</label><br>', '    </div>\n    <div class="field">\n      <label>Fecha fin (YYYY-MM-DD [HH:MM[:SS]]):</label>')
-    tpl = tpl.replace('<input name="fecha_fin"', '<input name="fecha_fin" placeholder="YYYY-MM-DD [HH:MM[:SS]]"')
-    tpl = tpl.replace('<br>\n    <label>Límite:', '</div>\n    <div class="field">\n    <label>Límite:')
-
-    # Fila 3: Límite, Filtro, Margen
-    tpl = tpl.replace('<input name="limite"', '<input name="limite"')
-    tpl = tpl.replace('<label style="display:inline-block; margin-top:8px;">', '</div>\n    <div class="field">\n      <label>')
-    tpl = tpl.replace('</label>\n    <br>', '</label>')
-    tpl = tpl.replace('    <label>Margen %:</label>', '    </div>\n    <div class="field">\n      <label>Margen %:</label>')
-    tpl = tpl.replace('<input name="margen"', '<input name="margen" placeholder="% margen"')
-
-    # Fila 4: Acciones
-    tpl = tpl.replace('<br><br>\n    <button type="submit">Buscar</button>\n    <a href="/">Limpiar</a>\n  </form>',
-        '</div>\n    <div class="actions-row">\n      <a class="button button-secondary" href="/precios">Limpiar</a>\n      <button type="submit" class="button">Buscar</button>\n    </div>\n  </form>')
-
-    # Agregar formateo de números (margen, límite) y normalización en submit
-    script = (
-        '<script>\n'
-        '  (function(){\n'
-        '    const locale = "es-ES";\n'
-        '    const nf0 = new Intl.NumberFormat(locale);\n'
-        '    function unformat(val){\n'
-        '      if(val == null) return "";\n'
-        '      val = String(val).trim();\n'
-        '      val = val.replace(/\s/g,"");\n'
-        '      if(/,\d{1,2}$/.test(val)){ val = val.replace(/\./g, "").replace(/,/g, "."); } else { val = val.replace(/\./g, ""); }\n'
-        '      return val;\n'
-        '    }\n'
-        '    function tryParseFloat(val){\n'
-        '      const raw = unformat(val);\n'
-        '      const n = parseFloat(raw);\n'
-        '      return isNaN(n) ? null : n;\n'
-        '    }\n'
-        '    function formatInput(el){\n'
-        '      const n = tryParseFloat(el.value);\n'
-        '      if(n == null) return;\n'
-        '      if(el.name === "limite"){ el.value = nf0.format(Math.trunc(n)); } else { el.value = nf0.format(n); }\n'
-        '    }\n'
-        '    const form = document.querySelector("form[action=\"/precios\"]");\n'
-        '    if(!form) return;\n'
-        '    const inputs = Array.from(form.querySelectorAll("input[name=\"margen\"], input[name=\"limite\"]"));\n'
-        '    inputs.forEach(el => {\n'
-        '      el.addEventListener("blur", () => formatInput(el));\n'
-        '      el.addEventListener("focus", () => { el.value = unformat(el.value); });\n'
-        '      if(el.value) { formatInput(el); }\n'
-        '    });\n'
-        '    form.addEventListener("submit", () => {\n'
-        '      inputs.forEach(el => { el.value = unformat(el.value); });\n'
-        '    });\n'
-        '  })();\n'
-        '</script>'
-    );
-    tpl = tpl.replace('</html>', script + '\n</html>')
-
-    return tpl
 
 
 @app.route("/")
@@ -372,7 +85,45 @@ def precios_index():
                 "precio_venta": precio_venta,
             })
 
-    return render_template('precios.html', rows=rows, request=request, margen_val=margen_val)
+    current_query = request.query_string.decode('utf-8') if request.query_string else ''
+
+    return render_template('precios.html', rows=rows, request=request, current_query=current_query)
+
+
+@app.route("/precios/materiales", methods=["POST"])
+def precios_agregar_material():
+    descripcion = (request.form.get("descripcion") or "").strip()
+    proveedor = (request.form.get("proveedor") or "").strip()
+    precio_str = request.form.get("precio") or "0"
+    tiempo_str = request.form.get("tiempo_instalacion") or "0"
+    return_query = request.form.get("return_query") or ""
+
+    try:
+        precio = float(precio_str)
+    except ValueError:
+        precio = 0.0
+    try:
+        tiempo_instalacion = float(tiempo_str)
+    except ValueError:
+        tiempo_instalacion = 0.0
+
+    status = "error"
+    if descripcion:
+        try:
+            _, updated = presupuestos.crear_o_actualizar_material(
+                descripcion=descripcion,
+                precio=precio,
+                tiempo_instalacion=tiempo_instalacion,
+                proveedor=proveedor or None,
+            )
+            status = "updated" if updated else "created"
+        except Exception:
+            status = "error"
+
+    params = dict(parse_qsl(return_query)) if return_query else {}
+    params["material_msg"] = status
+    params["material_desc"] = descripcion
+    return redirect(url_for('precios_index', **params))
 
 
 @app.route("/leer-facturas", methods=["GET", "POST"])
@@ -476,6 +227,628 @@ def historial_data():
     labels = [r['fecha'].strftime('%Y-%m-%d') if r['fecha'] else '' for r in rows]
     data = [float(r['precio']) if r['precio'] is not None else None for r in rows]
     return jsonify({"labels": labels, "data": data, "producto": producto, "proveedor": proveedor})
+
+
+# ==================== RUTAS DE PRESUPUESTOS ====================
+
+@app.route("/presupuestos", methods=["GET"])
+def presupuestos_index():
+    """Lista de presupuestos"""
+    estado = request.args.get("estado")
+    cliente_id = request.args.get("cliente_id")
+    try:
+        cliente_id = int(cliente_id) if cliente_id else None
+    except ValueError:
+        cliente_id = None
+    
+    presupuestos_lista = presupuestos.obtener_presupuestos(estado=estado, cliente_id=cliente_id)
+    clientes_lista = presupuestos.obtener_clientes()
+    
+    return render_template('presupuestos/index.html', 
+                         presupuestos=presupuestos_lista, 
+                         clientes=clientes_lista,
+                         estado_filtro=estado,
+                         cliente_filtro=cliente_id,
+                         request=request)
+
+@app.route("/presupuestos/nuevo", methods=["GET", "POST"])
+def presupuestos_nuevo():
+    """Crear nuevo presupuesto"""
+    if request.method == "POST":
+        cliente_id = request.form.get("cliente_id")
+        try:
+            cliente_id = int(cliente_id) if cliente_id else None
+        except ValueError:
+            cliente_id = None
+        
+        numero = request.form.get("numero_presupuesto") or presupuestos.generar_numero_presupuesto()
+        titulo = request.form.get("titulo") or None
+        descripcion = request.form.get("descripcion") or None
+        estado = request.form.get("estado") or "borrador"
+        fecha = request.form.get("fecha_presupuesto") or None
+        validez_dias = request.form.get("validez_dias")
+        try:
+            validez_dias = int(validez_dias) if validez_dias else 30
+        except ValueError:
+            validez_dias = 30
+        iva_porcentaje = request.form.get("iva_porcentaje")
+        try:
+            iva_porcentaje = float(iva_porcentaje) if iva_porcentaje else 21.0
+        except ValueError:
+            iva_porcentaje = 21.0
+        notas = request.form.get("notas") or None
+        
+        presupuesto_id = presupuestos.crear_presupuesto(
+            cliente_id=cliente_id,
+            numero_presupuesto=numero,
+            titulo=titulo,
+            descripcion=descripcion,
+            estado=estado,
+            fecha_presupuesto=fecha,
+            validez_dias=validez_dias,
+            iva_porcentaje=iva_porcentaje,
+            notas=notas
+        )
+        return redirect(url_for('presupuestos_ver', id=presupuesto_id))
+    
+    clientes_lista = presupuestos.obtener_clientes()
+    numero_presupuesto = presupuestos.generar_numero_presupuesto()
+    return render_template('presupuestos/form.html', 
+                         presupuesto=None, 
+                         clientes=clientes_lista,
+                         numero_presupuesto=numero_presupuesto,
+                         request=request)
+
+@app.route("/presupuestos/<int:id>", methods=["GET"])
+def presupuestos_ver(id):
+    """Ver presupuesto"""
+    presupuesto = presupuestos.obtener_presupuesto_por_id(id)
+    if not presupuesto:
+        return "Presupuesto no encontrado", 404
+    
+    items_servicio_raw = presupuestos.obtener_items_activos()
+    items_servicio = []
+    for item in items_servicio_raw:
+        item_dict = dict(item)
+        item_dict['precio_venta'] = float(item_dict.get('precio_venta') or item_dict.get('precio_base') or 0)
+        item_dict['tiempo_instalacion'] = float(item_dict.get('tiempo_instalacion') or 0)
+        item_dict['codigo'] = item_dict.get('codigo') or f"SERV-{item_dict.get('id')}"
+        item_dict['unidad'] = item_dict.get('unidad') or 'unidad'
+        items_servicio.append(item_dict)
+
+    materiales_raw = presupuestos.obtener_materiales()
+    items_materiales = []
+    for material in materiales_raw:
+        material_dict = dict(material)
+        material_dict['precio_venta'] = float(material_dict.get('precio') or 0)
+        material_dict['tiempo_instalacion'] = float(material_dict.get('tiempo_instalacion') or 0)
+        material_dict['tipo'] = material_dict.get('tipo') or 'Material'
+        material_dict['unidad'] = material_dict.get('unidad') or 'unidad'
+        material_dict['codigo'] = material_dict.get('codigo') or f"MAT-{material_dict.get('id')}"
+        items_materiales.append(material_dict)
+
+    tipos_items = presupuestos.obtener_tipos_items()
+    items_disponibles = items_servicio + items_materiales
+
+    return render_template('presupuestos/ver.html', 
+                         presupuesto=presupuesto, 
+                         items_disponibles=items_disponibles,
+                         items_servicio=items_servicio,
+                         items_materiales=items_materiales,
+                         tipos_items=tipos_items,
+                         request=request)
+
+@app.route("/presupuestos/<int:id>/editar", methods=["GET", "POST"])
+def presupuestos_editar(id):
+    """Editar presupuesto"""
+    presupuesto = presupuestos.obtener_presupuesto_por_id(id)
+    if not presupuesto:
+        return "Presupuesto no encontrado", 404
+    
+    if request.method == "POST":
+        cliente_id = request.form.get("cliente_id")
+        try:
+            cliente_id = int(cliente_id) if cliente_id else None
+        except ValueError:
+            cliente_id = None
+        
+        titulo = request.form.get("titulo") or None
+        descripcion = request.form.get("descripcion") or None
+        estado = request.form.get("estado") or "borrador"
+        fecha = request.form.get("fecha_presupuesto") or None
+        validez_dias = request.form.get("validez_dias")
+        try:
+            validez_dias = int(validez_dias) if validez_dias else None
+        except ValueError:
+            validez_dias = None
+        iva_porcentaje = request.form.get("iva_porcentaje")
+        try:
+            iva_porcentaje = float(iva_porcentaje) if iva_porcentaje else None
+        except ValueError:
+            iva_porcentaje = None
+        notas = request.form.get("notas") or None
+        
+        presupuestos.actualizar_presupuesto(
+            presupuesto_id=id,
+            cliente_id=cliente_id,
+            titulo=titulo,
+            descripcion=descripcion,
+            estado=estado,
+            fecha_presupuesto=fecha,
+            validez_dias=validez_dias,
+            iva_porcentaje=iva_porcentaje,
+            notas=notas
+        )
+        return redirect(url_for('presupuestos_ver', id=id))
+    
+    clientes_lista = presupuestos.obtener_clientes()
+    return render_template('presupuestos/form.html', 
+                         presupuesto=presupuesto, 
+                         clientes=clientes_lista,
+                         request=request)
+
+@app.route("/presupuestos/<int:id>/items/agregar", methods=["POST"])
+def presupuestos_agregar_item(id):
+    """Agregar item a presupuesto"""
+    item_id = request.form.get("item_id")
+    try:
+        item_id = int(item_id) if item_id else None
+    except ValueError:
+        item_id = None
+
+    material_id = request.form.get("material_id")
+    try:
+        material_id = int(material_id) if material_id else None
+    except ValueError:
+        material_id = None
+    
+    if not item_id and not material_id:
+        return "Debe seleccionar un servicio o material", 400
+    
+    cantidad = request.form.get("cantidad")
+    try:
+        cantidad = float(cantidad) if cantidad else 1
+    except ValueError:
+        cantidad = 1
+    
+    precio_unitario = request.form.get("precio_unitario")
+    try:
+        precio_unitario = float(precio_unitario) if precio_unitario else None
+    except ValueError:
+        precio_unitario = None
+    
+    subgrupo_id = request.form.get("subgrupo_id")
+    try:
+        subgrupo_id = int(subgrupo_id) if subgrupo_id else None
+    except ValueError:
+        subgrupo_id = None
+    
+    numero_subitem = request.form.get("numero_subitem") or None
+    tiempo_ejecucion_horas = request.form.get("tiempo_ejecucion_horas")
+    try:
+        tiempo_ejecucion_horas = float(tiempo_ejecucion_horas) if tiempo_ejecucion_horas not in (None, "") else None
+    except ValueError:
+        tiempo_ejecucion_horas = None
+    
+    orden = request.form.get("orden")
+    try:
+        orden = int(orden) if orden else 0
+    except ValueError:
+        orden = 0
+    
+    notas = request.form.get("notas") or None
+    
+    try:
+        presupuestos.agregar_item_a_presupuesto(
+            presupuesto_id=id,
+            item_id=item_id,
+            material_id=material_id,
+            cantidad=cantidad,
+            precio_unitario=precio_unitario,
+            subgrupo_id=subgrupo_id,
+            numero_subitem=numero_subitem,
+            tiempo_ejecucion_horas=tiempo_ejecucion_horas,
+            orden=orden,
+            notas=notas
+        )
+    except Exception as e:
+        return f"Error al agregar item: {str(e)}", 400
+    
+    return redirect(url_for('presupuestos_ver', id=id))
+
+@app.route("/presupuestos/items/<int:item_id>/eliminar", methods=["POST"])
+def presupuestos_eliminar_item(item_id):
+    """Eliminar item de presupuesto"""
+    presupuesto_id = request.form.get("presupuesto_id")
+    try:
+        presupuesto_id = int(presupuesto_id) if presupuesto_id else None
+    except ValueError:
+        return "Presupuesto ID inválido", 400
+    
+    if presupuestos.eliminar_item_de_presupuesto(item_id):
+        return redirect(url_for('presupuestos_ver', id=presupuesto_id))
+    return "Error al eliminar item", 400
+
+@app.route("/presupuestos/items/<int:item_id>/actualizar", methods=["POST"])
+def presupuestos_actualizar_item(item_id):
+    """Actualizar item de presupuesto"""
+    presupuesto_id = request.form.get("presupuesto_id")
+    try:
+        presupuesto_id = int(presupuesto_id) if presupuesto_id else None
+    except ValueError:
+        return "Presupuesto ID inválido", 400
+    
+    cantidad = request.form.get("cantidad")
+    try:
+        cantidad = float(cantidad) if cantidad else None
+    except ValueError:
+        cantidad = None
+    
+    precio_unitario = request.form.get("precio_unitario")
+    try:
+        precio_unitario = float(precio_unitario) if precio_unitario else None
+    except ValueError:
+        precio_unitario = None
+    
+    subgrupo_id = request.form.get("subgrupo_id")
+    try:
+        subgrupo_id = int(subgrupo_id) if subgrupo_id else None
+    except ValueError:
+        subgrupo_id = None
+    
+    numero_subitem = request.form.get("numero_subitem")
+    tiempo_ejecucion_horas = request.form.get("tiempo_ejecucion_horas")
+    try:
+        tiempo_ejecucion_horas = float(tiempo_ejecucion_horas) if tiempo_ejecucion_horas else None
+    except ValueError:
+        tiempo_ejecucion_horas = None
+    
+    orden = request.form.get("orden")
+    try:
+        orden = int(orden) if orden else None
+    except ValueError:
+        orden = None
+    
+    descripcion = request.form.get("descripcion")
+    notas = request.form.get("notas")
+    material_id = request.form.get("material_id")
+    try:
+        material_id = int(material_id) if material_id else None
+    except ValueError:
+        material_id = None
+    
+    if presupuestos.actualizar_item_presupuesto(
+        presupuesto_item_id=item_id,
+        cantidad=cantidad,
+        precio_unitario=precio_unitario,
+        subgrupo_id=subgrupo_id,
+        numero_subitem=numero_subitem,
+        tiempo_ejecucion_horas=tiempo_ejecucion_horas,
+        orden=orden,
+        descripcion=descripcion,
+        notas=notas,
+        material_id=material_id
+    ):
+        return redirect(url_for('presupuestos_ver', id=presupuesto_id))
+    return "Error al actualizar item", 400
+
+# ==================== RUTAS DE SUBGRUPOS ====================
+
+@app.route("/presupuestos/<int:id>/subgrupos/agregar", methods=["POST"])
+def presupuestos_agregar_subgrupo(id):
+    """Agregar subgrupo a presupuesto"""
+    nombre = request.form.get("nombre")
+    if not nombre:
+        return "Nombre del subgrupo es requerido", 400
+    
+    numero = request.form.get("numero")
+    try:
+        numero = int(numero) if numero else presupuestos.obtener_siguiente_numero_subgrupo(id)
+    except ValueError:
+        numero = presupuestos.obtener_siguiente_numero_subgrupo(id)
+    
+    orden = request.form.get("orden")
+    try:
+        orden = int(orden) if orden else 0
+    except ValueError:
+        orden = 0
+    
+    try:
+        presupuestos.crear_subgrupo(
+            presupuesto_id=id,
+            numero=numero,
+            nombre=nombre,
+            orden=orden
+        )
+    except Exception as e:
+        return f"Error al agregar subgrupo: {str(e)}", 400
+    
+    return redirect(url_for('presupuestos_ver', id=id))
+
+@app.route("/presupuestos/subgrupos/<int:subgrupo_id>/actualizar", methods=["POST"])
+def presupuestos_actualizar_subgrupo(subgrupo_id):
+    """Actualizar subgrupo"""
+    presupuesto_id = request.form.get("presupuesto_id")
+    try:
+        presupuesto_id = int(presupuesto_id) if presupuesto_id else None
+    except ValueError:
+        return "Presupuesto ID inválido", 400
+    
+    numero = request.form.get("numero")
+    try:
+        numero = int(numero) if numero else None
+    except ValueError:
+        numero = None
+    
+    nombre = request.form.get("nombre")
+    orden = request.form.get("orden")
+    try:
+        orden = int(orden) if orden else None
+    except ValueError:
+        orden = None
+    
+    if presupuestos.actualizar_subgrupo(
+        subgrupo_id=subgrupo_id,
+        numero=numero,
+        nombre=nombre,
+        orden=orden
+    ):
+        return redirect(url_for('presupuestos_ver', id=presupuesto_id))
+    return "Error al actualizar subgrupo", 400
+
+@app.route("/presupuestos/subgrupos/<int:subgrupo_id>/eliminar", methods=["POST"])
+def presupuestos_eliminar_subgrupo(subgrupo_id):
+    """Eliminar subgrupo"""
+    presupuesto_id = request.form.get("presupuesto_id")
+    try:
+        presupuesto_id = int(presupuesto_id) if presupuesto_id else None
+    except ValueError:
+        return "Presupuesto ID inválido", 400
+    
+    if presupuestos.eliminar_subgrupo(subgrupo_id):
+        return redirect(url_for('presupuestos_ver', id=presupuesto_id))
+    return "Error al eliminar subgrupo", 400
+
+
+@app.route("/presupuestos/<int:id>/pdf", methods=["GET"])
+def presupuestos_pdf(id):
+    """Generar/visualizar PDF del presupuesto"""
+    presupuesto = presupuestos.obtener_presupuesto_por_id(id)
+    if not presupuesto:
+        return "Presupuesto no encontrado", 404
+
+    items_disponibles = presupuestos.obtener_items_activos()
+    tipos_items = presupuestos.obtener_tipos_items()
+
+    html = render_template(
+        'presupuestos/pdf.html',
+        presupuesto=presupuesto,
+        items_disponibles=items_disponibles,
+        tipos_items=tipos_items,
+        request=request,
+        datetime=datetime,
+    )
+
+    try:
+        from weasyprint import HTML
+
+        pdf = HTML(string=html, base_url=request.host_url).write_pdf()
+        response = make_response(pdf)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'inline; filename=presupuesto_{id}.pdf'
+        return response
+    except Exception as e:
+        mensaje = (
+            "<p style='padding:10px; background:#fff3cd;'>"
+            "⚠️ No se pudo generar el PDF automáticamente."
+            "<br>• Si deseas exportar a PDF desde la aplicación instala la dependencia opcional "
+            "<code>weasyprint</code> y sus librerías del sistema (GTK/GObject)."
+            "<br>• Error reportado: <code>{error}</code>"
+            "<br>Mostrando vista previa imprimible."
+            "</p>"
+        ).format(error=str(e))
+        return mensaje + html
+
+# ==================== RUTAS DE ITEMS ====================
+
+@app.route("/presupuestos/items", methods=["GET"])
+def items_index():
+    """Lista de items"""
+    tipo = request.args.get("tipo")
+    items_lista = presupuestos.obtener_items_activos(tipo=tipo)
+    tipos_lista = presupuestos.obtener_tipos_items()
+    return render_template('presupuestos/items/index.html', 
+                         items=items_lista, 
+                         tipos=tipos_lista,
+                         tipo_filtro=tipo,
+                         request=request)
+
+@app.route("/presupuestos/items/nuevo", methods=["GET", "POST"])
+def items_nuevo():
+    """Crear nuevo item"""
+    if request.method == "POST":
+        codigo = request.form.get("codigo") or None
+        descripcion = request.form.get("descripcion")
+        if not descripcion:
+            return "Descripción es requerida", 400
+        tipo = request.form.get("tipo") or "Otros"
+        unidad = request.form.get("unidad") or "unidad"
+        precio_base = request.form.get("precio_base")
+        try:
+            precio_base = float(precio_base) if precio_base else 0
+        except ValueError:
+            precio_base = 0
+        margen_porcentaje = request.form.get("margen_porcentaje")
+        try:
+            margen_porcentaje = float(margen_porcentaje) if margen_porcentaje else 0
+        except ValueError:
+            margen_porcentaje = 0
+        notas = request.form.get("notas") or None
+        
+        try:
+            presupuestos.crear_item(
+                codigo=codigo,
+                descripcion=descripcion,
+                tipo=tipo,
+                unidad=unidad,
+                precio_base=precio_base,
+                margen_porcentaje=margen_porcentaje,
+                notas=notas
+            )
+            return redirect(url_for('items_index'))
+        except Exception as e:
+            return f"Error al crear item: {str(e)}", 400
+    
+    tipos_lista = presupuestos.obtener_tipos_items()
+    return render_template('presupuestos/items/form.html', 
+                         item=None, 
+                         tipos=tipos_lista,
+                         request=request)
+
+@app.route("/presupuestos/items/<int:id>/editar", methods=["GET", "POST"])
+def items_editar(id):
+    """Editar item"""
+    item = presupuestos.obtener_item_por_id(id)
+    if not item:
+        return "Item no encontrado", 404
+    
+    if request.method == "POST":
+        codigo = request.form.get("codigo") or None
+        descripcion = request.form.get("descripcion")
+        if not descripcion:
+            return "Descripción es requerida", 400
+        tipo = request.form.get("tipo") or "Otros"
+        unidad = request.form.get("unidad") or "unidad"
+        precio_base = request.form.get("precio_base")
+        try:
+            precio_base = float(precio_base) if precio_base else 0
+        except ValueError:
+            precio_base = 0
+        margen_porcentaje = request.form.get("margen_porcentaje")
+        try:
+            margen_porcentaje = float(margen_porcentaje) if margen_porcentaje else 0
+        except ValueError:
+            margen_porcentaje = 0
+        activo = request.form.get("activo")
+        activo = activo == "on" or activo == "1" or activo == "true"
+        notas = request.form.get("notas") or None
+        
+        try:
+            if presupuestos.actualizar_item(
+                item_id=id,
+                codigo=codigo,
+                descripcion=descripcion,
+                tipo=tipo,
+                unidad=unidad,
+                precio_base=precio_base,
+                margen_porcentaje=margen_porcentaje,
+                activo=activo,
+                notas=notas
+            ):
+                return redirect(url_for('items_index'))
+            else:
+                return "Error al actualizar item", 400
+        except Exception as e:
+            return f"Error al actualizar item: {str(e)}", 400
+    
+    # Convertir DictRow a diccionario
+    item_dict = dict(item) if item else None
+    tipos_lista = presupuestos.obtener_tipos_items()
+    return render_template('presupuestos/items/form.html', 
+                         item=item_dict, 
+                         tipos=tipos_lista,
+                         request=request)
+
+# ==================== RUTAS DE CLIENTES ====================
+
+@app.route("/presupuestos/clientes", methods=["GET"])
+def clientes_index():
+    """Lista de clientes"""
+    clientes_lista = presupuestos.obtener_clientes()
+    return render_template('presupuestos/clientes/index.html', 
+                         clientes=clientes_lista,
+                         request=request)
+
+@app.route("/presupuestos/clientes/nuevo", methods=["GET", "POST"])
+def clientes_nuevo():
+    """Crear nuevo cliente"""
+    if request.method == "POST":
+        nombre = request.form.get("nombre")
+        if not nombre:
+            return "Nombre es requerido", 400
+        razon_social = request.form.get("razon_social") or None
+        cuit = request.form.get("cuit") or None
+        direccion = request.form.get("direccion") or None
+        telefono = request.form.get("telefono") or None
+        email = request.form.get("email") or None
+        notas = request.form.get("notas") or None
+        
+        try:
+            presupuestos.crear_cliente(
+                nombre=nombre,
+                razon_social=razon_social,
+                cuit=cuit,
+                direccion=direccion,
+                telefono=telefono,
+                email=email,
+                notas=notas
+            )
+            return redirect(url_for('clientes_index'))
+        except Exception as e:
+            return f"Error al crear cliente: {str(e)}", 400
+    
+    return render_template('presupuestos/clientes/form.html', 
+                         cliente=None,
+                         request=request)
+
+@app.route("/presupuestos/materiales", methods=["GET"])
+def materiales_index():
+    descripcion = request.args.get("descripcion") or None
+    proveedor = request.args.get("proveedor") or None
+    materiales = presupuestos.buscar_materiales(descripcion=descripcion, proveedor=proveedor)
+    materiales_list = [dict(m) for m in materiales]
+    return render_template(
+        'presupuestos/materiales/index.html',
+        materiales=materiales_list,
+        descripcion_filtro=descripcion or "",
+        proveedor_filtro=proveedor or "",
+        request=request
+    )
+
+@app.route("/presupuestos/materiales/<int:id>/editar", methods=["GET", "POST"])
+def materiales_editar(id):
+    material = presupuestos.obtener_material_por_id(id)
+    if not material:
+        return "Material no encontrado", 404
+    if request.method == "POST":
+        descripcion = request.form.get("descripcion") or None
+        proveedor = request.form.get("proveedor") or None
+        precio = request.form.get("precio")
+        tiempo = request.form.get("tiempo_instalacion")
+        try:
+            precio = float(precio) if precio else None
+        except ValueError:
+            precio = None
+        try:
+            tiempo = float(tiempo) if tiempo else None
+        except ValueError:
+            tiempo = None
+        presupuestos.actualizar_material(
+            material_id=id,
+            descripcion=descripcion,
+            proveedor=proveedor,
+            precio=precio,
+            tiempo_instalacion=tiempo
+        )
+        return redirect(url_for('materiales_index'))
+    return render_template('presupuestos/materiales/form.html', material=dict(material), request=request)
+
+
+@app.route("/presupuestos/materiales/<int:id>/eliminar", methods=["POST"])
+def materiales_eliminar(id):
+    if presupuestos.eliminar_material(id):
+        return redirect(url_for('materiales_index'))
+    return "Error al eliminar material", 400
 
 
 if __name__ == "__main__":
