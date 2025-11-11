@@ -19,7 +19,7 @@
   </form>
   {% if resultado is not none %}
   <div class="result" style="margin-top:16px;background:#f7f7f7;padding:12px;border-radius:6px;">
-    <div><strong>Precio de venta:</strong> {{ "{:,.2f}".format(resultado) }}</div>
+    <div><strong>Precio de venta:</strong> {{ resultado|gs_currency }}</div>
     <div><small>Fórmula: precio × 100 / (100 − margen)</small></div>
   </div>
   {% endif %}

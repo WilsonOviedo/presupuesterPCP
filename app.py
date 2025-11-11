@@ -16,6 +16,107 @@ from datetime import datetime
 app = Flask(__name__)
 
 
+def _formatear_numero_local(valor, decimales=2):
+    try:
+        decimales = int(decimales)
+    except (TypeError, ValueError):
+        decimales = 2
+    try:
+        numero = float(valor)
+    except (TypeError, ValueError):
+        numero = 0.0
+    formato = f"{{:,.{decimales}f}}".format(numero)
+    return formato.replace(",", "_").replace(".", ",").replace("_", ".")
+
+
+@app.template_filter('numero_local')
+def numero_local(valor, decimales=2):
+    return _formatear_numero_local(valor, decimales)
+
+
+@app.template_filter('gs_currency')
+def gs_currency(valor):
+    return f"Gs. {_formatear_numero_local(valor, 0)}"
+
+
+def es_peticion_ajax():
+    return request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+
+def _a_numero(valor):
+    if valor is None:
+        return None
+    try:
+        return float(valor)
+    except (TypeError, ValueError):
+        return None
+
+
+def _buscar_item_en_presupuesto(presupuesto, presupuesto_item_id):
+    if presupuesto is None:
+        return None, None
+    try:
+        objetivo = int(presupuesto_item_id)
+    except (TypeError, ValueError):
+        return None, None
+    for subgrupo in presupuesto.get("subgrupos", []):
+        for item in subgrupo.get("items", []):
+            if item.get("id") == objetivo:
+                return item, subgrupo
+    for item in presupuesto.get("items_sin_subgrupo", []):
+        if item.get("id") == objetivo:
+            return item, None
+    return None, None
+
+
+def _serializar_item_respuesta(item_dict, subgrupo_dict):
+    if not item_dict:
+        return None
+    cantidad = _a_numero(item_dict.get("cantidad"))
+    precio_unitario = _a_numero(item_dict.get("precio_unitario"))
+    subtotal = item_dict.get("subtotal")
+    if subtotal is None:
+        subtotal = (precio_unitario or 0) * (cantidad or 0)
+    else:
+        subtotal = _a_numero(subtotal)
+    return {
+        "id": item_dict.get("id"),
+        "subgrupo_id": subgrupo_dict.get("id") if subgrupo_dict else None,
+        "descripcion": item_dict.get("descripcion"),
+        "cantidad": cantidad,
+        "precio_unitario": precio_unitario,
+        "tiempo_ejecucion_horas": _a_numero(item_dict.get("tiempo_ejecucion_horas")),
+        "subtotal": subtotal,
+        "unidad": item_dict.get("unidad"),
+        "numero_subitem": item_dict.get("numero_subitem"),
+        "notas": item_dict.get("notas"),
+    }
+
+
+def _serializar_subgrupo_respuesta(subgrupo_dict):
+    if not subgrupo_dict:
+        return None
+    return {
+        "id": subgrupo_dict.get("id"),
+        "subtotal": _a_numero(subgrupo_dict.get("subtotal")),
+        "tiempo_ejecucion_horas": _a_numero(subgrupo_dict.get("tiempo_ejecucion_horas")),
+        "items_count": len(subgrupo_dict.get("items", [])),
+    }
+
+
+def _serializar_totales(presupuesto_dict):
+    if not presupuesto_dict:
+        return None
+    return {
+        "subtotal": _a_numero(presupuesto_dict.get("subtotal")),
+        "iva_monto": _a_numero(presupuesto_dict.get("iva_monto")),
+        "total": _a_numero(presupuesto_dict.get("total")),
+        "tiempo_total": _a_numero(presupuesto_dict.get("tiempo_ejecucion_total")),
+        "cantidad_items": presupuesto_dict.get("cantidad_items"),
+        "iva_porcentaje": _a_numero(presupuesto_dict.get("iva_porcentaje")),
+    }
+
+
 @app.route("/")
 def menu():
     return render_template('menu.html')
@@ -151,6 +252,24 @@ def leer_facturas_status():
             "finished": _job_state["finished"],
             "output": _job_state["output"],
         })
+
+
+@app.route("/utilidades/mayusculas", methods=["GET", "POST"])
+def utilidades_mayusculas():
+    """Normaliza a mayúsculas los datos almacenados en las tablas principales."""
+    resumen = None
+    error = None
+    if request.method == "POST":
+        try:
+            resumen = presupuestos.convertir_datos_a_mayusculas()
+        except Exception as exc:
+            error = str(exc)
+    return render_template(
+        "utilidades/mayusculas.html",
+        resumen=resumen,
+        error=error,
+        request=request,
+    )
 
 
 @app.route("/calculadora", methods=["GET"])
@@ -313,7 +432,7 @@ def presupuestos_ver(id):
         item_dict['precio_venta'] = float(item_dict.get('precio_venta') or item_dict.get('precio_base') or 0)
         item_dict['tiempo_instalacion'] = float(item_dict.get('tiempo_instalacion') or 0)
         item_dict['codigo'] = item_dict.get('codigo') or f"SERV-{item_dict.get('id')}"
-        item_dict['unidad'] = item_dict.get('unidad') or 'unidad'
+        item_dict['unidad'] = presupuestos.simplificar_unidad(item_dict.get('unidad'))
         items_servicio.append(item_dict)
 
     materiales_raw = presupuestos.obtener_materiales()
@@ -323,7 +442,7 @@ def presupuestos_ver(id):
         material_dict['precio_venta'] = float(material_dict.get('precio') or 0)
         material_dict['tiempo_instalacion'] = float(material_dict.get('tiempo_instalacion') or 0)
         material_dict['tipo'] = material_dict.get('tipo') or 'Material'
-        material_dict['unidad'] = material_dict.get('unidad') or 'unidad'
+        material_dict['unidad'] = presupuestos.simplificar_unidad(material_dict.get('unidad'))
         material_dict['codigo'] = material_dict.get('codigo') or f"MAT-{material_dict.get('id')}"
         items_materiales.append(material_dict)
 
@@ -437,6 +556,9 @@ def presupuestos_agregar_item(id):
         orden = 0
     
     notas = request.form.get("notas") or None
+    unidad = request.form.get("unidad")
+    if unidad is not None:
+        unidad = unidad.strip() or None
     
     try:
         presupuestos.agregar_item_a_presupuesto(
@@ -449,7 +571,8 @@ def presupuestos_agregar_item(id):
             numero_subitem=numero_subitem,
             tiempo_ejecucion_horas=tiempo_ejecucion_horas,
             orden=orden,
-            notas=notas
+            notas=notas,
+            unidad=unidad
         )
     except Exception as e:
         return f"Error al agregar item: {str(e)}", 400
@@ -458,16 +581,59 @@ def presupuestos_agregar_item(id):
 
 @app.route("/presupuestos/items/<int:item_id>/eliminar", methods=["POST"])
 def presupuestos_eliminar_item(item_id):
-    """Eliminar item de presupuesto"""
+    """Eliminar item de un presupuesto"""
     presupuesto_id = request.form.get("presupuesto_id")
+    subgrupo_id = request.form.get("subgrupo_id")
     try:
         presupuesto_id = int(presupuesto_id) if presupuesto_id else None
-    except ValueError:
+    except (TypeError, ValueError):
         return "Presupuesto ID inválido", 400
-    
+    try:
+        subgrupo_id_int = int(subgrupo_id) if subgrupo_id not in (None, "", "None") else None
+    except (TypeError, ValueError):
+        subgrupo_id_int = None
+
     if presupuestos.eliminar_item_de_presupuesto(item_id):
+        if es_peticion_ajax():
+            presupuesto_dict = presupuestos.obtener_presupuesto_por_id(presupuesto_id)
+            subgrupo_dict = None
+            if subgrupo_id_int is not None:
+                for sg in presupuesto_dict.get("subgrupos", []):
+                    if sg.get("id") == subgrupo_id_int:
+                        subgrupo_dict = sg
+                        break
+            respuesta = {
+                "ok": True,
+                "item_id": item_id,
+                "subgrupo": _serializar_subgrupo_respuesta(subgrupo_dict),
+                "totales": _serializar_totales(presupuesto_dict),
+                "items_sin_subgrupo": len(presupuesto_dict.get("items_sin_subgrupo", [])),
+            }
+            return jsonify(respuesta)
         return redirect(url_for('presupuestos_ver', id=presupuesto_id))
+    if es_peticion_ajax():
+        return jsonify({"ok": False, "error": "No se pudo eliminar el item"}), 400
     return "Error al eliminar item", 400
+
+
+@app.route("/presupuestos/servicios/<int:item_id>/eliminar", methods=["POST"])
+def servicios_eliminar(item_id):
+    """Eliminar servicio del catálogo"""
+    if presupuestos.eliminar_item_catalogo(item_id):
+        return redirect(url_for('items_index'))
+    return "Error al eliminar servicio", 400
+
+
+@app.route("/presupuestos/servicios/<int:item_id>/duplicar", methods=["POST"])
+def servicios_duplicar(item_id):
+    """Duplicar servicio del catálogo"""
+    try:
+        nuevo_id = presupuestos.duplicar_item_catalogo(item_id)
+    except Exception as exc:
+        return f"Error al duplicar servicio: {exc}", 400
+    if nuevo_id:
+        return redirect(url_for('items_editar', id=nuevo_id))
+    return "Servicio no encontrado", 404
 
 @app.route("/presupuestos/items/<int:item_id>/actualizar", methods=["POST"])
 def presupuestos_actualizar_item(item_id):
@@ -517,7 +683,11 @@ def presupuestos_actualizar_item(item_id):
     except ValueError:
         material_id = None
     
-    if presupuestos.actualizar_item_presupuesto(
+    unidad = request.form.get("unidad")
+    if unidad is not None:
+        unidad = unidad.strip() or None
+
+    actualizado = presupuestos.actualizar_item_presupuesto(
         presupuesto_item_id=item_id,
         cantidad=cantidad,
         precio_unitario=precio_unitario,
@@ -527,10 +697,28 @@ def presupuestos_actualizar_item(item_id):
         orden=orden,
         descripcion=descripcion,
         notas=notas,
-        material_id=material_id
-    ):
-        return redirect(url_for('presupuestos_ver', id=presupuesto_id))
-    return "Error al actualizar item", 400
+        material_id=material_id,
+        unidad=unidad
+    )
+
+    if not actualizado:
+        if es_peticion_ajax():
+            return jsonify({"ok": False, "error": "No se pudo actualizar el item"}), 400
+        return "Error al actualizar item", 400
+
+    if es_peticion_ajax():
+        presupuesto_dict = presupuestos.obtener_presupuesto_por_id(presupuesto_id)
+        item_dict, subgrupo_dict = _buscar_item_en_presupuesto(presupuesto_dict, item_id)
+        if not item_dict:
+            return jsonify({"ok": False, "error": "Item no encontrado tras la actualización"}), 404
+        return jsonify({
+            "ok": True,
+            "item": _serializar_item_respuesta(item_dict, subgrupo_dict),
+            "subgrupo": _serializar_subgrupo_respuesta(subgrupo_dict),
+            "totales": _serializar_totales(presupuesto_dict),
+        })
+
+    return redirect(url_for('presupuestos_ver', id=presupuesto_id))
 
 # ==================== RUTAS DE SUBGRUPOS ====================
 
@@ -651,7 +839,7 @@ def presupuestos_pdf(id):
 
 # ==================== RUTAS DE ITEMS ====================
 
-@app.route("/presupuestos/items", methods=["GET"])
+@app.route("/presupuestos/servicios", methods=["GET"])
 def items_index():
     """Lista de items"""
     tipo = request.args.get("tipo")
@@ -663,7 +851,7 @@ def items_index():
                          tipo_filtro=tipo,
                          request=request)
 
-@app.route("/presupuestos/items/nuevo", methods=["GET", "POST"])
+@app.route("/presupuestos/servicios/nuevo", methods=["GET", "POST"])
 def items_nuevo():
     """Crear nuevo item"""
     if request.method == "POST":
@@ -705,7 +893,7 @@ def items_nuevo():
                          tipos=tipos_lista,
                          request=request)
 
-@app.route("/presupuestos/items/<int:id>/editar", methods=["GET", "POST"])
+@app.route("/presupuestos/servicios/<int:id>/editar", methods=["GET", "POST"])
 def items_editar(id):
     """Editar item"""
     item = presupuestos.obtener_item_por_id(id)
@@ -777,21 +965,23 @@ def clientes_nuevo():
         if not nombre:
             return "Nombre es requerido", 400
         razon_social = request.form.get("razon_social") or None
-        cuit = request.form.get("cuit") or None
+        ruc = request.form.get("ruc") or None
         direccion = request.form.get("direccion") or None
         telefono = request.form.get("telefono") or None
         email = request.form.get("email") or None
         notas = request.form.get("notas") or None
+        contacto = request.form.get("contacto") or None
         
         try:
             presupuestos.crear_cliente(
                 nombre=nombre,
                 razon_social=razon_social,
-                cuit=cuit,
+                ruc=ruc,
                 direccion=direccion,
                 telefono=telefono,
                 email=email,
-                notas=notas
+                notas=notas,
+                contacto=contacto
             )
             return redirect(url_for('clientes_index'))
         except Exception as e:
@@ -799,6 +989,41 @@ def clientes_nuevo():
     
     return render_template('presupuestos/clientes/form.html', 
                          cliente=None,
+                         request=request)
+
+@app.route("/presupuestos/clientes/<int:id>/editar", methods=["GET", "POST"])
+def clientes_editar(id):
+    """Editar cliente existente"""
+    cliente = presupuestos.obtener_cliente_por_id(id)
+    if not cliente:
+        return "Cliente no encontrado", 404
+    
+    if request.method == "POST":
+        nombre = request.form.get("nombre")
+        if not nombre:
+            return "Nombre es requerido", 400
+        razon_social = request.form.get("razon_social") or None
+        ruc = request.form.get("ruc") or None
+        direccion = request.form.get("direccion") or None
+        telefono = request.form.get("telefono") or None
+        email = request.form.get("email") or None
+        contacto = request.form.get("contacto") or None
+
+        if presupuestos.actualizar_cliente(
+            cliente_id=id,
+            nombre=nombre,
+            razon_social=razon_social,
+            ruc=ruc,
+            direccion=direccion,
+            telefono=telefono,
+            email=email,
+            contacto=contacto,
+        ):
+            return redirect(url_for('clientes_index'))
+        return "Error al actualizar cliente", 400
+
+    return render_template('presupuestos/clientes/form.html', 
+                         cliente=dict(cliente),
                          request=request)
 
 @app.route("/presupuestos/materiales", methods=["GET"])

@@ -4,7 +4,7 @@
   <div class="actions" style="margin-bottom:10px;">
     <a class="button button-secondary" href="{{ url_for('menu') }}">← Volver</a>
     <a class="button" href="{{ url_for('presupuestos_nuevo') }}">+ Nuevo presupuesto</a>
-    <a class="button button-secondary" href="{{ url_for('items_index') }}">Items</a>
+    <a class="button button-secondary" href="{{ url_for('items_index') }}">Servicios</a>
     <a class="button button-secondary" href="{{ url_for('clientes_index') }}">Clientes</a>
   </div>
   <h2>Presupuestos</h2>
@@ -46,7 +46,7 @@
         <th>Cliente</th>
         <th>Proveedor</th>
         <th>Fecha</th>
-        <th>Items</th>
+        <th>Servicios</th>
         <th>Subtotal</th>
         <th>IVA</th>
         <th>Total</th>
@@ -61,9 +61,9 @@
           <td>{{ p.nombre_proveedor or '-' }}</td>
           <td>{{ p.fecha_presupuesto.strftime('%d/%m/%Y') if p.fecha_presupuesto else '-' }}</td>
           <td style="text-align:center;">{{ p.cantidad_items }}</td>
-          <td style="text-align:right;">$ {{ "{:,.2f}".format(p.subtotal) if p.subtotal else '0.00' }}</td>
-          <td style="text-align:right;">$ {{ "{:,.2f}".format(p.iva_monto) if p.iva_monto else '0.00' }}</td>
-          <td style="text-align:right;"><strong>$ {{ "{:,.2f}".format(p.total) if p.total else '0.00' }}</strong></td>
+          <td style="text-align:right;">{{ p.subtotal|gs_currency }}</td>
+          <td style="text-align:right;">{{ p.iva_monto|gs_currency }}</td>
+          <td style="text-align:right;"><strong>{{ p.total|gs_currency }}</strong></td>
           <td>
             <span style="padding:4px 8px; border-radius:4px; font-size:0.85em; 
               {% if p.estado == 'aprobado' %}background:#d4edda; color:#155724;

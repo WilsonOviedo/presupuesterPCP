@@ -1,16 +1,16 @@
 {% extends 'base.html' %}
-{% block title %}Items{% endblock %}
+{% block title %}Servicios{% endblock %}
 {% block content %}
   <div class="actions" style="margin-bottom:10px;">
     <a class="button button-secondary" href="{{ url_for('presupuestos_index') }}">← Volver</a>
-    <a class="button" href="{{ url_for('items_nuevo') }}">+ Nuevo item</a>
+    <a class="button" href="{{ url_for('items_nuevo') }}">+ Nuevo servicio</a>
   </div>
-  <h2>Items</h2>
+  <h2>Servicios</h2>
 
   <form method="get" action="{{ url_for('items_index') }}" style="margin-bottom:20px; padding:15px; background:#f7f7f7; border-radius:6px;">
     <div style="display:flex; gap:10px; align-items:end;">
       <div style="flex:1;">
-        <label style="display:block; margin-bottom:5px; font-weight:600;">Tipo:</label>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Categoría:</label>
         <select name="tipo" style="width:100%; padding:6px; height:34px;">
           <option value="">Todos los tipos</option>
           {% for tipo in tipos %}
@@ -30,7 +30,7 @@
       <tr>
         <th>Código</th>
         <th>Descripción</th>
-        <th>Tipo</th>
+        <th>Categoría</th>
         <th>Unidad</th>
         <th>Precio Base</th>
         <th>Margen %</th>
@@ -44,9 +44,17 @@
           <td>{{ item.descripcion }}</td>
           <td>{{ item.tipo }}</td>
           <td>{{ item.unidad }}</td>
-          <td style="text-align:right;">$ {{ "{:,.2f}".format(item.precio_base) if item.precio_base else '0.00' }}</td>
-          <td style="text-align:right;">{{ "{:,.2f}".format(item.margen_porcentaje) if item.margen_porcentaje else '0.00' }}%</td>
-          <td style="text-align:right;"><strong>$ {{ "{:,.2f}".format(item.precio_venta) if item.precio_venta else '0.00' }}</strong></td>
+          <td style="text-align:right;">{{ (item.precio_base or 0)|gs_currency }}</td>
+          <td style="text-align:right;">{{ (item.margen_porcentaje or 0)|numero_local(2) }}%</td>
+          <td style="text-align:right;">
+            {% set margen = item.margen_porcentaje or 0 %}
+            {% if margen >= 100 %}
+              <strong>Margen inválido</strong>
+            {% else %}
+              {% set precio_calculado = (item.precio_base or 0) * 100 / (100 - margen) %}
+              <strong>{{ precio_calculado|gs_currency }}</strong>
+            {% endif %}
+          </td>
           <td>
             <span style="padding:4px 8px; border-radius:4px; font-size:0.85em; 
               {% if item.activo %}background:#d4edda; color:#155724;{% else %}background:#f8d7da; color:#721c24;{% endif %}">
@@ -55,6 +63,12 @@
           </td>
           <td>
             <a href="{{ url_for('items_editar', id=item.id) }}" class="button" style="padding:4px 8px; font-size:0.85em;">Editar</a>
+            <form method="post" action="{{ url_for('servicios_duplicar', item_id=item.id) }}" style="display:inline;" onsubmit="return confirm('¿Duplicar este servicio?');">
+              <button type="submit" class="button button-secondary" style="padding:4px 8px; font-size:0.85em; background:#6c757d;">Duplicar</button>
+            </form>
+            <form method="post" action="{{ url_for('servicios_eliminar', item_id=item.id) }}" style="display:inline;" onsubmit="return confirm('¿Eliminar este servicio? Esta acción no se puede deshacer.');">
+              <button type="submit" class="button button-secondary" style="padding:4px 8px; font-size:0.85em; background:#dc3545;">Eliminar</button>
+            </form>
           </td>
         </tr>
         {% if item.notas %}
@@ -65,7 +79,7 @@
       {% endfor %}
     </table>
   {% else %}
-    <p>No hay items.</p>
+    <p>No hay servicios.</p>
   {% endif %}
 {% endblock %}
 

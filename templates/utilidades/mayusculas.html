@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}Normalizar a Mayúsculas{% endblock %}
+{% block content %}
+  <h2>Normalizar datos a MAYÚSCULAS</h2>
+  <p style="max-width:720px;">
+    Esta herramienta repasa las tablas principales (clientes, items, materiales, presupuestos, precios, etc.)
+    y actualiza todos los textos a mayúsculas. También aplica la conversión a las unidades guardadas.
+  </p>
+
+  {% if error %}
+    <div style="padding:12px; background:#f8d7da; color:#721c24; border-radius:6px; margin-bottom:16px;">
+      ⚠️ Ocurrió un problema: {{ error }}
+    </div>
+  {% endif %}
+
+  {% if resumen %}
+    <div style="padding:12px; background:#e8f5e9; color:#256029; border-radius:6px; margin-bottom:20px;">
+      ✅ Conversión completada. Tablas con filas modificadas:
+      <ul style="margin:8px 0 0 20px;">
+        {% for tabla, cantidad in resumen.items() %}
+          <li><strong>{{ tabla }}</strong>: {{ cantidad }} fila{% if cantidad != 1 %}s{% endif %} actualizada{% if cantidad != 1 %}s{% endif %}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  <form method="post" onsubmit="return confirm('Esta acción convertirá todos los textos a MAYÚSCULAS. ¿Continuar?');">
+    <button type="submit" class="button">Convertir todo a MAYÚSCULAS</button>
+  </form>
+{% endblock %}
+

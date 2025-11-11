@@ -18,6 +18,17 @@ def conectar():
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     return conn, cur
 
+
+def _texto_mayusculas(valor):
+    """Convierte un texto a mayúsculas y elimina espacios laterales."""
+    if valor is None:
+        return None
+    texto = str(valor).strip()
+    if texto == "":
+        return ""
+    return texto.upper()
+
+
 def obtener_items_activos(tipo=None):
     """Obtiene todos los items activos, opcionalmente filtrados por tipo"""
     conn, cur = conectar()
@@ -50,10 +61,15 @@ def crear_item(codigo, descripcion, tipo, unidad, precio_base, margen_porcentaje
     """Crea un nuevo item"""
     conn, cur = conectar()
     try:
+        codigo_normalizado = _texto_mayusculas(codigo)
+        descripcion_normalizada = _texto_mayusculas(descripcion)
+        tipo_normalizado = _texto_mayusculas(tipo)
+        notas_normalizadas = _texto_mayusculas(notas)
+        unidad_simplificada = simplificar_unidad(unidad)
         cur.execute(
             """INSERT INTO items (codigo, descripcion, tipo, unidad, precio_base, margen_porcentaje, notas)
                VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-            (codigo, descripcion, tipo, unidad, precio_base, margen_porcentaje, notas)
+            (codigo_normalizado, descripcion_normalizada, tipo_normalizado, unidad_simplificada, precio_base, margen_porcentaje, notas_normalizadas)
         )
         item_id = cur.fetchone()['id']
         conn.commit()
@@ -72,16 +88,16 @@ def actualizar_item(item_id, codigo=None, descripcion=None, tipo=None, unidad=No
         
         if codigo is not None:
             updates.append("codigo = %s")
-            params.append(codigo)
+            params.append(_texto_mayusculas(codigo))
         if descripcion is not None:
             updates.append("descripcion = %s")
-            params.append(descripcion)
+            params.append(_texto_mayusculas(descripcion))
         if tipo is not None:
             updates.append("tipo = %s")
-            params.append(tipo)
+            params.append(_texto_mayusculas(tipo))
         if unidad is not None:
             updates.append("unidad = %s")
-            params.append(unidad)
+            params.append(simplificar_unidad(unidad))
         if precio_base is not None:
             updates.append("precio_base = %s")
             params.append(precio_base)
@@ -93,7 +109,7 @@ def actualizar_item(item_id, codigo=None, descripcion=None, tipo=None, unidad=No
             params.append(activo)
         if notas is not None:
             updates.append("notas = %s")
-            params.append(notas)
+            params.append(_texto_mayusculas(notas))
         
         if updates:
             params.append(item_id)
@@ -132,6 +148,8 @@ def crear_o_actualizar_material(descripcion, precio, tiempo_instalacion=0, prove
     """Crea o actualiza un material eléctrico"""
     conn, cur = conectar()
     try:
+        descripcion_normalizada = _texto_mayusculas(descripcion)
+        proveedor_normalizado = _texto_mayusculas(proveedor)
         cur.execute(
             "SELECT id FROM materiales WHERE LOWER(descripcion) = LOWER(%s)",
             (descripcion,)
@@ -143,7 +161,7 @@ def crear_o_actualizar_material(descripcion, precio, tiempo_instalacion=0, prove
                 """UPDATE materiales 
                    SET precio = %s, tiempo_instalacion = %s, proveedor = %s, actualizado_en = CURRENT_TIMESTAMP
                    WHERE id = %s""",
-                (precio, tiempo_instalacion, proveedor, material_id)
+                (precio, tiempo_instalacion, proveedor_normalizado, material_id)
             )
             conn.commit()
             return material_id, True
@@ -151,7 +169,7 @@ def crear_o_actualizar_material(descripcion, precio, tiempo_instalacion=0, prove
             cur.execute(
                 """INSERT INTO materiales (descripcion, proveedor, precio, tiempo_instalacion)
                    VALUES (%s, %s, %s, %s) RETURNING id""",
-                (descripcion, proveedor, precio, tiempo_instalacion)
+                (descripcion_normalizada, proveedor_normalizado, precio, tiempo_instalacion)
             )
             material_id = cur.fetchone()['id']
             conn.commit()
@@ -168,10 +186,10 @@ def actualizar_material(material_id, descripcion=None, proveedor=None, precio=No
         params = []
         if descripcion is not None:
             updates.append("descripcion = %s")
-            params.append(descripcion)
+            params.append(_texto_mayusculas(descripcion))
         if proveedor is not None:
             updates.append("proveedor = %s")
-            params.append(proveedor)
+            params.append(_texto_mayusculas(proveedor))
         if precio is not None:
             updates.append("precio = %s")
             params.append(precio)
@@ -211,18 +229,77 @@ def obtener_clientes():
         cur.close()
         conn.close()
 
-def crear_cliente(nombre, razon_social=None, cuit=None, direccion=None, telefono=None, email=None, notas=None):
+def obtener_cliente_por_id(cliente_id):
+    """Obtiene un cliente específico por ID"""
+    conn, cur = conectar()
+    try:
+        cur.execute("SELECT * FROM clientes WHERE id = %s", (cliente_id,))
+        return cur.fetchone()
+    finally:
+        cur.close()
+        conn.close()
+
+def crear_cliente(nombre, razon_social=None, ruc=None, direccion=None,
+                  telefono=None, email=None, notas=None, contacto=None):
     """Crea un nuevo cliente"""
     conn, cur = conectar()
     try:
+        nombre = _texto_mayusculas(nombre)
+        razon_social = _texto_mayusculas(razon_social)
+        ruc = _texto_mayusculas(ruc)
+        direccion = _texto_mayusculas(direccion)
+        telefono = _texto_mayusculas(telefono)
+        email = _texto_mayusculas(email)
+        notas = _texto_mayusculas(notas)
+        contacto = _texto_mayusculas(contacto)
         cur.execute(
-            """INSERT INTO clientes (nombre, razon_social, cuit, direccion, telefono, email, notas)
-               VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-            (nombre, razon_social, cuit, direccion, telefono, email, notas)
+            """INSERT INTO clientes (nombre, razon_social, ruc, direccion, telefono, email, notas, contacto)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+            (nombre, razon_social, ruc, direccion, telefono, email, notas, contacto)
         )
         cliente_id = cur.fetchone()['id']
         conn.commit()
         return cliente_id
+    finally:
+        cur.close()
+        conn.close()
+
+def actualizar_cliente(cliente_id, nombre=None, razon_social=None, ruc=None,
+                       direccion=None, telefono=None, email=None, contacto=None):
+    """Actualiza la información básica del cliente"""
+    conn, cur = conectar()
+    try:
+        updates = []
+        params = []
+        if nombre is not None:
+            updates.append("nombre = %s")
+            params.append(_texto_mayusculas(nombre))
+        if razon_social is not None:
+            updates.append("razon_social = %s")
+            params.append(_texto_mayusculas(razon_social))
+        if ruc is not None:
+            updates.append("ruc = %s")
+            params.append(_texto_mayusculas(ruc))
+        if direccion is not None:
+            updates.append("direccion = %s")
+            params.append(_texto_mayusculas(direccion))
+        if telefono is not None:
+            updates.append("telefono = %s")
+            params.append(_texto_mayusculas(telefono))
+        if email is not None:
+            updates.append("email = %s")
+            params.append(_texto_mayusculas(email))
+        if contacto is not None:
+            updates.append("contacto = %s")
+            params.append(_texto_mayusculas(contacto))
+
+        if not updates:
+            return False
+        params.append(cliente_id)
+        query = f"UPDATE clientes SET {', '.join(updates)}, actualizado_en = CURRENT_TIMESTAMP WHERE id = %s"
+        cur.execute(query, tuple(params))
+        conn.commit()
+        return cur.rowcount > 0
     finally:
         cur.close()
         conn.close()
@@ -243,6 +320,10 @@ def crear_presupuesto(cliente_id, numero_presupuesto, titulo=None, descripcion=N
     """Crea un nuevo presupuesto"""
     conn, cur = conectar()
     try:
+        numero_presupuesto = _texto_mayusculas(numero_presupuesto)
+        titulo = _texto_mayusculas(titulo)
+        descripcion = _texto_mayusculas(descripcion)
+        notas = _texto_mayusculas(notas)
         cur.execute(
             """INSERT INTO presupuestos 
                (cliente_id, numero_presupuesto, titulo, descripcion, estado, fecha_presupuesto, validez_dias, iva_porcentaje, notas)
@@ -331,6 +412,7 @@ def obtener_presupuesto_por_id(presupuesto_id):
             item_dict = {}
             for key in item.keys():
                 item_dict[key] = item[key]
+            item_dict['unidad'] = simplificar_unidad(item_dict.get('unidad'))
             
             subgrupo_id = item_dict.get('subgrupo_id')
             if subgrupo_id:
@@ -398,17 +480,66 @@ def obtener_presupuesto_por_id(presupuesto_id):
         cur.close()
         conn.close()
 
-def agregar_item_a_presupuesto(presupuesto_id, item_id=None, cantidad=1, precio_unitario=None, 
+UNIDADES_SIMPLIFICADAS = {
+    'unidad': 'UND',
+    'unidades': 'UND',
+    'und': 'UND',
+    'u': 'UND',
+    'metro': 'M',
+    'metros': 'M',
+    'm': 'M',
+    'metro lineal': 'ML',
+    'metros lineales': 'ML',
+    'ml': 'ML',
+    'metro cuadrado': 'M2',
+    'metros cuadrados': 'M2',
+    'm2': 'M2',
+    'metro cúbico': 'M3',
+    'metros cúbicos': 'M3',
+    'm3': 'M3',
+    'hora': 'H',
+    'horas': 'H',
+    'h': 'H',
+    'kilogramo': 'KG',
+    'kilogramos': 'KG',
+    'kg': 'KG',
+    'litro': 'L',
+    'litros': 'L',
+    'l': 'L',
+    'par': 'PAR',
+    'pares': 'PAR',
+    'juego': 'JGO',
+    'juegos': 'JGO',
+}
+
+
+def simplificar_unidad(valor):
+    """Devuelve la abreviatura estándar para una unidad de medida."""
+    if valor is None:
+        return 'UND'
+    valor_str = str(valor).strip()
+    if not valor_str:
+        return 'UND'
+    clave = valor_str.lower()
+    if clave in UNIDADES_SIMPLIFICADAS:
+        return UNIDADES_SIMPLIFICADAS[clave]
+    return valor_str.upper()[:6]
+
+
+def agregar_item_a_presupuesto(presupuesto_id, item_id=None, cantidad=1, precio_unitario=None,
                                subgrupo_id=None, numero_subitem=None, tiempo_ejecucion_horas=None,
-                               material_id=None,
+                               material_id=None, unidad=None,
                                orden=0, notas=None):
     """Agrega un item a un presupuesto"""
     conn, cur = conectar()
     try:
+        numero_subitem = _texto_mayusculas(numero_subitem)
+        notas = _texto_mayusculas(notas)
         codigo_item = None
         descripcion = None
         tipo = None
-        unidad = 'unidad'
+        unidad_final = simplificar_unidad(unidad) if unidad else None
+        unidad_insercion = 'UND'
         item_fk = None
         material_fk = None
         tiempo_defecto = 0.0
@@ -419,10 +550,11 @@ def agregar_item_a_presupuesto(presupuesto_id, item_id=None, cantidad=1, precio_
             if not material:
                 raise ValueError("Material no encontrado")
             material_fk = material['id']
-            descripcion = material['descripcion']
-            proveedor = material.get('proveedor')
-            tipo = 'Material'
-            unidad = 'unidad'
+            descripcion = _texto_mayusculas(material['descripcion'])
+            proveedor = _texto_mayusculas(material.get('proveedor'))
+            tipo = _texto_mayusculas('Material')
+            unidad_material = simplificar_unidad(material.get('unidad')) if isinstance(material, dict) else None
+            unidad_insercion = unidad_final or unidad_material or 'UND'
             tiempo_defecto = float(material.get('tiempo_instalacion') or 0) if material.get('tiempo_instalacion') is not None else 0.0
             if precio_unitario is None:
                 precio_unitario = float(material.get('precio') or 0)
@@ -434,11 +566,12 @@ def agregar_item_a_presupuesto(presupuesto_id, item_id=None, cantidad=1, precio_
             if not item:
                 raise ValueError("Item no encontrado")
             item_fk = item['id']
-            codigo_item = item['codigo']
-            descripcion = item['descripcion']
-            tipo = item['tipo']
-            unidad = item['unidad'] or 'unidad'
-            proveedor = item.get('proveedor')
+            codigo_item = _texto_mayusculas(item['codigo'])
+            descripcion = _texto_mayusculas(item['descripcion'])
+            tipo = _texto_mayusculas(item['tipo'])
+            unidad_item = simplificar_unidad(item.get('unidad')) if isinstance(item, dict) else None
+            unidad_insercion = unidad_final or unidad_item or 'UND'
+            proveedor = _texto_mayusculas(item.get('proveedor'))
             if precio_unitario is None:
                 precio_unitario = item['precio_venta'] or item['precio_base'] or 0
             tiempo_defecto = 0.0
@@ -455,7 +588,7 @@ def agregar_item_a_presupuesto(presupuesto_id, item_id=None, cantidad=1, precio_
                (presupuesto_id, subgrupo_id, item_id, material_id, codigo_item, descripcion, proveedor, tipo, unidad, 
                 cantidad, precio_unitario, numero_subitem, tiempo_ejecucion_horas, orden, notas)
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-            (presupuesto_id, subgrupo_id, item_fk, material_fk, codigo_item, descripcion, proveedor, tipo, unidad, 
+            (presupuesto_id, subgrupo_id, item_fk, material_fk, codigo_item, descripcion, proveedor, tipo, unidad_insercion,
              cantidad, precio_unitario, numero_subitem, tiempo_ejecucion_horas, orden, notas)
         )
         item_presupuesto_id = cur.fetchone()['id']
@@ -476,6 +609,67 @@ def eliminar_item_de_presupuesto(presupuesto_item_id):
         cur.close()
         conn.close()
 
+
+def eliminar_item_catalogo(item_id):
+    """Elimina un servicio del catálogo principal"""
+    conn, cur = conectar()
+    try:
+        cur.execute("DELETE FROM items WHERE id = %s", (item_id,))
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        cur.close()
+        conn.close()
+
+
+def duplicar_item_catalogo(item_id):
+    """Duplica un servicio del catálogo y devuelve el nuevo ID"""
+    conn, cur = conectar()
+    try:
+        cur.execute("SELECT * FROM items WHERE id = %s", (item_id,))
+        item = cur.fetchone()
+        if not item:
+            return None
+
+        nuevo_codigo = None
+        if item['codigo']:
+            cur.execute("SELECT COUNT(*) FROM items WHERE codigo = %s", (item['codigo'],))
+            existe = cur.fetchone()[0] > 0
+            if not existe:
+                nuevo_codigo = item['codigo']
+            else:
+                base_codigo = item['codigo']
+                sufijo = 1
+                while True:
+                    candidato = f"{base_codigo}-{sufijo}"
+                    cur.execute("SELECT COUNT(*) FROM items WHERE codigo = %s", (candidato,))
+                    if cur.fetchone()[0] == 0:
+                        nuevo_codigo = candidato
+                        break
+                    sufijo += 1
+        descripcion = f"{item['descripcion']} (COPIA)"
+
+        cur.execute(
+            """INSERT INTO items (codigo, descripcion, tipo, unidad, precio_base, margen_porcentaje, notas, activo)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+            (
+                nuevo_codigo,
+                descripcion,
+                item['tipo'],
+                item['unidad'],
+                item['precio_base'],
+                item['margen_porcentaje'],
+                item['notas'],
+                item['activo'],
+            )
+        )
+        nuevo_id = cur.fetchone()['id']
+        conn.commit()
+        return nuevo_id
+    finally:
+        cur.close()
+        conn.close()
+
 def actualizar_presupuesto(presupuesto_id, cliente_id=None, titulo=None, descripcion=None,
                           estado=None, fecha_presupuesto=None, validez_dias=None,
                           iva_porcentaje=None, notas=None):
@@ -490,10 +684,10 @@ def actualizar_presupuesto(presupuesto_id, cliente_id=None, titulo=None, descrip
             params.append(cliente_id)
         if titulo is not None:
             updates.append("titulo = %s")
-            params.append(titulo)
+            params.append(_texto_mayusculas(titulo))
         if descripcion is not None:
             updates.append("descripcion = %s")
-            params.append(descripcion)
+            params.append(_texto_mayusculas(descripcion))
         if estado is not None:
             updates.append("estado = %s")
             params.append(estado)
@@ -508,7 +702,7 @@ def actualizar_presupuesto(presupuesto_id, cliente_id=None, titulo=None, descrip
             params.append(iva_porcentaje)
         if notas is not None:
             updates.append("notas = %s")
-            params.append(notas)
+            params.append(_texto_mayusculas(notas))
         
         if updates:
             params.append(presupuesto_id)
@@ -521,9 +715,10 @@ def actualizar_presupuesto(presupuesto_id, cliente_id=None, titulo=None, descrip
         cur.close()
         conn.close()
 
-def actualizar_item_presupuesto(presupuesto_item_id, cantidad=None, precio_unitario=None, 
+def actualizar_item_presupuesto(presupuesto_item_id, cantidad=None, precio_unitario=None,
                                 subgrupo_id=None, numero_subitem=None, tiempo_ejecucion_horas=None,
-                                orden=None, descripcion=None, notas=None, material_id=None, proveedor=None):
+                                orden=None, descripcion=None, notas=None, material_id=None, proveedor=None,
+                                unidad=None):
     """Actualiza un item de un presupuesto"""
     conn, cur = conectar()
     try:
@@ -541,7 +736,7 @@ def actualizar_item_presupuesto(presupuesto_item_id, cantidad=None, precio_unita
             params.append(subgrupo_id)
         if numero_subitem is not None:
             updates.append("numero_subitem = %s")
-            params.append(numero_subitem)
+            params.append(_texto_mayusculas(numero_subitem))
         if tiempo_ejecucion_horas is not None:
             updates.append("tiempo_ejecucion_horas = %s")
             params.append(tiempo_ejecucion_horas)
@@ -550,16 +745,19 @@ def actualizar_item_presupuesto(presupuesto_item_id, cantidad=None, precio_unita
             params.append(orden)
         if descripcion is not None:
             updates.append("descripcion = %s")
-            params.append(descripcion)
+            params.append(_texto_mayusculas(descripcion))
         if notas is not None:
             updates.append("notas = %s")
-            params.append(notas)
+            params.append(_texto_mayusculas(notas))
         if material_id is not None:
             updates.append("material_id = %s")
             params.append(material_id)
         if proveedor is not None:
             updates.append("proveedor = %s")
-            params.append(proveedor)
+            params.append(_texto_mayusculas(proveedor))
+        if unidad is not None:
+            updates.append("unidad = %s")
+            params.append(simplificar_unidad(unidad))
         
         if updates:
             params.append(presupuesto_item_id)
@@ -592,6 +790,7 @@ def crear_subgrupo(presupuesto_id, numero, nombre, orden=0):
     """Crea un nuevo subgrupo en un presupuesto"""
     conn, cur = conectar()
     try:
+        nombre = _texto_mayusculas(nombre)
         cur.execute(
             """INSERT INTO presupuesto_subgrupos (presupuesto_id, numero, nombre, orden)
                VALUES (%s, %s, %s, %s) RETURNING id""",
@@ -616,7 +815,7 @@ def actualizar_subgrupo(subgrupo_id, numero=None, nombre=None, orden=None, tiemp
             params.append(numero)
         if nombre is not None:
             updates.append("nombre = %s")
-            params.append(nombre)
+            params.append(_texto_mayusculas(nombre))
         if orden is not None:
             updates.append("orden = %s")
             params.append(orden)
@@ -674,6 +873,60 @@ def buscar_materiales(descripcion=None, proveedor=None):
         query += " ORDER BY descripcion ASC"
         cur.execute(query, tuple(params))
         return cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def _procesar_mayusculas_para_columnas(row, columnas):
+    cambios = {}
+    for columna in columnas:
+        valor = row.get(columna)
+        if valor is None:
+            continue
+        if columna == "unidad":
+            nuevo = simplificar_unidad(valor)
+        else:
+            nuevo = _texto_mayusculas(valor)
+        if nuevo != valor:
+            cambios[columna] = nuevo
+    return cambios
+
+
+def convertir_datos_a_mayusculas():
+    """
+    Normaliza a mayúsculas los campos de texto principales en todas las tablas relevantes.
+    Devuelve un diccionario con la cantidad de filas modificadas por tabla.
+    """
+    tablas = {
+        "clientes": ["nombre", "razon_social", "ruc", "direccion", "telefono", "email", "notas", "contacto"],
+        "items": ["codigo", "descripcion", "tipo", "unidad", "notas"],
+        "materiales": ["descripcion", "proveedor"],
+        "presupuestos": ["numero_presupuesto", "titulo", "descripcion", "notas"],
+        "presupuesto_subgrupos": ["nombre"],
+        "presupuesto_items": ["descripcion", "proveedor", "notas", "numero_subitem", "unidad"],
+        "precios": ["proveedor", "producto"],
+    }
+
+    conn, cur = conectar()
+    try:
+        resumen = {}
+        for tabla, columnas in tablas.items():
+            cur.execute(f"SELECT id, {', '.join(columnas)} FROM {tabla}")
+            filas = cur.fetchall()
+            modificadas = 0
+            for fila in filas:
+                fila_dict = dict(fila)
+                cambios = _procesar_mayusculas_para_columnas(fila_dict, columnas)
+                if cambios:
+                    sets = ", ".join(f"{col} = %s" for col in cambios.keys())
+                    params = list(cambios.values())
+                    params.append(fila_dict["id"])
+                    cur.execute(f"UPDATE {tabla} SET {sets} WHERE id = %s", params)
+                    modificadas += 1
+            resumen[tabla] = modificadas
+        conn.commit()
+        return resumen
     finally:
         cur.close()
         conn.close()

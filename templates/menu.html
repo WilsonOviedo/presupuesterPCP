@@ -29,8 +29,20 @@
 
   <div class="card">
     <h3>Presupuestos</h3>
-    <p>Gestionar presupuestos, items y clientes para proyectos eléctricos industriales.</p>
+    <p>Gestionar presupuestos, servicios y clientes para proyectos eléctricos industriales.</p>
     <a class="button" href="{{ url_for('presupuestos_index') }}">Abrir presupuestos</a>
+  </div>
+
+  <div class="card">
+    <h3>Servicios</h3>
+    <p>Gestionar catálogos de servicios y conceptos reutilizables.</p>
+    <a class="button" href="{{ url_for('items_index') }}">Abrir servicios</a>
+  </div>
+
+  <div class="card">
+    <h3>Utilidades</h3>
+    <p>Normaliza todos los textos de la base de datos a MAYÚSCULAS.</p>
+    <a class="button" href="{{ url_for('utilidades_mayusculas') }}">Mayúsculas globales</a>
   </div>
 {% endblock %}
 

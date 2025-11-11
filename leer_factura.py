@@ -26,6 +26,16 @@ PG_CONN = {
     "port": os.getenv("DB_PORT"),
 }
 
+
+def _to_upper(valor):
+    if valor is None:
+        return None
+    texto = str(valor).strip()
+    if texto == "":
+        return ""
+    return texto.upper()
+
+
 def conectar_postgres():
     conn = psycopg2.connect(**PG_CONN)
     cur = conn.cursor()
@@ -82,15 +92,15 @@ def extraer_datos_xml(xml_bytes):
     tree = ET.parse(BytesIO(xml_bytes))
     root = tree.getroot()
 
-    proveedor = root.findtext(".//{*}dNomEmi") or "Desconocido"
+    proveedor = _to_upper(root.findtext(".//{*}dNomEmi") or "DESCONOCIDO")
     fecha = root.findtext(".//{*}dFecFirma")
 
     for item in root.findall(".//{*}gCamItem"):
-        producto = item.findtext(".//{*}dDesProSer")
+        producto = _to_upper(item.findtext(".//{*}dDesProSer"))
         precio = item.findtext(".//{*}dPUniProSer")
         if producto and precio:
             try:
-                datos.append((proveedor.strip(), fecha.strip(), producto.strip(), float(precio)))
+                datos.append((proveedor, fecha.strip() if fecha else None, producto, float(precio)))
             except ValueError:
                 pass
     return datos

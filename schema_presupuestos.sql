@@ -6,7 +6,8 @@ CREATE TABLE IF NOT EXISTS clientes (
     id SERIAL PRIMARY KEY,
     nombre VARCHAR(255) NOT NULL,
     razon_social VARCHAR(255),
-    cuit VARCHAR(20),
+    ruc VARCHAR(20),
+    contacto VARCHAR(255),
     direccion TEXT,
     telefono VARCHAR(50),
     email VARCHAR(255),
@@ -27,7 +28,7 @@ CREATE TABLE IF NOT EXISTS items (
     precio_venta NUMERIC(15, 2) GENERATED ALWAYS AS (
         CASE 
             WHEN margen_porcentaje = 0 THEN precio_base
-            ELSE precio_base * (100 + margen_porcentaje) / 100
+            ELSE precio_base * 100 / (100 - margen_porcentaje)
         END
     ) STORED,
     activo BOOLEAN DEFAULT TRUE,
@@ -118,6 +119,11 @@ ALTER TABLE presupuesto_items
 
 ALTER TABLE materiales
     ADD COLUMN IF NOT EXISTS proveedor VARCHAR(255);
+
+ALTER TABLE clientes
+    ADD COLUMN IF NOT EXISTS ruc VARCHAR(20);
+ALTER TABLE clientes
+    ADD COLUMN IF NOT EXISTS contacto VARCHAR(255);
 
 -- Función para actualizar updated_at automáticamente
 CREATE OR REPLACE FUNCTION actualizar_timestamp()

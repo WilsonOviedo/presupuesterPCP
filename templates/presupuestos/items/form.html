@@ -1,17 +1,21 @@
 {% extends 'base.html' %}
-{% block title %}{% if item %}Editar{% else %}Nuevo{% endif %} Item{% endblock %}
+{% block title %}{% if item %}Editar{% else %}Nuevo{% endif %} Servicio{% endblock %}
 {% block content %}
   <div class="actions" style="margin-bottom:10px;">
     <a class="button button-secondary" href="{{ url_for('items_index') }}">← Volver</a>
   </div>
-  <h2>{% if item %}Editar{% else %}Nuevo{% endif %} Item</h2>
+  <h2>{% if item %}Editar{% else %}Nuevo{% endif %} Servicio</h2>
 
-  <form method="post" action="{% if item %}{{ url_for('items_editar', id=item.id) }}{% else %}{{ url_for('items_nuevo') }}{% endif %}" style="max-width:600px;">
+  <form id="servicio-form" method="post" action="{% if item %}{{ url_for('items_editar', id=item.id) }}{% else %}{{ url_for('items_nuevo') }}{% endif %}" style="max-width:600px;">
     <div style="display:grid; gap:15px;">
       <div>
         <label style="display:block; margin-bottom:5px; font-weight:600;">Código:</label>
-        <input type="text" name="codigo" value="{{ item.codigo if item else '' }}" 
-               style="width:100%; padding:8px;" placeholder="Opcional">
+        <div style="display:flex; gap:8px;">
+          <input type="text" name="codigo" value="{{ item.codigo if item else '' }}" 
+                 style="flex:1; padding:8px;" placeholder="Opcional">
+          <button type="button" class="button button-secondary" id="btn-generar-codigo" style="padding:8px 12px;">Auto</button>
+        </div>
+        <small style="color:#555;">Genera un código basado en el tipo, descripción y la fecha actual.</small>
       </div>
 
       <div>
@@ -62,6 +66,13 @@
       </div>
 
       <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Precio con margen:</label>
+        <input type="text" id="precio-final" value="{{ (item.precio_venta if item else 0)|gs_currency }}" readonly
+               style="width:100%; padding:8px; background:#f5f5f5; border:1px solid #ccc;">
+        <small style="color:#555;">Se calcula como <code>precio_base × 100 ÷ (100 − margen)</code>.</small>
+      </div>
+
+      <div>
         <label style="display:block; margin-bottom:5px; font-weight:600;">Notas:</label>
         <textarea name="notas" rows="3" style="width:100%; padding:8px;">{{ item.notas if item else '' }}</textarea>
       </div>
@@ -82,5 +93,73 @@
       </div>
     </div>
   </form>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    (function() {
+      const form = document.getElementById('servicio-form');
+      if (!form) return;
+      const precioInput = form.querySelector('input[name="precio_base"]');
+      const margenInput = form.querySelector('input[name="margen_porcentaje"]');
+      const salida = document.getElementById('precio-final');
+      const codigoInput = form.querySelector('input[name="codigo"]');
+      const tipoSelect = form.querySelector('select[name="tipo"]');
+      const descripcionInput = form.querySelector('input[name="descripcion"]');
+      const btnGenerarCodigo = document.getElementById('btn-generar-codigo');
+      const formato = new Intl.NumberFormat('es-PY', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+      function toFloat(valor) {
+        const numero = parseFloat(valor);
+        return isNaN(numero) ? 0 : numero;
+      }
+
+      function recalcular() {
+        if (!salida) return;
+        const precio = toFloat(precioInput && precioInput.value);
+        const margen = toFloat(margenInput && margenInput.value);
+        const denominador = 100 - margen;
+        if (denominador <= 0) {
+          salida.value = 'Margen debe ser < 100';
+          return;
+        }
+        const resultado = precio * 100 / denominador;
+        salida.value = `Gs. ${formato.format(resultado)}`;
+      }
+
+      if (precioInput) {
+        precioInput.addEventListener('input', recalcular);
+        precioInput.addEventListener('blur', recalcular);
+      }
+      if (margenInput) {
+        margenInput.addEventListener('input', recalcular);
+        margenInput.addEventListener('blur', recalcular);
+      }
+      recalcular();
+
+      function slug(texto) {
+        return (texto || '')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^A-Z0-9]/gi, '')
+          .toUpperCase();
+      }
+
+      function generarCodigo() {
+        if (!codigoInput) return;
+        const tipo = slug(tipoSelect && tipoSelect.value || 'SR');
+        const tipoSlug = slug(tipoSelect && tipoSelect.value || 'SRV');
+        const descSlug = slug(descripcionInput && descripcionInput.value || 'S');
+        const bloqueTipo = tipoSlug.slice(0, 3) || 'SRV';
+        const letraDesc = descSlug.slice(0, 1) || 'S';
+        const sufijo = String(Math.floor(100 + Math.random() * 900)).padStart(3, '0');
+        codigoInput.value = `${bloqueTipo}-${letraDesc}-${sufijo}`;
+      }
+
+      if (btnGenerarCodigo) {
+        btnGenerarCodigo.addEventListener('click', generarCodigo);
+      }
+    })();
+  </script>
 {% endblock %}
 

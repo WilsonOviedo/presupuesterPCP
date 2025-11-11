@@ -81,8 +81,8 @@
             <td>{{ r.proveedor }}</td>
             <td>{{ r.fecha.strftime("%Y-%m-%d %H:%M:%S") if r.fecha else "" }}</td>
             <td>{{ r.producto }}</td>
-            <td style="text-align:right;">{{ "{:,.2f}".format(r.precio) if r.precio is not none else "" }}</td>
-            <td style="text-align:right;">{{ "{:,.2f}".format(r.precio_venta) if r.precio_venta is not none else "" }}</td>
+          <td style="text-align:right;">{{ r.precio|gs_currency if r.precio is not none else "" }}</td>
+          <td style="text-align:right;">{{ r.precio_venta|gs_currency if r.precio_venta is not none else "" }}</td>
             <td>
               <form method="post" action="{{ url_for('precios_agregar_material') }}" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
                 <input type="hidden" name="precio" value="{{ r.precio_venta if r.precio_venta is not none else (r.precio or 0) }}">
