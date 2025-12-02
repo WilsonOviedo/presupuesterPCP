@@ -9,28 +9,83 @@ import os
 import sys
 import time
 import subprocess
-from dotenv import load_dotenv
 import psycopg2
 
-# Cargar variables de entorno
-load_dotenv()
+# En Docker, las variables de entorno vienen de docker-compose.yml/env_file
+# Docker Compose lee el .env del host y lo inyecta como variables de entorno
+# Intentar cargar .env si existe (para desarrollo local), pero las variables
+# de entorno del sistema (de Docker) tienen prioridad
+try:
+    from dotenv import load_dotenv
+    # Cargar .env solo si existe, pero no sobrescribir variables ya existentes
+    # (override=False significa que las variables de entorno del sistema tienen prioridad)
+    if os.path.exists('/app/.env'):
+        load_dotenv('/app/.env', override=False)
+    elif os.path.exists('.env'):
+        load_dotenv('.env', override=False)
+except ImportError:
+    pass  # dotenv no es crítico si las variables vienen del sistema
+except Exception:
+    pass  # Si hay error cargando .env, continuar con variables del sistema
+
+# Debug: mostrar qué variables están disponibles (sin mostrar valores sensibles)
+if os.getenv('DEBUG_DB_INIT'):
+    print("[DEBUG] Variables de entorno detectadas:")
+    for var in ['DB_NAME', 'DB_USER', 'DB_HOST', 'DB_PORT']:
+        val = os.getenv(var)
+        print(f"   {var}: {val if val else 'NO CONFIGURADA'}")
+    db_pass = os.getenv('DB_PASSWORD')
+    print(f"   DB_PASSWORD: {'*' * len(db_pass) if db_pass else 'NO CONFIGURADA'}")
 
 def verificar_variables_env():
     """Verifica que las variables de entorno necesarias estén configuradas"""
     variables_requeridas = ['DB_NAME', 'DB_USER', 'DB_PASSWORD', 'DB_HOST', 'DB_PORT']
     faltantes = []
+    valores = {}
+    
+    # Debug: mostrar todas las variables de entorno relacionadas con DB
+    debug_mode = os.getenv('DEBUG_DB_INIT', '').lower() in ('1', 'true', 'yes')
+    if debug_mode:
+        print("[DEBUG] Variables de entorno detectadas:")
+        for key, value in os.environ.items():
+            if 'DB' in key or 'POSTGRES' in key:
+                if 'PASSWORD' in key:
+                    print(f"   {key}: {'*' * len(value) if value else 'NO CONFIGURADA'}")
+                else:
+                    print(f"   {key}: {value if value else 'NO CONFIGURADA'}")
+        print("")
     
     for var in variables_requeridas:
         valor = os.getenv(var)
+        valores[var] = valor
         if not valor:
             faltantes.append(var)
     
     if faltantes:
         print(f"[ERROR] Variables de entorno faltantes: {', '.join(faltantes)}")
-        print("[ERROR] Por favor, configura estas variables en el archivo .env")
+        print("[ERROR] Por favor, configura estas variables en:")
+        print("   1. El archivo .env en la raíz del proyecto (Docker Compose lo leerá)")
+        print("   2. O directamente en docker-compose.yml en la sección 'environment'")
+        print("\nVariables encontradas:")
+        for var in variables_requeridas:
+            if var not in faltantes:
+                # Ocultar valores sensibles
+                if 'PASSWORD' in var:
+                    print(f"   {var}: {'*' * len(valores[var])}")
+                else:
+                    print(f"   {var}: {valores[var]}")
+        print("\n[INFO] En Docker, el archivo .env del host se lee automáticamente")
+        print("       por docker-compose.yml mediante 'env_file: - .env'")
         sys.exit(1)
     
     print("[OK] Variables de entorno verificadas")
+    # Mostrar valores (ocultando contraseña)
+    print("   Configuración de base de datos:")
+    print(f"   - DB_NAME: {valores['DB_NAME']}")
+    print(f"   - DB_USER: {valores['DB_USER']}")
+    print(f"   - DB_HOST: {valores['DB_HOST']}")
+    print(f"   - DB_PORT: {valores['DB_PORT']}")
+    print(f"   - DB_PASSWORD: {'*' * len(valores['DB_PASSWORD']) if valores['DB_PASSWORD'] else 'NO CONFIGURADA'}")
 
 def esperar_postgresql(max_retries=30, retry_delay=2):
     """Espera a que PostgreSQL esté listo para aceptar conexiones"""
