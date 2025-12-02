@@ -5,20 +5,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Dependencias del sistema para psycopg2, OpenCV y Tesseract OCR
+# Dependencias del sistema para psycopg2
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
-    tesseract-ocr \
-    tesseract-ocr-spa \
-    tesseract-ocr-por \
-    tesseract-ocr-eng \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgomp1 \
     curl \
  && rm -rf /var/lib/apt/lists/*
 
