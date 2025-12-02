@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% set titulo = 'Editar proveedor' if proveedor else 'Nuevo proveedor' %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('proveedores_index') }}">← Volver</a>
+  </div>
+  <h2>{{ titulo }}</h2>
+  <form method="post" style="max-width:640px; background:white; padding:20px; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:12px;">
+      <div>
+        <label style="display:block; margin-bottom:6px; font-weight:600;">Nombre *</label>
+        <input type="text" name="nombre" value="{{ proveedor.nombre if proveedor else '' }}" required style="width:100%; padding:8px;">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:6px; font-weight:600;">Razón social</label>
+        <input type="text" name="razon_social" value="{{ proveedor.razon_social if proveedor else '' }}" style="width:100%; padding:8px;">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:6px; font-weight:600;">RUC</label>
+        <input type="text" name="ruc" value="{{ proveedor.ruc if proveedor else '' }}" style="width:100%; padding:8px;">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:6px; font-weight:600;">Teléfono</label>
+        <input type="text" name="telefono" value="{{ proveedor.telefono if proveedor else '' }}" style="width:100%; padding:8px;">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:6px; font-weight:600;">Email</label>
+        <input type="text" name="email" value="{{ proveedor.email if proveedor else '' }}" style="width:100%; padding:8px;">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:6px; font-weight:600;">Contacto</label>
+        <input type="text" name="contacto" value="{{ proveedor.contacto if proveedor else '' }}" style="width:100%; padding:8px;">
+      </div>
+    </div>
+    <div style="margin-top:12px;">
+      <label style="display:block; margin-bottom:6px; font-weight:600;">Dirección</label>
+      <input type="text" name="direccion" value="{{ proveedor.direccion if proveedor else '' }}" style="width:100%; padding:8px;">
+    </div>
+    <div style="margin-top:12px;">
+      <label style="display:block; margin-bottom:6px; font-weight:600;">Notas</label>
+      <textarea name="notas" rows="3" style="width:100%; padding:8px;">{{ proveedor.notas if proveedor else '' }}</textarea>
+    </div>
+    <div style="margin-top:12px;">
+      <label style="display:block; margin-bottom:6px; font-weight:600;">Estado</label>
+      <select name="activo" style="width:100%; padding:8px;">
+        <option value="true" {% if proveedor is none or proveedor.activo %}selected{% endif %}>Activo</option>
+        <option value="false" {% if proveedor and not proveedor.activo %}selected{% endif %}>Inactivo</option>
+      </select>
+    </div>
+    <div style="margin-top:20px; display:flex; gap:10px;">
+      <button type="submit" class="button">Guardar</button>
+      <a href="{{ url_for('proveedores_index') }}" class="button button-secondary">Cancelar</a>
+    </div>
+  </form>
+{% endblock %}
+

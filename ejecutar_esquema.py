@@ -24,7 +24,7 @@ def obtener_conexion():
         )
         return conn
     except Exception as e:
-        print(f"❌ Error al conectar a la base de datos: {e}")
+        print(f"[ERROR] Error al conectar a la base de datos: {e}")
         sys.exit(1)
 
 def leer_archivo_sql(archivo="schema_presupuestos.sql"):
@@ -34,10 +34,10 @@ def leer_archivo_sql(archivo="schema_presupuestos.sql"):
             contenido = f.read()
         return contenido
     except FileNotFoundError:
-        print(f"❌ Error: No se encontró el archivo {archivo}")
+        print(f"[ERROR] Error: No se encontró el archivo {archivo}")
         sys.exit(1)
     except Exception as e:
-        print(f"❌ Error al leer el archivo SQL: {e}")
+        print(f"[ERROR] Error al leer el archivo SQL: {e}")
         sys.exit(1)
 
 def dividir_comandos_sql(sql_content):
@@ -52,21 +52,33 @@ def dividir_comandos_sql(sql_content):
         linea_strip = linea.strip()
         linea_upper = linea_strip.upper()
         
+        # Ignorar líneas que son solo comentarios
+        if linea_strip.startswith('--') and not en_bloque_dollar:
+            continue
+        
         # Agregar línea al comando actual
         comando_actual.append(linea)
         
-        # Detectar inicio de bloque $$ (AS $$)
-        if not en_bloque_dollar and 'AS $$' in linea_upper:
+        # Detectar inicio de bloque $$ (AS $$ o DO $$)
+        if not en_bloque_dollar and ('AS $$' in linea_upper or 'DO $$' in linea_upper):
             en_bloque_dollar = True
         
-        # Detectar fin de bloque $$ ($$ LANGUAGE)
-        elif en_bloque_dollar and '$$' in linea and 'LANGUAGE' in linea_upper:
-            # Es el cierre del bloque
-            comando = '\n'.join(comando_actual).strip()
-            if comando:
-                comandos.append(comando)
-            comando_actual = []
-            en_bloque_dollar = False
+        # Detectar fin de bloque $$ ($$ LANGUAGE o END $$)
+        elif en_bloque_dollar:
+            if '$$' in linea and 'LANGUAGE' in linea_upper:
+                # Es el cierre del bloque de función
+                comando = '\n'.join(comando_actual).strip()
+                if comando:
+                    comandos.append(comando)
+                comando_actual = []
+                en_bloque_dollar = False
+            elif 'END $$' in linea_upper or (linea_strip == '$$;' and 'END' in '\n'.join(comando_actual[-3:]).upper()):
+                # Es el cierre del bloque DO $$
+                comando = '\n'.join(comando_actual).strip()
+                if comando:
+                    comandos.append(comando)
+                comando_actual = []
+                en_bloque_dollar = False
         
         # Si no estamos en bloque $$, buscar punto y coma al final
         elif not en_bloque_dollar and linea_strip.endswith(';'):
@@ -77,18 +89,32 @@ def dividir_comandos_sql(sql_content):
             if nivel_parentesis == 0:
                 # Estamos en nivel 0, es el fin del comando
                 comando = '\n'.join(comando_actual).strip()
+                # Filtrar comandos que son solo comentarios o vacíos
                 if comando and comando != ';':
-                    comandos.append(comando)
+                    # Verificar que no sea solo comentarios
+                    lineas_comando = [l.strip() for l in comando.split('\n') if l.strip() and not l.strip().startswith('--')]
+                    if lineas_comando:
+                        comandos.append(comando)
                 comando_actual = []
     
     # Agregar último comando si queda
     if comando_actual:
         comando = '\n'.join(comando_actual).strip()
         if comando and comando != ';':
-            comandos.append(comando)
+            lineas_comando = [l.strip() for l in comando.split('\n') if l.strip() and not l.strip().startswith('--')]
+            if lineas_comando:
+                comandos.append(comando)
     
-    # Filtrar comandos vacíos
-    return [c for c in comandos if c.strip() and c.strip() != ';']
+    # Filtrar comandos vacíos y solo comentarios
+    comandos_filtrados = []
+    for c in comandos:
+        c_stripped = c.strip()
+        if c_stripped and c_stripped != ';':
+            # Verificar que no sea solo comentarios
+            lineas = [l.strip() for l in c_stripped.split('\n') if l.strip() and not l.strip().startswith('--')]
+            if lineas:
+                comandos_filtrados.append(c)
+    return comandos_filtrados
 
 def ejecutar_esquema(archivo_sql="schema_presupuestos.sql"):
     """Ejecuta el esquema SQL en la base de datos"""
@@ -97,22 +123,22 @@ def ejecutar_esquema(archivo_sql="schema_presupuestos.sql"):
     print("=" * 60)
     
     # Leer archivo SQL
-    print(f"\n📖 Leyendo archivo: {archivo_sql}")
+    print(f"\nLeyendo archivo: {archivo_sql}")
     sql_content = leer_archivo_sql(archivo_sql)
     
     # Conectar a la base de datos
-    print("🔌 Conectando a la base de datos...")
+    print("Conectando a la base de datos...")
     conn = obtener_conexion()
     conn.autocommit = True  # Usar autocommit para permitir DDL
     
     try:
         cur = conn.cursor()
         
-        print("\n🔍 Dividiendo comandos SQL...")
+        print("\nDividiendo comandos SQL...")
         comandos = dividir_comandos_sql(sql_content)
         print(f"   Se encontraron {len(comandos)} comandos SQL")
         
-        print("\n🚀 Ejecutando comandos SQL...\n")
+        print("\nEjecutando comandos SQL...\n")
         
         comandos_exitosos = 0
         comandos_fallidos = 0
@@ -120,7 +146,11 @@ def ejecutar_esquema(archivo_sql="schema_presupuestos.sql"):
         
         for i, comando in enumerate(comandos, 1):
             comando_limpio = comando.strip()
-            if not comando_limpio:
+            if not comando_limpio or comando_limpio.startswith('--'):
+                continue
+            # Verificar que no sea solo comentarios
+            lineas_validas = [l.strip() for l in comando_limpio.split('\n') if l.strip() and not l.strip().startswith('--')]
+            if not lineas_validas:
                 continue
             
             # Identificar tipo de comando
@@ -171,27 +201,27 @@ def ejecutar_esquema(archivo_sql="schema_presupuestos.sql"):
             try:
                 cur.execute(comando_limpio)
                 comandos_exitosos += 1
-                mensaje = f"✅ [{i}/{len(comandos)}] {tipo}"
+                mensaje = f"[OK] [{i}/{len(comandos)}] {tipo}"
                 if nombre:
                     mensaje += f": {nombre}"
                 print(mensaje)
             except psycopg2.errors.DuplicateTable:
                 comandos_exitosos += 1
-                mensaje = f"⚠️  [{i}/{len(comandos)}] {tipo}"
+                mensaje = f"[WARN] [{i}/{len(comandos)}] {tipo}"
                 if nombre:
                     mensaje += f": {nombre}"
                 mensaje += " - Ya existe (se omite)"
                 print(mensaje)
             except psycopg2.errors.DuplicateObject:
                 comandos_exitosos += 1
-                mensaje = f"⚠️  [{i}/{len(comandos)}] {tipo}"
+                mensaje = f"[WARN] [{i}/{len(comandos)}] {tipo}"
                 if nombre:
                     mensaje += f": {nombre}"
                 mensaje += " - Ya existe (se omite)"
                 print(mensaje)
             except Exception as e:
                 comandos_fallidos += 1
-                mensaje = f"❌ [{i}/{len(comandos)}] {tipo}"
+                mensaje = f"[ERROR] [{i}/{len(comandos)}] {tipo}"
                 if nombre:
                     mensaje += f": {nombre}"
                 mensaje += f" - ERROR: {str(e)}"
@@ -206,27 +236,27 @@ def ejecutar_esquema(archivo_sql="schema_presupuestos.sql"):
         print("\n" + "=" * 60)
         print("RESUMEN")
         print("=" * 60)
-        print(f"✅ Comandos exitosos: {comandos_exitosos}")
+        print(f"[OK] Comandos exitosos: {comandos_exitosos}")
         if comandos_fallidos > 0:
-            print(f"❌ Comandos fallidos: {comandos_fallidos}")
+            print(f"[ERROR] Comandos fallidos: {comandos_fallidos}")
         print("=" * 60)
         
         # Verificar objetos creados
         if comandos_fallidos == 0 or comandos_exitosos > 0:
-            print("\n📊 Verificando objetos creados...")
+            print("\nVerificando objetos creados...")
             
             # Verificar tablas
             cur.execute("""
                 SELECT table_name 
                 FROM information_schema.tables 
                 WHERE table_schema = 'public' 
-                AND table_name IN ('clientes', 'items', 'materiales', 'presupuestos', 'presupuesto_subgrupos', 'presupuesto_items')
+                AND table_name IN ('clientes', 'items_mano_de_obra', 'materiales', 'materiales_genericos', 'templates_presupuestos', 'template_items', 'presupuestos', 'presupuesto_subgrupos', 'presupuesto_items')
                 ORDER BY table_name
             """)
             tablas = cur.fetchall()
             
             if tablas:
-                print("\n✅ Tablas encontradas:")
+                print("\n[OK] Tablas encontradas:")
                 for tabla in tablas:
                     print(f"   - {tabla[0]}")
             
@@ -240,7 +270,7 @@ def ejecutar_esquema(archivo_sql="schema_presupuestos.sql"):
             vistas = cur.fetchall()
             
             if vistas:
-                print("\n✅ Vistas encontradas:")
+                print("\n[OK] Vistas encontradas:")
                 for vista in vistas:
                     print(f"   - {vista[0]}")
             
@@ -255,28 +285,28 @@ def ejecutar_esquema(archivo_sql="schema_presupuestos.sql"):
             funciones = cur.fetchall()
             
             if funciones:
-                print("\n✅ Funciones encontradas:")
+                print("\n[OK] Funciones encontradas:")
                 for funcion in funciones:
                     print(f"   - {funcion[0]}")
         
         if comandos_fallidos == 0:
-            print("\n🎉 ¡ESQUEMA SQL EJECUTADO CORRECTAMENTE!")
+            print("\n[OK] ¡ESQUEMA SQL EJECUTADO CORRECTAMENTE!")
         elif comandos_exitosos > 0:
-            print(f"\n⚠️  Se ejecutaron {comandos_exitosos} comandos pero {comandos_fallidos} fallaron.")
+            print(f"\n[WARN] Se ejecutaron {comandos_exitosos} comandos pero {comandos_fallidos} fallaron.")
             print("   Algunos objetos pueden haberse creado correctamente.")
         else:
-            print(f"\n❌ Todos los comandos fallaron. Revisa los errores arriba.")
+            print(f"\n[ERROR] Todos los comandos fallaron. Revisa los errores arriba.")
             sys.exit(1)
         
     except Exception as e:
-        print(f"\n❌ Error durante la ejecución: {e}")
+        print(f"\n[ERROR] Error durante la ejecución: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
     finally:
         cur.close()
         conn.close()
-        print("\n🔌 Conexión cerrada.")
+        print("\nConexión cerrada.")
 
 if __name__ == "__main__":
     # Verificar que el archivo SQL existe
@@ -285,7 +315,7 @@ if __name__ == "__main__":
         archivo_sql = sys.argv[1]
     
     if not os.path.exists(archivo_sql):
-        print(f"❌ Error: No se encontró el archivo {archivo_sql}")
+        print(f"[ERROR] Error: No se encontró el archivo {archivo_sql}")
         print("   Uso: python ejecutar_esquema.py [archivo.sql]")
         sys.exit(1)
     

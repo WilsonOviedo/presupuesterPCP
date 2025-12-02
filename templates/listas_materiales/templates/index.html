@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}Templates de Presupuestos{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('listas_materiales_index') }}">← Volver</a>
+    <a class="button" href="{{ url_for('templates_nuevo') }}">+ Nuevo Template</a>
+  </div>
+  <h2>Templates de Presupuestos</h2>
+
+  {% if templates %}
+    <table>
+      <tr>
+        <th style="width:30%; text-align:left;">Nombre</th>
+        <th style="width:50%; text-align:left;">Descripción</th>
+        <th style="width:20%; text-align:left;">Acciones</th>
+      </tr>
+      {% for template in templates %}
+        <tr>
+          <td style="text-align:left;"><strong>{{ template.nombre }}</strong></td>
+          <td style="text-align:left;">{{ template.descripcion or '-' }}</td>
+          <td style="white-space:nowrap; text-align:left;">
+            <a href="{{ url_for('templates_ver', id=template.id) }}" class="button" style="padding:4px 8px; font-size:0.85em;">Ver</a>
+            <a href="{{ url_for('templates_editar', id=template.id) }}" class="button" style="padding:4px 8px; font-size:0.85em;">Editar</a>
+            <form method="post" action="{{ url_for('templates_eliminar', id=template.id) }}" style="display:inline;">
+              <button type="submit" class="button button-secondary" style="padding:4px 8px; font-size:0.85em; background:#dc3545;" onclick="return confirm('¿Eliminar este template?')">Eliminar</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p>No hay templates creados.</p>
+  {% endif %}
+{% endblock %}
+

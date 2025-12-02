@@ -1,0 +1,239 @@
+{% extends 'base.html' %}
+{% block title %}Asignar precios - {{ lista.titulo or lista.numero_lista }}{% endblock %}
+{% block content %}
+<style>
+  .wizard-steps {display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:15px;}
+  .wizard-step {border:2px solid #000;border-radius:4px;padding:10px;position:relative;background:#fff;cursor:pointer;transition:all 0.3s ease;min-height:60px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;}
+  .wizard-step:hover {transform:translateY(-1px);box-shadow:0 2px 6px rgba(0,0,0,0.15);}
+  .wizard-step.completed {background:#fff;border-color:#000;color:#000;}
+  .wizard-step.active {background:#FFD700;border-color:#000;box-shadow:0 0 0 2px rgba(255,215,0,0.3);}
+  .wizard-step.pendiente {background:#fff;border-color:#000;color:#000;}
+  .wizard-step h4 {margin:5px 0 4px 0;font-size:0.9rem;font-weight:bold;}
+  .wizard-step span.step-number {width:25px;height:25px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:0.9em;margin-bottom:5px;border:2px solid #000;}
+  .wizard-step.completed span.step-number {background:#000;color:#fff;}
+  .wizard-step.active span.step-number {background:#000;color:#FFD700;}
+  .wizard-step.pendiente span.step-number {background:#fff;color:#000;}
+  .wizard-step small {font-size:0.7em;color:#666;display:block;margin-top:2px;}
+  .wizard-step.completed small {color:#666;}
+  .wizard-step.pendiente small {color:#666;}
+  @media (max-width: 768px) {
+    .wizard-steps {grid-template-columns:repeat(2,1fr);}
+  }
+  @media (max-width: 480px) {
+    .wizard-steps {grid-template-columns:1fr;}
+  }
+</style>
+
+<div class="wizard-steps">
+  <div class="wizard-step completed" onclick="window.location.href='{{ url_for('listas_materiales_ver', id=lista.id) }}'">
+    <div style="display:flex;flex-direction:column;align-items:center;width:100%;">
+      <span class="step-number">1</span>
+      <h4>Listar materiales</h4>
+      <small>Agregar subgrupos e items.</small>
+    </div>
+  </div>
+  <div class="wizard-step active" onclick="window.location.href='{{ url_for('listas_materiales_precios', id=lista.id) }}'">
+    <div style="display:flex;flex-direction:column;align-items:center;width:100%;">
+      <span class="step-number">2</span>
+      <h4>Asignar precios</h4>
+      <small>Comparar proveedores.</small>
+    </div>
+  </div>
+  <div class="wizard-step pendiente">
+    <div style="display:flex;flex-direction:column;align-items:center;width:100%;">
+      <span class="step-number">3</span>
+      <h4>Paso 3</h4>
+      <small>Próximamente.</small>
+    </div>
+  </div>
+  <div class="wizard-step pendiente">
+    <div style="display:flex;flex-direction:column;align-items:center;width:100%;">
+      <span class="step-number">4</span>
+      <h4>Paso 4</h4>
+      <small>Próximamente.</small>
+    </div>
+  </div>
+</div>
+  
+  <style>
+    .tabla-precios { width:100%; border-collapse:collapse; box-shadow:0 2px 6px rgba(0,0,0,0.05); background:white; }
+    .tabla-precios th, .tabla-precios td { border:1px solid #e0e0e0; padding:10px; vertical-align:top; }
+    .tabla-precios thead { background:#f4f6f9; }
+    .grupo-info strong { display:block; font-size:1.05em; margin-bottom:4px; }
+    .slot-form { display:flex; flex-direction:column; gap:6px; }
+    .slot-form select, .slot-form input { width:100%; padding:6px; font-size:0.9em; }
+    .slot-actions { margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; }
+    .slot-actions form { display:inline; }
+    .slot-actions button { padding:2px 6px; font-size:0.8em; }
+    .text-muted { color:#888; }
+    .text-danger { color:#c0392b; }
+  </style>
+
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('listas_materiales_ver', id=lista.id) }}">← Volver a la lista</a>
+  </div>
+  <h2>Asignar precios: {{ lista.titulo or lista.numero_lista }}</h2>
+  <p style="color:#555;">Los materiales con la misma descripción y marca se agrupan en la tabla. Cada fila permite registrar hasta 5 proveedores y elegir un precio final.</p>
+
+  {% if grupos_precios %}
+    <table class="tabla-precios">
+      <thead>
+        <tr>
+          <th style="width:240px;">Item / Marca</th>
+          {% for idx in range(max_proveedores) %}
+            <th>Proveedor {{ loop.index }}</th>
+          {% endfor %}
+          <th style="width:160px;">Precio asignado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for grupo in grupos_precios %}
+          <tr data-item-id="{{ grupo.representante_id }}">
+            <td class="grupo-info">
+              <strong>{{ grupo.descripcion }}</strong>
+              <small>Marca: {{ grupo.marca or '-' }} · Unidad: {{ grupo.unidad }}</small><br>
+              <small>Cantidad total: {{ "{:,.2f}".format(grupo.cantidad_total) }} · Ítems agrupados: {{ grupo.items_agrupados|length }}</small>
+              {% if grupo.items_agrupados|length > 1 %}
+                <div style="margin-top:4px; color:#777;">Incluye: 
+                  {% for item in grupo.items_agrupados %}
+                    {{ item.numero_subitem or item.id }}{% if not loop.last %}, {% endif %}
+                  {% endfor %}
+                </div>
+              {% endif %}
+              <form method="post" action="{{ url_for('listas_seleccionar_precio_criterio', item_id=grupo.representante_id) }}" style="margin-top:8px; display:flex; gap:6px; align-items:center;">
+                <input type="hidden" name="lista_id" value="{{ lista.id }}">
+                <select name="criterio" style="padding:4px;">
+                  <option value="menor">Precio más bajo</option>
+                  <option value="mayor">Precio más alto</option>
+                </select>
+                <button type="submit" class="button button-secondary" style="padding:4px 10px;">Auto seleccionar</button>
+              </form>
+            </td>
+            {% for slot in grupo.slots %}
+              <td>
+                <form method="post"
+                      action="{{ url_for('listas_guardar_precio_slot', item_id=grupo.representante_id) }}"
+                      class="slot-form"
+                      data-item-id="{{ grupo.representante_id }}">
+                  <input type="hidden" name="lista_id" value="{{ lista.id }}">
+                  <input type="hidden" name="slot" value="{{ loop.index0 }}">
+                  <input type="hidden" name="precio_id" value="{{ slot.id if slot else '' }}">
+                  <label>Proveedor</label>
+                  <select name="proveedor_id" {% if not slot %}required{% endif %}>
+                    <option value="">Seleccionar...</option>
+                    {% for proveedor in proveedores %}
+                      <option value="{{ proveedor.id }}" {% if slot and slot.proveedor_id == proveedor.id %}selected{% endif %}>
+                        {{ proveedor.nombre }}
+                      </option>
+                    {% endfor %}
+                  </select>
+                  <label>Precio</label>
+                  <input type="text" name="precio" value="{{ "{:,.2f}".format(slot.precio) if slot else '' }}" {% if not slot %}required{% endif %}>
+                  <label>Moneda</label>
+                  <input type="text" name="moneda" value="{{ slot.moneda if slot else 'PYG' }}">
+                  <label>Notas</label>
+                  <input type="text" name="notas" value="{{ slot.notas or '' }}">
+                </form>
+                {% if slot %}
+                  <div class="slot-actions">
+                    <form method="post" action="{{ url_for('listas_eliminar_precio', precio_id=slot.id) }}">
+                      <input type="hidden" name="lista_id" value="{{ lista.id }}">
+                      <button type="submit" class="button button-secondary" style="background:#dc3545;" onclick="return confirm('¿Eliminar esta cotización?')">Eliminar</button>
+                    </form>
+                  </div>
+                {% endif %}
+              </td>
+            {% endfor %}
+            <td class="precio-asignado" data-item-id="{{ grupo.representante_id }}">
+              {% if grupo.precio_final %}
+                <strong>{{ grupo.precio_final.proveedor_nombre }}</strong><br>
+                {{ grupo.precio_final.moneda }} {{ "{:,.2f}".format(grupo.precio_final.precio) }}
+              {% else %}
+                <span class="text-muted">Sin asignar</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p style="color:#777;">Esta lista aún no tiene materiales para asignar precios.</p>
+  {% endif %}
+
+  <script>
+    (function() {
+      const formatter = new Intl.NumberFormat('es-PY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      function normalizarPrecio(valor) {
+        if (!valor) return '';
+        return valor
+          .toString()
+          .replace(/\s/g, '')
+          .replace(/\./g, '')
+          .replace(',', '.');
+      }
+      function formatearInput(input) {
+        const valor = parseFloat(normalizarPrecio(input.value));
+        if (!isNaN(valor)) {
+          input.value = formatter.format(valor);
+        }
+      }
+      function actualizarAsignado(itemId, data) {
+        const celda = document.querySelector('.precio-asignado[data-item-id="' + itemId + '"]');
+        if (!celda) return;
+        if (data && data.proveedor) {
+          celda.innerHTML = '<strong>' + data.proveedor + '</strong><br>' +
+            data.moneda + ' ' + formatter.format(data.precio);
+        } else {
+          celda.innerHTML = '<span class="text-muted">Sin asignar</span>';
+        }
+      }
+      document.querySelectorAll('.slot-form').forEach(function(form) {
+        const priceInput = form.querySelector('input[name="precio"]');
+        const providerSelect = form.querySelector('select[name="proveedor_id"]');
+        const currencyInput = form.querySelector('input[name="moneda"]');
+        const notesInput = form.querySelector('input[name="notas"]');
+        const itemId = form.getAttribute('data-item-id');
+        if (priceInput) {
+          formatearInput(priceInput);
+          priceInput.addEventListener('blur', function() {
+            formatearInput(priceInput);
+          });
+        }
+        function enviar() {
+          if (!providerSelect.value || !priceInput.value) {
+            return;
+          }
+          const formData = new FormData(form);
+          formData.set('precio', normalizarPrecio(priceInput.value));
+          fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+          })
+          .then(resp => resp.json())
+          .then(data => {
+            if (data.success) {
+              if (data.precio_final) {
+                actualizarAsignado(itemId, data.precio_final);
+              }
+            } else {
+              alert(data.error || 'No se pudo guardar el precio');
+            }
+          })
+          .catch(() => {
+            alert('Error al guardar el precio');
+          });
+        }
+        [providerSelect, currencyInput, notesInput].forEach(function(ctrl) {
+          if (ctrl) {
+            ctrl.addEventListener('change', enviar);
+          }
+        });
+        if (priceInput) {
+          priceInput.addEventListener('change', enviar);
+        }
+      });
+    })();
+  </script>
+{% endblock %}
+

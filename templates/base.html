@@ -10,7 +10,7 @@
     .navbar a { color:white; text-decoration:none; font-weight:500; padding:6px 10px; border-radius:4px; }
     .navbar a:hover { background:rgba(255,255,255,0.18); }
     .navbar .spacer { flex:1; }
-    .container { width: calc(100% - 200px); max-width: none; margin: 20px 100px 40px; padding: 0 24px 40px; }
+    .container { max-width: 1200px; width: 100%; margin: 20px auto; padding: 0 20px 40px; }
     .card { border: 1px solid #ddd; padding: 16px; border-radius: 8px; margin: 12px 0; background:white; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
     a.button, button.button { display: inline-block; padding: 8px 14px; background: #1976d2; color: #fff; text-decoration: none; border-radius: 6px; border: none; cursor: pointer; }
     a.button:hover, button.button:hover { background: #125a9e; }
@@ -30,10 +30,14 @@
     <a href="{{ url_for('menu') }}">Inicio</a>
     <a href="{{ url_for('precios_index') }}">Buscar Precios</a>
     <a href="{{ url_for('presupuestos_index') }}">Presupuestos</a>
-    <a href="{{ url_for('items_index') }}">Servicios</a>
+    <a href="{{ url_for('items_index') }}">Items Mano de Obra</a>
+    <a href="{{ url_for('prefijos_codigos_index') }}">Prefijos Códigos</a>
     <a href="{{ url_for('materiales_index') }}">Materiales</a>
+    <a href="{{ url_for('marcas_materiales_index') }}">Marcas</a>
+    <a href="{{ url_for('proveedores_index') }}">Proveedores</a>
+    <a href="{{ url_for('materiales_genericos_index') }}">Materiales Genéricos</a>
+    <a href="{{ url_for('templates_index') }}">Templates</a>
     <a href="{{ url_for('clientes_index') }}">Clientes</a>
-    <a href="{{ url_for('utilidades_mayusculas') }}">Utilidades</a>
     <div class="spacer"></div>
   </nav>
   <div class="container">

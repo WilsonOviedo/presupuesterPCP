@@ -2,8 +2,9 @@
 {% block title %}Materiales{% endblock %}
 {% block content %}
   <div class="actions" style="margin-bottom:10px;">
-    <a class="button button-secondary" href="{{ url_for('presupuestos_index') }}">← Volver</a>
+    <a class="button button-secondary" href="{{ url_for('listas_materiales_index') }}">← Volver</a>
     <a class="button" href="{{ url_for('precios_index') }}">Importar desde precios</a>
+    <a class="button button-secondary" href="{{ url_for('marcas_materiales_index') }}">Gestionar marcas</a>
   </div>
   <h2>Materiales eléctricos</h2>
 
@@ -14,8 +15,8 @@
         <input type="text" name="descripcion" value="{{ descripcion_filtro }}" placeholder="Buscar por descripción" style="width:100%; padding:6px;">
       </div>
       <div>
-        <label style="display:block; margin-bottom:6px; font-weight:600;">Proveedor:</label>
-        <input type="text" name="proveedor" value="{{ proveedor_filtro }}" placeholder="Buscar por proveedor" style="width:100%; padding:6px;">
+        <label style="display:block; margin-bottom:6px; font-weight:600;">Marca:</label>
+        <input type="text" name="marca" value="{{ marca_filtro }}" placeholder="Buscar por marca" list="marcas-list" style="width:100%; padding:6px;">
       </div>
       <div style="display:flex; gap:10px;">
         <button type="submit" class="button">Buscar</button>
@@ -27,21 +28,21 @@
   {% if materiales %}
     <table>
       <tr>
-        <th>Descripción</th>
-        <th>Proveedor</th>
-        <th>Precio</th>
-        <th>Tiempo instalación (h)</th>
-        <th>Actualizado</th>
-        <th>Acciones</th>
+        <th style="width:40%; text-align:left;">Descripción</th>
+        <th style="width:12%; text-align:left;">Marca</th>
+        <th style="width:10%; text-align:right;">Precio</th>
+        <th style="width:12%; text-align:right;">Tiempo instalación (h)</th>
+        <th style="width:12%; text-align:left;">Actualizado</th>
+        <th style="width:14%; text-align:left;">Acciones</th>
       </tr>
       {% for mat in materiales %}
         <tr>
-          <td>{{ mat.descripcion }}</td>
-          <td>{{ mat.proveedor or '-' }}</td>
-          <td style="text-align:right;">{{ mat.precio|gs_currency }}</td>
-          <td style="text-align:right;">{{ (mat.tiempo_instalacion if mat.tiempo_instalacion is not none else 0)|numero_local(2) }}</td>
-          <td>{{ mat.actualizado_en.strftime('%d/%m/%Y %H:%M') if mat.actualizado_en else '-' }}</td>
-          <td style="white-space:nowrap;">
+          <td style="text-align:left;">{{ mat.descripcion }}</td>
+          <td style="text-align:left;">{{ mat.marca or '-' }}</td>
+          <td style="text-align:right;">Gs. {{ "{:,.2f}".format(mat.precio) if mat.precio is not none else '0.00' }}</td>
+          <td style="text-align:right;">{{ "{:,.2f}".format(mat.tiempo_instalacion) if mat.tiempo_instalacion is not none else '0.00' }}</td>
+          <td style="text-align:left;">{{ mat.actualizado_en.strftime('%d/%m/%Y %H:%M') if mat.actualizado_en else '-' }}</td>
+          <td style="white-space:nowrap; text-align:left;">
             <a href="{{ url_for('materiales_editar', id=mat.id) }}" class="button" style="padding:4px 8px; font-size:0.85em;">Editar</a>
             <form method="post" action="{{ url_for('materiales_eliminar', id=mat.id) }}" style="display:inline;">
               <button type="submit" class="button button-secondary" style="padding:4px 8px; font-size:0.85em; background:#dc3545;" onclick="return confirm('¿Eliminar este material?')">Eliminar</button>
@@ -53,4 +54,10 @@
   {% else %}
     <p>No se encontraron materiales.</p>
   {% endif %}
+
+  <datalist id="marcas-list">
+    {% for marca in marcas or [] %}
+      <option value="{{ marca.nombre }}"></option>
+    {% endfor %}
+  </datalist>
 {% endblock %}

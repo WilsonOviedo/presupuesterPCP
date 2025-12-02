@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% block title %}Proveedores{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('menu') }}">← Volver</a>
+    <a class="button" href="{{ url_for('proveedores_nuevo') }}">+ Nuevo proveedor</a>
+  </div>
+  <h2>Proveedores</h2>
+
+  <form method="get" action="{{ url_for('proveedores_index') }}" style="margin-bottom:20px; padding:15px; background:#f7f7f7; border-radius:6px;">
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:12px; align-items:end;">
+      <div>
+        <label style="display:block; margin-bottom:6px; font-weight:600;">Buscar:</label>
+        <input type="text" name="q" value="{{ busqueda }}" placeholder="Nombre o razón social" style="width:100%; padding:6px;">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:6px; font-weight:600;">Estado:</label>
+        <select name="activo" style="width:100%; padding:6px; height:34px;">
+          <option value="">Todos</option>
+          <option value="true" {% if activo_filtro == 'true' %}selected{% endif %}>Activos</option>
+          <option value="false" {% if activo_filtro == 'false' %}selected{% endif %}>Inactivos</option>
+        </select>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button type="submit" class="button">Filtrar</button>
+        <a href="{{ url_for('proveedores_index') }}" class="button button-secondary">Limpiar</a>
+      </div>
+    </div>
+  </form>
+
+  {% if proveedores %}
+    <table>
+      <tr>
+        <th>Nombre</th>
+        <th>Razón social</th>
+        <th>Contacto</th>
+        <th>Teléfono</th>
+        <th>Email</th>
+        <th>Estado</th>
+        <th>Acciones</th>
+      </tr>
+      {% for proveedor in proveedores %}
+        <tr>
+          <td><strong>{{ proveedor.nombre }}</strong><br><small>{{ proveedor.ruc or '' }}</small></td>
+          <td>{{ proveedor.razon_social or '-' }}</td>
+          <td>{{ proveedor.contacto or '-' }}</td>
+          <td>{{ proveedor.telefono or '-' }}</td>
+          <td>{{ proveedor.email or '-' }}</td>
+          <td>
+            {% if proveedor.activo %}
+              <span style="padding:3px 8px; background:#d4edda; color:#155724; border-radius:4px; font-size:0.85em;">Activo</span>
+            {% else %}
+              <span style="padding:3px 8px; background:#f8d7da; color:#721c24; border-radius:4px; font-size:0.85em;">Inactivo</span>
+            {% endif %}
+          </td>
+          <td style="white-space:nowrap;">
+            <a href="{{ url_for('proveedores_editar', id=proveedor.id) }}" class="button" style="padding:4px 8px; font-size:0.85em;">Editar</a>
+            <form method="post" action="{{ url_for('proveedores_eliminar', id=proveedor.id) }}" style="display:inline;">
+              <button type="submit" class="button button-secondary" style="padding:4px 8px; font-size:0.85em; background:#dc3545;" onclick="return confirm('¿Eliminar este proveedor?')">Eliminar</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p>No hay proveedores cargados.</p>
+  {% endif %}
+{% endblock %}
+

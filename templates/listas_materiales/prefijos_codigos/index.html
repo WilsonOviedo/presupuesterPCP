@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}Prefijos de Códigos{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('listas_materiales_index') }}">← Volver</a>
+    <a class="button" href="{{ url_for('prefijos_codigos_nuevo') }}">+ Nuevo prefijo</a>
+  </div>
+  <h2>Prefijos de Códigos</h2>
+  <p style="color:#666; margin-bottom:20px;">Gestiona los prefijos que se asignan automáticamente a los códigos de items según su tipo de servicio.</p>
+
+  {% if prefijos %}
+    <table>
+      <tr>
+        <th>Tipo de Servicio</th>
+        <th>Prefijo</th>
+        <th>Estado</th>
+        <th>Acciones</th>
+      </tr>
+      {% for prefijo in prefijos %}
+        <tr>
+          <td>{{ prefijo.tipo_servicio }}</td>
+          <td><strong>{{ prefijo.prefijo }}</strong></td>
+          <td>
+            <span style="padding:4px 8px; border-radius:4px; font-size:0.85em; 
+              {% if prefijo.activo %}background:#d4edda; color:#155724;{% else %}background:#f8d7da; color:#721c24;{% endif %}">
+              {{ 'Activo' if prefijo.activo else 'Inactivo' }}
+            </span>
+          </td>
+          <td>
+            <a href="{{ url_for('prefijos_codigos_editar', id=prefijo.id) }}" class="button" style="padding:4px 8px; font-size:0.85em;">Editar</a>
+            <form method="post" action="{{ url_for('prefijos_codigos_eliminar', id=prefijo.id) }}" style="display:inline;" onsubmit="return confirm('¿Está seguro de eliminar este prefijo?');">
+              <button type="submit" class="button" style="padding:4px 8px; font-size:0.85em; background:#dc3545;">Eliminar</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p>No hay prefijos configurados. <a href="{{ url_for('prefijos_codigos_nuevo') }}">Crear el primero</a></p>
+  {% endif %}
+{% endblock %}
+

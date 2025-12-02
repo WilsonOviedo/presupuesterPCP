@@ -31,10 +31,10 @@
     <div class="totals">
       <h4>Totales</h4>
       <p><strong>Items:</strong> {{ presupuesto.cantidad_items }}</p>
-      <p><strong>Subtotal:</strong> {{ presupuesto.subtotal|gs_currency }}</p>
-      <p><strong>IVA ({{ presupuesto.iva_porcentaje }}%):</strong> {{ presupuesto.iva_monto|gs_currency }}</p>
-      <p><strong>Total:</strong> {{ presupuesto.total|gs_currency }}</p>
-      <p><strong>Tiempo total:</strong> {{ presupuesto.tiempo_ejecucion_total|numero_local(2) }} horas</p>
+      <p><strong>Subtotal:</strong> Gs. {{ "{:,.2f}".format(presupuesto.subtotal) if presupuesto.subtotal else '0.00' }}</p>
+      <p><strong>IVA ({{ presupuesto.iva_porcentaje }}%):</strong> Gs. {{ "{:,.2f}".format(presupuesto.iva_monto) if presupuesto.iva_monto else '0.00' }}</p>
+      <p><strong>Total:</strong> Gs. {{ "{:,.2f}".format(presupuesto.total) if presupuesto.total else '0.00' }}</p>
+      <p><strong>Tiempo total:</strong> {{ "{:,.2f}".format(presupuesto.tiempo_ejecucion_total) if presupuesto.tiempo_ejecucion_total else '0.00' }} horas</p>
     </div>
   </div>
 
@@ -54,9 +54,9 @@
             <strong>{{ subgrupo.numero }} - {{ subgrupo.nombre }}</strong>
           </div>
           <div>
-            <strong>Subtotal:</strong> {{ subgrupo.subtotal|gs_currency }}
+            <strong>Subtotal:</strong> Gs. {{ "{:,.2f}".format(subgrupo.subtotal) if subgrupo.subtotal else '0.00' }}
             &nbsp;|&nbsp;
-            <strong>Tiempo:</strong> {{ subgrupo.tiempo_ejecucion_horas|numero_local(2) }} h
+            <strong>Tiempo:</strong> {{ "{:,.2f}".format(subgrupo.tiempo_ejecucion_horas) if subgrupo.tiempo_ejecucion_horas else '0.00' }} h
           </div>
         </div>
         <div class="subgrupo-body">
@@ -66,7 +66,6 @@
                 <th style="width:60px;">Nº</th>
                 <th>Descripción</th>
                 <th style="width:70px;">Cant.</th>
-                <th style="width:70px;">Unidad</th>
                 <th style="width:90px;">Precio Unit.</th>
                 <th style="width:90px;">Subtotal</th>
                 <th style="width:80px;">Tiempo (h)</th>
@@ -76,11 +75,10 @@
                 <tr>
                   <td>{{ item.numero_subitem or subgrupo.numero ~ '.' ~ loop.index }}</td>
                   <td>{{ item.descripcion }}</td>
-                  <td style="text-align:right;">{{ item.cantidad|numero_local(2) }}</td>
-                  <td style="text-align:center;">{{ item.unidad or 'UND' }}</td>
-                  <td style="text-align:right;">{{ item.precio_unitario|gs_currency }}</td>
-                  <td style="text-align:right;">{{ item.subtotal|gs_currency }}</td>
-                  <td style="text-align:right;">{{ item.tiempo_ejecucion_horas|numero_local(2) }}</td>
+                  <td style="text-align:right;">{{ "{:,.2f}".format(item.cantidad) }}</td>
+                  <td style="text-align:right;">Gs. {{ "{:,.2f}".format(item.precio_unitario) if item.precio_unitario else '0.00' }}</td>
+                  <td style="text-align:right;">Gs. {{ "{:,.2f}".format(item.subtotal) if item.subtotal else '0.00' }}</td>
+                  <td style="text-align:right;">{{ "{:,.2f}".format(item.tiempo_ejecucion_horas) if item.tiempo_ejecucion_horas else '0.00' }}</td>
                   <td>{{ item.notas or '' }}</td>
                 </tr>
               {% endfor %}
@@ -100,7 +98,6 @@
         <tr>
           <th>Descripción</th>
           <th style="width:70px;">Cant.</th>
-          <th style="width:70px;">Unidad</th>
           <th style="width:90px;">Precio Unit.</th>
           <th style="width:90px;">Subtotal</th>
           <th style="width:80px;">Tiempo (h)</th>
@@ -109,11 +106,10 @@
         {% for item in presupuesto.get('items_sin_subgrupo', []) %}
           <tr>
             <td>{{ item.descripcion }}</td>
-            <td style="text-align:right;">{{ item.cantidad|numero_local(2) }}</td>
-            <td style="text-align:center;">{{ item.unidad or 'UND' }}</td>
-            <td style="text-align:right;">{{ item.precio_unitario|gs_currency }}</td>
-            <td style="text-align:right;">{{ item.subtotal|gs_currency }}</td>
-            <td style="text-align:right;">{{ item.tiempo_ejecucion_horas|numero_local(2) }}</td>
+            <td style="text-align:right;">{{ "{:,.2f}".format(item.cantidad) }}</td>
+            <td style="text-align:right;">Gs. {{ "{:,.2f}".format(item.precio_unitario) if item.precio_unitario else '0.00' }}</td>
+            <td style="text-align:right;">Gs. {{ "{:,.2f}".format(item.subtotal) if item.subtotal else '0.00' }}</td>
+            <td style="text-align:right;">{{ "{:,.2f}".format(item.tiempo_ejecucion_horas) if item.tiempo_ejecucion_horas else '0.00' }}</td>
             <td>{{ item.notas or '' }}</td>
           </tr>
         {% endfor %}

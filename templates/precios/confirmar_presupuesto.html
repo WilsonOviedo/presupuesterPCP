@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% block title %}Confirmar Presupuesto{% endblock %}
+{% block content %}
+<h2>Confirmar Presupuesto Extraído</h2>
+
+<div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:20px;margin-bottom:20px;">
+  <h3>Información del Presupuesto</h3>
+  <table style="width:100%;margin-bottom:20px;">
+    <tr>
+      <td style="font-weight:600;width:150px;">Proveedor:</td>
+      <td>{{ datos.proveedor or 'No identificado' }}</td>
+    </tr>
+    <tr>
+      <td style="font-weight:600;">Fecha:</td>
+      <td>{{ datos.fecha[:10] if datos.fecha else 'No identificada' }}</td>
+    </tr>
+    <tr>
+      <td style="font-weight:600;">Número:</td>
+      <td>{{ datos.numero_presupuesto or 'No identificado' }}</td>
+    </tr>
+    {% if datos.total %}
+    <tr>
+      <td style="font-weight:600;">Total:</td>
+      <td>Gs. {{ "{:,.2f}".format(datos.total) }}</td>
+    </tr>
+    {% endif %}
+  </table>
+</div>
+
+<div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:20px;margin-bottom:20px;">
+  {% set items_list = datos.get('items', []) if datos.get('items') is iterable else [] %}
+  <h3>Items Extraídos ({{ items_list|length }})</h3>
+  
+  {% if items_list %}
+  <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;margin-top:10px;">
+      <thead>
+        <tr style="background:#f0f0f0;">
+          <th style="padding:8px;text-align:left;border:1px solid #ddd;">Código</th>
+          <th style="padding:8px;text-align:left;border:1px solid #ddd;">Cantidad</th>
+          <th style="padding:8px;text-align:left;border:1px solid #ddd;">Unidad</th>
+          <th style="padding:8px;text-align:left;border:1px solid #ddd;">Descripción</th>
+          <th style="padding:8px;text-align:left;border:1px solid #ddd;">Marca</th>
+          <th style="padding:8px;text-align:right;border:1px solid #ddd;">Precio Unit.</th>
+          <th style="padding:8px;text-align:right;border:1px solid #ddd;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items_list %}
+        <tr>
+          <td style="padding:8px;border:1px solid #ddd;">{{ item.codigo or '-' }}</td>
+          <td style="padding:8px;border:1px solid #ddd;">{{ item.cantidad or '-' }}</td>
+          <td style="padding:8px;border:1px solid #ddd;">{{ item.unidad or '-' }}</td>
+          <td style="padding:8px;border:1px solid #ddd;">{{ item.descripcion or '-' }}</td>
+          <td style="padding:8px;border:1px solid #ddd;">{{ item.marca or '-' }}</td>
+          <td style="padding:8px;text-align:right;border:1px solid #ddd;">
+            {% if item.precio_unitario %}
+              Gs. {{ "{:,.2f}".format(item.precio_unitario) }}
+            {% else %}
+              -
+            {% endif %}
+          </td>
+          <td style="padding:8px;text-align:right;border:1px solid #ddd;">
+            {% if item.total %}
+              Gs. {{ "{:,.2f}".format(item.total) }}
+            {% else %}
+              -
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="padding:20px;text-align:center;color:#666;">
+    No se encontraron items en el presupuesto.
+  </div>
+  {% endif %}
+</div>
+
+<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:12px;margin-bottom:20px;">
+  <strong>⚠️ Revisa los datos antes de confirmar.</strong> Puedes editar manualmente después si es necesario.
+</div>
+
+<form method="post" action="{{ url_for('precios_confirmar_presupuesto') }}">
+  <input type="hidden" name="datos_json" value="{{ datos_json }}">
+  
+  <div style="display:flex;gap:10px;">
+    <button type="submit" class="button" style="background:#4caf50;">
+      ✓ Confirmar y Guardar
+    </button>
+    <a href="{{ url_for('precios_cargar_presupuesto') }}" class="button button-secondary">
+      ← Volver a Cargar Otra Imagen
+    </a>
+    <a href="{{ url_for('precios_index') }}" class="button button-secondary">
+      Cancelar
+    </a>
+  </div>
+</form>
+{% endblock %}
+

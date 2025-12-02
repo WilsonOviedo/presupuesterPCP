@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% block title %}{% if material %}Editar{% else %}Nuevo{% endif %} Material Genérico{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    {% if mostrar_salir %}
+      <a class="button button-secondary" href="{{ url_for('materiales_genericos_index') }}">← Salir</a>
+    {% else %}
+      <a class="button button-secondary" href="{{ url_for('materiales_genericos_index') }}">← Volver</a>
+    {% endif %}
+  </div>
+  <h2>{% if material %}Editar{% else %}Nuevo{% endif %} Material Genérico</h2>
+  
+  {% if mensaje_exito %}
+    <div style="background:#d4edda; color:#155724; padding:12px; border-radius:6px; margin-bottom:15px; border:1px solid #c3e6cb;">
+      <strong>✓ {{ mensaje_exito }}</strong>
+    </div>
+  {% endif %}
+  
+  {% if error %}
+    <div style="background:#f8d7da; color:#721c24; padding:12px; border-radius:6px; margin-bottom:15px; border:1px solid #f5c6cb;">
+      <strong>✗ {{ error }}</strong>
+    </div>
+  {% endif %}
+  
+  <form method="post" style="max-width:520px; background:white; padding:20px; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+    <div style="margin-bottom:12px;">
+      <label style="display:block; margin-bottom:6px; font-weight:600;">Descripción *</label>
+      <input type="text" name="descripcion" value="{{ material.descripcion if material else '' }}" required style="width:100%; padding:8px; text-transform:uppercase;" oninput="this.value = this.value.toUpperCase()">
+      <small style="color:#666; display:block; margin-top:4px;">Se guardará automáticamente en mayúsculas</small>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="display:block; margin-bottom:6px; font-weight:600;">Unidad de medida</label>
+      <input type="text" name="unidad" value="{{ material.unidad if material else 'UND' }}" style="width:100%; padding:8px; text-transform:uppercase;" list="unidades-genericas" oninput="this.value = this.value.toUpperCase()">
+      <small style="color:#666; display:block; margin-top:4px;">Ej: UND, M, ML, M2, H, KG</small>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="display:block; margin-bottom:6px; font-weight:600;">Tiempo Instalación (horas)</label>
+      <input type="number" name="tiempo_instalacion" step="0.01" min="0" value="{{ material.tiempo_instalacion if material else '0' }}" style="width:100%; padding:8px;">
+    </div>
+    <div style="margin-top:20px; display:flex; gap:10px;">
+      <button type="submit" class="button">Guardar y agregar otro</button>
+      {% if mostrar_salir %}
+        <a href="{{ url_for('materiales_genericos_index') }}" class="button button-secondary">Salir</a>
+      {% else %}
+        <a href="{{ url_for('materiales_genericos_index') }}" class="button button-secondary">Cancelar</a>
+      {% endif %}
+    </div>
+  </form>
+  
+  {% if mensaje_exito %}
+    <script>
+      // Limpiar el formulario después de guardar
+      document.querySelector('form').reset();
+      // Enfocar el campo de descripción
+      document.querySelector('input[name="descripcion"]').focus();
+    </script>
+  {% endif %}
+  <datalist id="unidades-genericas">
+    <option value="UND"></option>
+    <option value="M"></option>
+    <option value="ML"></option>
+    <option value="M2"></option>
+    <option value="M3"></option>
+    <option value="H"></option>
+    <option value="KG"></option>
+    <option value="L"></option>
+  </datalist>
+{% endblock %}
+

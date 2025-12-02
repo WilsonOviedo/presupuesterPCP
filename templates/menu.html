@@ -28,21 +28,15 @@
   </div>
 
   <div class="card">
-    <h3>Presupuestos</h3>
-    <p>Gestionar presupuestos, servicios y clientes para proyectos eléctricos industriales.</p>
-    <a class="button" href="{{ url_for('presupuestos_index') }}">Abrir presupuestos</a>
+    <h3>Cargar presupuesto desde imagen</h3>
+    <p>Sube una imagen de presupuesto y el sistema extraerá automáticamente los productos y precios usando OCR.</p>
+    <a class="button" href="{{ url_for('precios_cargar_presupuesto') }}">Cargar presupuesto</a>
   </div>
 
   <div class="card">
-    <h3>Servicios</h3>
-    <p>Gestionar catálogos de servicios y conceptos reutilizables.</p>
-    <a class="button" href="{{ url_for('items_index') }}">Abrir servicios</a>
-  </div>
-
-  <div class="card">
-    <h3>Utilidades</h3>
-    <p>Normaliza todos los textos de la base de datos a MAYÚSCULAS.</p>
-    <a class="button" href="{{ url_for('utilidades_mayusculas') }}">Mayúsculas globales</a>
+    <h3>Listas de materiales</h3>
+    <p>Generar listas de materiales y servicios por proyecto, asignar precios y preparar presupuestos finales.</p>
+    <a class="button" href="{{ url_for('listas_materiales_index') }}">Abrir listas</a>
   </div>
 {% endblock %}
 

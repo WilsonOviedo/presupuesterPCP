@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}{% if prefijo %}Editar{% else %}Nuevo{% endif %} Prefijo de Código{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('prefijos_codigos_index') }}">← Volver</a>
+  </div>
+  <h2>{% if prefijo %}Editar{% else %}Nuevo{% endif %} Prefijo de Código</h2>
+
+  <form method="post" action="{% if prefijo %}{{ url_for('prefijos_codigos_editar', id=prefijo.id) }}{% else %}{{ url_for('prefijos_codigos_nuevo') }}{% endif %}" style="max-width:600px;">
+    <div style="display:grid; gap:15px;">
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Tipo de Servicio: *</label>
+        {% if prefijo %}
+          <input type="text" name="tipo_servicio" value="{{ prefijo.tipo_servicio }}" 
+                 required style="width:100%; padding:8px;" readonly>
+          <small style="color:#666;">El tipo de servicio no se puede modificar</small>
+        {% else %}
+          <input type="text" name="tipo_servicio" value="" 
+                 required style="width:100%; padding:8px;" placeholder="Ej: Montaje, Boca de luz, Programación">
+          <small style="color:#666;">Ingrese el tipo de servicio libremente</small>
+        {% endif %}
+      </div>
+
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Prefijo: *</label>
+        <input type="text" name="prefijo" value="{{ prefijo.prefijo if prefijo else '' }}" 
+               required style="width:100%; padding:8px;" placeholder="Ej: mon, bl, pro">
+        <small style="color:#666;">El prefijo se usará para generar códigos automáticos (ej: mon-001, bl-002)</small>
+      </div>
+
+      <div>
+        <label style="display:flex; align-items:center; gap:8px; margin-bottom:5px;">
+          <input type="checkbox" name="activo" {% if not prefijo or prefijo.activo %}checked{% endif %} style="width:auto;">
+          <span style="font-weight:600;">Prefijo activo</span>
+        </label>
+        <small style="color:#666;">Los prefijos inactivos no se usarán para generar códigos automáticos.</small>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="button">{% if prefijo %}Actualizar{% else %}Crear{% endif %}</button>
+        <a href="{{ url_for('prefijos_codigos_index') }}" class="button button-secondary">Cancelar</a>
+      </div>
+    </div>
+  </form>
+{% endblock %}
+

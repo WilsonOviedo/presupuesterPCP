@@ -11,8 +11,15 @@
       <input type="text" name="descripcion" value="{{ material.descripcion }}" required style="width:100%; padding:8px;">
     </div>
     <div style="margin-bottom:12px;">
-      <label style="display:block; margin-bottom:6px; font-weight:600;">Proveedor</label>
-      <input type="text" name="proveedor" value="{{ material.proveedor or '' }}" style="width:100%; padding:8px;">
+      <label style="display:block; margin-bottom:6px; font-weight:600;">Marca</label>
+      <select name="marca_id" style="width:100%; padding:8px;">
+        <option value="">Seleccionar marca...</option>
+        {% for marca in marcas or [] %}
+          <option value="{{ marca.id }}" {% if material.marca_id == marca.id %}selected{% endif %}>{{ marca.nombre }}</option>
+        {% endfor %}
+      </select>
+      <small style="display:block; margin:6px 0 4px; color:#666;">o ingresa una marca manual:</small>
+      <input type="text" name="marca" value="{{ material.marca or '' }}" style="width:100%; padding:8px;" placeholder="Ej: Schneider, ABB">
     </div>
     <div style="display:flex; gap:12px;">
       <div style="flex:1;">

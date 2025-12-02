@@ -2,14 +2,14 @@
 {% block title %}{% if cliente %}Editar{% else %}Nuevo{% endif %} Cliente{% endblock %}
 {% block content %}
   <div class="actions" style="margin-bottom:10px;">
-    <a class="button button-secondary" href="{{ url_for('clientes_index') }}">← Volver</a>
+    <a class="button button-secondary" href="{{ url_for('clientes_index') }}">← Volver a listas</a>
   </div>
   <h2>{% if cliente %}Editar{% else %}Nuevo{% endif %} Cliente</h2>
 
-  <form method="post" action="{% if cliente %}{{ url_for('clientes_editar', id=cliente.id) }}{% else %}{{ url_for('clientes_nuevo') }}{% endif %}" style="max-width:700px;">
+  <form method="post" action="{% if cliente %}{{ url_for('clientes_editar', id=cliente.id) }}{% else %}{{ url_for('clientes_nuevo') }}{% endif %}" style="max-width:600px;">
     <div style="display:grid; gap:15px;">
       <div>
-        <label style="display:block; margin-bottom:5px; font-weight:600;">Nombre fantasía: *</label>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Nombre: *</label>
         <input type="text" name="nombre" value="{{ cliente.nombre if cliente else '' }}" 
                required style="width:100%; padding:8px;">
       </div>
@@ -22,13 +22,7 @@
 
       <div>
         <label style="display:block; margin-bottom:5px; font-weight:600;">RUC:</label>
-        <input type="text" name="ruc" value="{{ cliente.ruc if cliente and cliente.ruc is not none else (cliente.cuit if cliente and cliente.cuit is not none else '') }}" 
-               style="width:100%; padding:8px;">
-      </div>
-
-      <div>
-        <label style="display:block; margin-bottom:5px; font-weight:600;">Nombre del contacto:</label>
-        <input type="text" name="contacto" value="{{ cliente.contacto if cliente and cliente.contacto else '' }}" 
+        <input type="text" name="ruc" value="{{ cliente.ruc if cliente else '' }}" 
                style="width:100%; padding:8px;">
       </div>
 
@@ -52,6 +46,10 @@
         </div>
       </div>
 
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Notas:</label>
+        <textarea name="notas" rows="3" style="width:100%; padding:8px;">{{ cliente.notas if cliente else '' }}</textarea>
+      </div>
 
       <div class="actions">
         <button type="submit" class="button">{% if cliente %}Actualizar{% else %}Crear{% endif %}</button>

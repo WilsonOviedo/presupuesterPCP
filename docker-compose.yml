@@ -2,7 +2,9 @@ version: "3.9"
 
 services:
   web:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile
     container_name: scrapper_web
     ports:
       - "5000:5000"
@@ -13,9 +15,21 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-300}
+      # Variables de OCR (opcionales)
+      USE_REMOTE_OCR: ${USE_REMOTE_OCR:-false}
+      OCR_SERVER_URL: ${OCR_SERVER_URL:-}
+      TESSERACT_CMD: ${TESSERACT_CMD:-}
+    volumes:
+      - ./uploads:/app/uploads
     depends_on:
       - postgres
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   postgres:
     image: postgres:15

@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% if marca %}
+  {% set titulo = "Editar marca" %}
+{% else %}
+  {% set titulo = "Nueva marca" %}
+{% endif %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('marcas_materiales_index') }}">← Volver</a>
+  </div>
+  <h2>{{ titulo }}</h2>
+  <form method="post" style="max-width:640px; background:white; padding:20px; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+    <div style="margin-bottom:12px;">
+      <label style="display:block; margin-bottom:6px; font-weight:600;">Nombre *</label>
+      <input type="text" name="nombre" value="{{ (marca.nombre if marca else '') or '' }}" required style="width:100%; padding:8px;">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="display:block; margin-bottom:6px; font-weight:600;">Descripción</label>
+      <textarea name="descripcion" rows="2" style="width:100%; padding:8px;">{{ (marca.descripcion if marca else '') or '' }}</textarea>
+    </div>
+    <div style="display:flex; gap:12px; flex-wrap:wrap;">
+      <div style="flex:1; min-width:200px;">
+        <label style="display:block; margin-bottom:6px; font-weight:600;">Fabricante</label>
+        <input type="text" name="fabricante" value="{{ (marca.fabricante if marca else '') or '' }}" style="width:100%; padding:8px;">
+      </div>
+      <div style="flex:1; min-width:200px;">
+        <label style="display:block; margin-bottom:6px; font-weight:600;">País de origen</label>
+        <input type="text" name="pais_origen" value="{{ (marca.pais_origen if marca else '') or '' }}" style="width:100%; padding:8px;">
+      </div>
+    </div>
+    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:12px;">
+      <div style="flex:1; min-width:200px;">
+        <label style="display:block; margin-bottom:6px; font-weight:600;">Sitio web</label>
+        <input type="url" name="sitio_web" value="{{ (marca.sitio_web if marca else '') or '' }}" style="width:100%; padding:8px;">
+      </div>
+      <div style="flex:1; min-width:200px;">
+        <label style="display:block; margin-bottom:6px; font-weight:600;">Contacto</label>
+        <input type="text" name="contacto" value="{{ (marca.contacto if marca else '') or '' }}" style="width:100%; padding:8px;">
+      </div>
+    </div>
+    <div style="margin:12px 0;">
+      <label style="display:block; margin-bottom:6px; font-weight:600;">Notas</label>
+      <textarea name="notas" rows="3" style="width:100%; padding:8px;">{{ (marca.notas if marca else '') or '' }}</textarea>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="display:block; margin-bottom:6px; font-weight:600;">Estado</label>
+      <select name="activo" style="width:100%; padding:8px;">
+        <option value="true" {% if not marca or marca.activo %}selected{% endif %}>Activa</option>
+        <option value="false" {% if marca and not marca.activo %}selected{% endif %}>Inactiva</option>
+      </select>
+    </div>
+    <div style="margin-top:20px; display:flex; gap:10px;">
+      <button type="submit" class="button">Guardar</button>
+      <a href="{{ url_for('marcas_materiales_index') }}" class="button button-secondary">Cancelar</a>
+    </div>
+  </form>
+{% endblock %}
+

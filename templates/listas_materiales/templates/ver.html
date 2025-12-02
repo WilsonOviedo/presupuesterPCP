@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+{% block title %}Template: {{ template.nombre }}{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('templates_index') }}">← Volver</a>
+    <a class="button" href="{{ url_for('templates_editar', id=template.id) }}">Editar</a>
+  </div>
+  <h2>Template: {{ template.nombre }}</h2>
+
+  {% if template.descripcion %}
+    <p style="color:#666; margin-bottom:20px;">{{ template.descripcion }}</p>
+  {% endif %}
+
+  <div style="background:#f7f7f7; padding:15px; border-radius:6px; margin-bottom:20px;">
+    <h3 style="margin-top:0;">Agregar Item al Template</h3>
+    <form method="post" action="{{ url_for('templates_agregar_item', template_id=template.id) }}" style="display:grid; grid-template-columns: 2fr 2fr 1fr 1fr auto; gap:10px; align-items:end;">
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Tipo:</label>
+        <select id="tipo-item-template" class="tipo-item-select" style="width:100%; padding:6px; height:34px;">
+          <option value="mano_de_obra">Mano de Obra</option>
+          <option value="material_generico">Material Genérico</option>
+        </select>
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Item:</label>
+        <select name="item_mano_de_obra_id" id="select-mano-de-obra" class="item-select" style="width:100%; padding:6px; height:34px;">
+          <option value="">Seleccionar...</option>
+          {% for item in items_mano_de_obra %}
+            <option value="{{ item.id }}" data-precio="{{ item.precio_venta or item.precio_base or 0 }}">{{ item.descripcion }}</option>
+          {% endfor %}
+        </select>
+        <select name="material_generico_id" id="select-material-generico" class="item-select" style="width:100%; padding:6px; height:34px; display:none;">
+          <option value="">Seleccionar...</option>
+          {% for material in materiales_genericos %}
+            <option value="{{ material.id }}" data-tiempo="{{ material.tiempo_instalacion or 0 }}">{{ material.descripcion }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Cantidad:</label>
+        <input type="number" name="cantidad" step="0.01" min="0.01" value="1" required style="width:100%; padding:6px;">
+      </div>
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Orden:</label>
+        <input type="number" name="orden" value="{{ (template.items or [])|length + 1 }}" min="0" style="width:100%; padding:6px;">
+      </div>
+      <div>
+        <button type="submit" class="button">Agregar</button>
+      </div>
+    </form>
+  </div>
+
+  {% if template.items %}
+    <h3>Items del Template</h3>
+    <table>
+      <tr>
+        <th style="width:50px;">Orden</th>
+        <th>Tipo</th>
+        <th>Descripción</th>
+        <th style="width:100px;">Cantidad</th>
+        <th style="width:150px;">Acciones</th>
+      </tr>
+      {% for item in template.items %}
+        <tr>
+          <td style="text-align:center;">{{ item.orden or '-' }}</td>
+          <td>
+            {% if item.item_mano_de_obra_id %}
+              <span style="padding:2px 6px; background:#e3f2fd; color:#1976d2; border-radius:4px; font-size:0.85em;">Mano de Obra</span>
+            {% elif item.material_generico_id %}
+              <span style="padding:2px 6px; background:#fff3e0; color:#f57c00; border-radius:4px; font-size:0.85em;">Material Genérico</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if item.descripcion_item %}
+              {{ item.descripcion_item }}
+              {% if item.precio_venta %}
+                <small style="color:#666;">(Gs. {{ "{:,.2f}".format(item.precio_venta) }})</small>
+              {% endif %}
+            {% elif item.descripcion_material %}
+              {{ item.descripcion_material }}
+              {% if item.tiempo_instalacion %}
+                <small style="color:#666;">({{ "{:,.2f}".format(item.tiempo_instalacion) }}h)</small>
+              {% endif %}
+            {% endif %}
+          </td>
+          <td style="text-align:right;">{{ "{:,.2f}".format(item.cantidad) if item.cantidad else '1.00' }}</td>
+          <td>
+            <form method="post" action="{{ url_for('templates_eliminar_item', item_id=item.id) }}" style="display:inline;">
+              <input type="hidden" name="template_id" value="{{ template.id }}">
+              <button type="submit" class="button button-secondary" style="padding:4px 8px; font-size:0.85em; background:#dc3545;" onclick="return confirm('¿Eliminar este item del template?')">Eliminar</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p style="color:#666; font-style:italic;">No hay items en este template. Agrega items usando el formulario de arriba.</p>
+  {% endif %}
+
+  <script>
+    document.getElementById('tipo-item-template').addEventListener('change', function() {
+      const tipo = this.value;
+      const selectManoDeObra = document.getElementById('select-mano-de-obra');
+      const selectMaterialGenerico = document.getElementById('select-material-generico');
+      
+      if (tipo === 'mano_de_obra') {
+        selectManoDeObra.style.display = 'block';
+        selectMaterialGenerico.style.display = 'none';
+        selectMaterialGenerico.value = '';
+        selectMaterialGenerico.removeAttribute('name');
+        selectManoDeObra.setAttribute('name', 'item_mano_de_obra_id');
+      } else {
+        selectManoDeObra.style.display = 'none';
+        selectMaterialGenerico.style.display = 'block';
+        selectManoDeObra.value = '';
+        selectManoDeObra.removeAttribute('name');
+        selectMaterialGenerico.setAttribute('name', 'material_generico_id');
+      }
+    });
+  </script>
+{% endblock %}
+

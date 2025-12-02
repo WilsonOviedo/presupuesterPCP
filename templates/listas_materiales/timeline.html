@@ -1,0 +1,106 @@
+{% set lista_id = lista.id if lista else presupuesto.id if presupuesto else 0 %}
+{% set etapa_actual = etapa_actual|default(1) %}
+{% set etapas = [
+  {'numero': 1, 'nombre': 'Listar materiales', 'url': url_for('listas_materiales_ver', id=lista_id)},
+  {'numero': 2, 'nombre': 'Asignar precios', 'url': url_for('listas_materiales_precios', id=lista_id)}
+] %}
+
+<style>
+  .timeline-container {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  .timeline {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    position: relative;
+  }
+  .timeline-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    z-index: 2;
+  }
+  .timeline-circle {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.2em;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 3px solid #000;
+    position: relative;
+    z-index: 3;
+  }
+  .timeline-circle:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  }
+  .timeline-circle.activo {
+    background: #FFD700;
+    color: #000;
+  }
+  .timeline-circle.completado {
+    background: #FFD700;
+    color: #000;
+  }
+  .timeline-circle.pendiente {
+    background: #000;
+    color: #FFD700;
+  }
+  .timeline-line {
+    flex: 1;
+    height: 4px;
+    background: #000;
+    position: relative;
+    margin: 0 -10px;
+    z-index: 1;
+  }
+  .timeline-line.completado {
+    background: #FFD700;
+  }
+  .timeline-label {
+    margin-top: 8px;
+    font-size: 0.9em;
+    color: #333;
+    text-align: center;
+    max-width: 120px;
+    font-weight: 500;
+  }
+  .timeline-step:last-child .timeline-line {
+    display: none;
+  }
+  .timeline-step a {
+    text-decoration: none;
+    color: inherit;
+  }
+</style>
+
+  <div class="timeline-container">
+    <div class="timeline">
+      {% for etapa in etapas %}
+        <div class="timeline-step">
+          <a href="{{ etapa.url }}">
+            <div class="timeline-circle {% if etapa.numero == etapa_actual %}activo{% elif etapa.numero < etapa_actual %}completado{% else %}pendiente{% endif %}">
+              {{ etapa.numero }}
+            </div>
+          </a>
+          <div class="timeline-label">{{ etapa.nombre }}</div>
+        </div>
+        {% if not loop.last %}
+          <div class="timeline-line {% if etapa.numero < etapa_actual %}completado{% endif %}"></div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+

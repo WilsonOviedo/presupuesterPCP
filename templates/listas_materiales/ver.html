@@ -1,0 +1,1051 @@
+{% extends 'base.html' %}
+{% block title %}Presupuesto {{ presupuesto.numero_presupuesto }}{% endblock %}
+{% block content %}
+<style>
+  .wizard-steps {display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:15px;}
+  .wizard-step {border:2px solid #000;border-radius:4px;padding:10px;position:relative;background:#fff;cursor:pointer;transition:all 0.3s ease;min-height:60px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;}
+  .wizard-step:hover {transform:translateY(-1px);box-shadow:0 2px 6px rgba(0,0,0,0.15);}
+  .wizard-step.completed {background:#fff;border-color:#000;color:#000;}
+  .wizard-step.active {background:#FFD700;border-color:#000;box-shadow:0 0 0 2px rgba(255,215,0,0.3);}
+  .wizard-step.pendiente {background:#fff;border-color:#000;color:#000;}
+  .wizard-step h4 {margin:5px 0 4px 0;font-size:0.9rem;font-weight:bold;}
+  .wizard-step span.step-number {width:25px;height:25px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:0.9em;margin-bottom:5px;border:2px solid #000;}
+  .wizard-step.completed span.step-number {background:#000;color:#fff;}
+  .wizard-step.active span.step-number {background:#000;color:#FFD700;}
+  .wizard-step.pendiente span.step-number {background:#fff;color:#000;}
+  .wizard-step small {font-size:0.7em;color:#666;display:block;margin-top:2px;}
+  .wizard-step.completed small {color:#666;}
+  .wizard-step.pendiente small {color:#666;}
+  @media (max-width: 768px) {
+    .wizard-steps {grid-template-columns:repeat(2,1fr);}
+  }
+  @media (max-width: 480px) {
+    .wizard-steps {grid-template-columns:1fr;}
+  }
+</style>
+
+<div class="wizard-steps">
+  <div class="wizard-step active" onclick="window.location.href='{{ url_for('listas_materiales_ver', id=presupuesto.id) }}'">
+    <div style="display:flex;flex-direction:column;align-items:center;width:100%;">
+      <span class="step-number">1</span>
+      <h4>Listar materiales</h4>
+      <small>Agregar subgrupos e items.</small>
+    </div>
+  </div>
+  <div class="wizard-step {% if presupuesto.cantidad_items > 0 %}completed{% else %}pendiente{% endif %}" onclick="window.location.href='{{ url_for('listas_materiales_precios', id=presupuesto.id) }}'">
+    <div style="display:flex;flex-direction:column;align-items:center;width:100%;">
+      <span class="step-number">2</span>
+      <h4>Asignar precios</h4>
+      <small>Comparar proveedores.</small>
+    </div>
+  </div>
+  <div class="wizard-step pendiente">
+    <div style="display:flex;flex-direction:column;align-items:center;width:100%;">
+      <span class="step-number">3</span>
+      <h4>Paso 3</h4>
+      <small>Próximamente.</small>
+    </div>
+  </div>
+  <div class="wizard-step pendiente">
+    <div style="display:flex;flex-direction:column;align-items:center;width:100%;">
+      <span class="step-number">4</span>
+      <h4>Paso 4</h4>
+      <small>Próximamente.</small>
+    </div>
+  </div>
+</div>
+  
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('listas_materiales_index') }}">← Volver</a>
+    <a class="button" href="{{ url_for('listas_materiales_editar', id=presupuesto.id) }}">Editar</a>
+    <a class="button button-secondary" href="{{ url_for('listas_materiales_pdf', id=presupuesto.id) }}" target="_blank">Ver PDF</a>
+    <a class="button" href="{{ url_for('listas_materiales_precios', id=presupuesto.id) }}" style="background:#4caf50;">Asignar precios</a>
+  </div>
+  <h2>Presupuesto: {{ presupuesto.numero_presupuesto }}</h2>
+
+  <div style="display:grid; grid-template-columns: 2fr 1fr; gap:20px; margin-bottom:20px;">
+    <div>
+      <h3>Información</h3>
+      <table style="width:100%;">
+        <tr><td style="font-weight:600; width:150px;">Título:</td><td>{{ presupuesto.titulo or '-' }}</td></tr>
+        <tr><td style="font-weight:600;">Cliente:</td><td>{{ presupuesto.nombre_cliente }}</td></tr>
+        <tr><td style="font-weight:600;">Fecha:</td><td>{{ presupuesto.fecha_presupuesto.strftime('%d/%m/%Y') if presupuesto.fecha_presupuesto else '-' }}</td></tr>
+        <tr><td style="font-weight:600;">Validez:</td><td>{{ presupuesto.validez_dias }} días</td></tr>
+        <tr><td style="font-weight:600;">Estado:</td><td>
+          <span style="padding:4px 8px; border-radius:4px; font-size:0.9em; 
+            {% if presupuesto.estado == 'aprobado' %}background:#d4edda; color:#155724;
+            {% elif presupuesto.estado == 'enviado' %}background:#d1ecf1; color:#0c5460;
+            {% elif presupuesto.estado == 'rechazado' %}background:#f8d7da; color:#721c24;
+            {% elif presupuesto.estado == 'facturado' %}background:#d1ecf1; color:#0c5460;
+            {% else %}background:#fff3cd; color:#856404;{% endif %}">
+            {{ presupuesto.estado|upper }}
+          </span>
+        </td></tr>
+        {% if presupuesto.descripcion %}
+        <tr><td style="font-weight:600; vertical-align:top;">Descripción:</td><td>{{ presupuesto.descripcion }}</td></tr>
+        {% endif %}
+        {% if presupuesto.notas %}
+        <tr><td style="font-weight:600; vertical-align:top;">Notas:</td><td>{{ presupuesto.notas }}</td></tr>
+        {% endif %}
+      </table>
+    </div>
+
+    <div style="background:#f7f7f7; padding:15px; border-radius:6px;">
+      <h3>Totales</h3>
+      <table style="width:100%;">
+        <tr><td style="font-weight:600;">Items:</td><td style="text-align:right;">{{ presupuesto.cantidad_items }}</td></tr>
+        <tr><td style="font-weight:600;">Subtotal:</td><td style="text-align:right;">Gs. {{ "{:,.2f}".format(presupuesto.subtotal) if presupuesto.subtotal else '0.00' }}</td></tr>
+        <tr><td style="font-weight:600;">IVA ({{ presupuesto.iva_porcentaje }}%):</td><td style="text-align:right;">Gs. {{ "{:,.2f}".format(presupuesto.iva_monto) if presupuesto.iva_monto else '0.00' }}</td></tr>
+        <tr style="border-top:2px solid #333; font-size:1.2em;"><td style="font-weight:bold;">TOTAL:</td><td style="text-align:right; font-weight:bold;">Gs. {{ "{:,.2f}".format(presupuesto.total) if presupuesto.total else '0.00' }}</td></tr>
+        {% if presupuesto.tiempo_ejecucion_total %}
+        <tr style="border-top:1px solid #ddd; margin-top:10px;"><td style="font-weight:600;">Tiempo total:</td><td style="text-align:right;" class="tiempo-total-presupuesto">{{ "{:,.2f}".format(presupuesto.tiempo_ejecucion_total) }} horas</td></tr>
+        {% endif %}
+      </table>
+    </div>
+  </div>
+
+  <h3>Subgrupos e Items</h3>
+  <datalist id="datalist-servicios">
+    {% for item in items_servicio %}
+      <option value="{{ item.descripcion }}" data-id="{{ item.id }}" data-precio="{{ item.precio_venta or 0 }}" data-tiempo="{{ item.tiempo_instalacion or 0 }}"></option>
+    {% endfor %}
+  </datalist>
+  <datalist id="datalist-materiales-genericos">
+    {% for item in items_materiales %}
+      <option value="{{ item.descripcion }}" data-id="{{ item.id }}" data-precio="0" data-tiempo="{{ item.tiempo_instalacion or 0 }}"></option>
+    {% endfor %}
+  </datalist>
+  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;">
+    <div style="background:#f7f7f7; padding:15px; border-radius:6px;">
+      <h3 style="margin-top:0;">Agregar Subgrupo</h3>
+      <form method="post" action="{{ url_for('listas_materiales_agregar_subgrupo', id=presupuesto.id) }}" style="display:flex; gap:10px; align-items:end;">
+        <div style="flex:1;">
+          <label style="display:block; margin-bottom:5px; font-weight:600;">Número:</label>
+          <input type="number" name="numero" value="{{ presupuesto.get('subgrupos', [])|length + 1 }}" min="1" 
+                 style="width:100%; padding:6px;">
+        </div>
+        <div style="flex:3;">
+          <label style="display:block; margin-bottom:5px; font-weight:600;">Nombre del subgrupo:</label>
+          <input type="text" name="nombre" required placeholder="Ej: MONTAJE DE BANDEJADO" 
+                 style="width:100%; padding:6px;">
+        </div>
+        <div>
+          <button type="submit" class="button">Agregar</button>
+        </div>
+      </form>
+    </div>
+    <div style="background:#e8f5e9; padding:15px; border-radius:6px;">
+      <h3 style="margin-top:0;">Aplicar Template</h3>
+      <form method="post" action="{{ url_for('listas_materiales_aplicar_template', lista_id=presupuesto.id) }}" style="display:flex; gap:10px; align-items:end;">
+        <div style="flex:1;">
+          <label style="display:block; margin-bottom:5px; font-weight:600;">Template:</label>
+          <select name="template_id" required style="width:100%; padding:6px;">
+            <option value="">Seleccionar template...</option>
+            {% for template in templates_disponibles %}
+              <option value="{{ template.id }}">{{ template.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <button type="submit" class="button" style="background:#4caf50;">Aplicar</button>
+        </div>
+      </form>
+      <small style="color:#666; display:block; margin-top:8px;">
+        <a href="{{ url_for('templates_index') }}" target="_blank">Gestionar templates →</a>
+      </small>
+    </div>
+  </div>
+  
+  {% if presupuesto.get('subgrupos') %}
+    {% for subgrupo in presupuesto.get('subgrupos', []) %}
+      <div style="background:#e8f4f8; padding:15px; border-radius:6px; margin-bottom:15px; border-left:4px solid #1976d2;" data-subgrupo-container="{{ subgrupo.id }}">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <div>
+            <h4 style="margin:0;">
+              {{ subgrupo.numero }} - {{ subgrupo.nombre }}
+              <form method="post" action="{{ url_for('listas_materiales_actualizar_subgrupo', subgrupo_id=subgrupo.id) }}" style="display:inline-block; margin-left:10px;">
+                <input type="hidden" name="lista_id" value="{{ presupuesto.id }}">
+                <input type="number" name="numero" value="{{ subgrupo.numero }}" min="1" style="width:50px; padding:2px;" onchange="this.form.submit()">
+                <input type="text" name="nombre" value="{{ subgrupo.nombre }}" style="width:300px; padding:4px; margin-left:5px;" onchange="this.form.submit()">
+              </form>
+            </h4>
+          </div>
+          <div style="text-align:right;">
+            <small class="tiempo-subgrupo" data-subgrupo-id="{{ subgrupo.id }}">Tiempo: {{ "{:,.2f}".format(subgrupo.tiempo_ejecucion_horas) if subgrupo.tiempo_ejecucion_horas else '0.00' }} horas</small>
+            <form method="post" action="{{ url_for('listas_materiales_eliminar_subgrupo', subgrupo_id=subgrupo.id) }}" style="display:inline; margin-left:10px;">
+              <input type="hidden" name="lista_id" value="{{ presupuesto.id }}">
+              <button type="submit" onclick="return confirm('¿Eliminar este subgrupo? Los items quedarán sin subgrupo.')" 
+                      style="padding:4px 8px; background:#dc3545; color:white; border:none; border-radius:4px; cursor:pointer; font-size:0.85em;">Eliminar</button>
+            </form>
+          </div>
+        </div>
+        
+        {% if subgrupo.get('items') %}
+          <table style="width:100%; background:white; border-radius:4px;">
+            <tr style="background:#f0f0f0;">
+              <th style="width:60px;">Nº</th>
+              <th style="width:45%;">Descripción</th>
+              <th style="width:150px;">Marca</th>
+              <th>Unidad</th>
+              <th style="width:80px;">Cant.</th>
+              <th style="width:80px;">Tiempo (h)</th>
+              <th style="width:100px;">Acciones</th>
+            </tr>
+            {% for item in subgrupo.get('items', []) %}
+              <tr>
+                <td style="text-align:center;">
+                  <form method="post" action="{{ url_for('listas_materiales_actualizar_item', item_id=item.id) }}" style="display:inline;">
+                    <input type="hidden" name="lista_id" value="{{ presupuesto.id }}">
+                    <input type="hidden" name="subgrupo_id" value="{{ subgrupo.id }}">
+                    <input type="hidden" name="material_id" value="{{ item.material_id or '' }}">
+                    <input type="text" name="numero_subitem" value="{{ item.numero_subitem or '' }}" 
+                           style="width:50px; padding:2px; text-align:center;" 
+                           placeholder="{{ subgrupo.numero }}.{{ loop.index }}" 
+                           onchange="this.form.submit()">
+                  </form>
+                </td>
+                <td>
+                  <form method="post" action="{{ url_for('listas_materiales_actualizar_item', item_id=item.id) }}" style="display:inline;">
+                    <input type="hidden" name="lista_id" value="{{ presupuesto.id }}">
+                    <input type="hidden" name="subgrupo_id" value="{{ subgrupo.id }}">
+                    <input type="hidden" name="material_id" value="{{ item.material_id or '' }}">
+                    <input type="text" name="descripcion" value="{{ item.descripcion }}" 
+                           style="width:100%; padding:4px;" onchange="this.form.submit()">
+                  </form>
+                </td>
+                <td>
+                  <form method="post" action="{{ url_for('listas_materiales_actualizar_item', item_id=item.id) }}" class="form-marca-item" data-item-id="{{ item.id }}" style="display:flex; flex-direction:column; gap:4px; max-width:150px;">
+                    <input type="hidden" name="lista_id" value="{{ presupuesto.id }}">
+                    <input type="hidden" name="subgrupo_id" value="{{ subgrupo.id }}">
+                    <input type="hidden" name="material_id" value="{{ item.material_id or '' }}">
+                    <input type="hidden" name="marca_id" class="input-marca-id" value="{{ item.marca_id or '' }}">
+                    <input type="text" name="marca" value="{{ item.marca or '' }}" placeholder="Marca" class="input-marca-item" style="padding:4px; text-transform:uppercase; width:100%; box-sizing:border-box;" list="datalist-marcas">
+                    <small class="marca-status" style="font-size:0.75em; color:#666; visibility:hidden;"> </small>
+                  </form>
+                </td>
+                <td>{{ item.unidad or 'UND' }}</td>
+                <td style="text-align:right;">
+                  <form method="post" action="{{ url_for('listas_materiales_actualizar_item', item_id=item.id) }}" style="display:inline;">
+                    <input type="hidden" name="lista_id" value="{{ presupuesto.id }}">
+                    <input type="hidden" name="subgrupo_id" value="{{ subgrupo.id }}">
+                    <input type="hidden" name="material_id" value="{{ item.material_id or '' }}">
+                    <input type="number" name="cantidad" step="0.01" value="{{ item.cantidad }}" 
+                           class="input-cantidad-item" data-item-id="{{ item.id }}"
+                           style="width:70px; padding:4px; text-align:right;" onchange="this.form.submit()">
+                  </form>
+                </td>
+                <td style="text-align:right;">
+                  <form method="post" action="{{ url_for('listas_materiales_actualizar_item', item_id=item.id) }}" class="form-tiempo-item" data-subgrupo-id="{{ subgrupo.id }}" data-item-row="{{ item.id }}">
+                    <input type="hidden" name="lista_id" value="{{ presupuesto.id }}">
+                    <input type="hidden" name="subgrupo_id" value="{{ subgrupo.id }}">
+                    <input type="hidden" name="material_id" value="{{ item.material_id or '' }}">
+                    <input type="number" name="tiempo_ejecucion_horas" step="0.01" value="{{ item.tiempo_ejecucion_horas or 0 }}" 
+                           class="input-tiempo-item" data-item-id="{{ item.id }}"
+                           style="width:70px; padding:4px; text-align:right;" onchange="this.form.submit()">
+                  </form>
+                </td>
+                <td>
+                  <form method="post" action="{{ url_for('listas_materiales_eliminar_item', item_id=item.id) }}" style="display:inline;">
+                    <input type="hidden" name="lista_id" value="{{ presupuesto.id }}">
+                    <button type="submit" onclick="return confirm('¿Eliminar este item?')" 
+                            style="padding:4px 8px; background:#dc3545; color:white; border:none; border-radius:4px; cursor:pointer; font-size:0.85em;">Eliminar</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </table>
+        {% else %}
+        <table style="width:100%; background:white; border-radius:4px;">
+          <tr style="background:#f0f0f0;">
+            <th style="width:60px;">Nº</th>
+            <th style="width:45%;">Descripción</th>
+            <th style="width:150px;">Marca</th>
+            <th>Unidad</th>
+            <th style="width:80px;">Cant.</th>
+            <th style="width:80px;">Tiempo (h)</th>
+            <th style="width:100px;">Acciones</th>
+          </tr>
+        </table>
+        {% endif %}
+
+        <!-- Formulario de entrada rápida siempre visible -->
+        <div class="subgrupo-add-item" style="margin-top:12px;">
+          <form id="form-subgrupo-{{ subgrupo.id }}" method="post" action="{{ url_for('listas_materiales_agregar_item', id=presupuesto.id) }}" class="form-agregar-item-rapido" data-subgrupo-id="{{ subgrupo.id }}" style="background:#f9f9f9; padding:12px; border-radius:6px; border:2px dashed #ccc;">
+            <input type="hidden" name="subgrupo_id" value="{{ subgrupo.id }}">
+            <input type="hidden" name="orden" value="{{ (subgrupo.get('items') or [])|length + 1 }}">
+            <input type="hidden" name="item_id" class="hidden-item-id" value="">
+            <input type="hidden" name="material_generico_id" class="hidden-material-generico-id" value="">
+            <input type="hidden" name="marca_id" class="hidden-marca-id" value="">
+            <input type="hidden" name="marca" class="hidden-marca-nombre" value="">
+            <div style="display:grid; grid-template-columns: 1fr 2fr 1.5fr 1fr 1fr 1fr; gap:20px; align-items:end;">
+              <div>
+                <label style="display:block; margin-bottom:5px; font-weight:600; font-size:0.9em;">Tipo:</label>
+                <select class="item-source" style="width:100%; padding:8px; height:38px; font-size:0.9em; box-sizing:border-box;">
+                  <option value="material_generico" {% if not items_materiales %}disabled{% else %}selected{% endif %}>Materiales genéricos</option>
+                  <option value="servicio" {% if not items_servicio %}disabled{% endif %} {% if not items_materiales and items_servicio %}selected{% endif %}>Mano de obra / servicios</option>
+                </select>
+              </div>
+              <div>
+                <label style="display:block; margin-bottom:5px; font-weight:600; font-size:0.9em;">Item:</label>
+                <div class="item-select-wrapper">
+                  <input type="text" class="item-input item-input-servicio" list="datalist-servicios" placeholder="Buscar servicio..." style="width:100%; padding:8px; height:38px; font-size:0.9em; box-sizing:border-box; {% if not items_servicio %}display:none;{% endif %}">
+                  <input type="text" class="item-input item-input-material-generico" list="datalist-materiales-genericos" placeholder="Buscar material genérico..." {% if items_materiales %}style="width:100%; padding:8px; height:38px; font-size:0.9em; box-sizing:border-box; display:block;"{% else %}style="width:100%; padding:8px; height:38px; font-size:0.9em; box-sizing:border-box; display:none;" disabled{% endif %}>
+                </div>
+              </div>
+              <div>
+                <label style="display:block; margin-bottom:5px; font-weight:600; font-size:0.9em;">Marca:</label>
+                <input type="text" class="input-marca-nuevo" list="datalist-marcas" placeholder="Marca..." style="width:100%; padding:8px; height:38px; text-transform:uppercase; font-size:0.9em; box-sizing:border-box;">
+              </div>
+              <div>
+                <label style="display:block; margin-bottom:5px; font-weight:600; font-size:0.9em;">Cantidad:</label>
+                <input type="number" name="cantidad" step="0.01" value="1" min="0.01" required style="width:100%; padding:8px; height:38px; font-size:0.9em; box-sizing:border-box;" class="input-cantidad-nuevo">
+              </div>
+              <div>
+                <label style="display:block; margin-bottom:5px; font-weight:600; font-size:0.9em;">Tiempo (h):</label>
+                <input type="number" name="tiempo_ejecucion_horas" step="0.01" min="0" value="0" style="width:100%; padding:8px; height:38px; font-size:0.9em; box-sizing:border-box;" class="input-tiempo-nuevo">
+              </div>
+            </div>
+            <small style="color:#666; display:block; margin-top:8px; font-size:0.85em;">Presiona Enter en cualquier campo para agregar el item</small>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+
+<datalist id="datalist-marcas">
+  {% for marca in marcas_materiales %}
+    <option value="{{ marca.nombre }}" data-id="{{ marca.id }}"></option>
+  {% endfor %}
+</datalist>
+
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    // Eliminar código del botón toggle - ya no se necesita
+
+    document.querySelectorAll('.form-agregar-item-rapido').forEach(function(form) {
+      const sourceSelect = form.querySelector('.item-source');
+      const servicioInput = form.querySelector('.item-input-servicio');
+      const materialGenericoInput = form.querySelector('.item-input-material-generico');
+      const hiddenItem = form.querySelector('.hidden-item-id');
+      const hiddenMaterialGenerico = form.querySelector('.hidden-material-generico-id');
+      const hiddenMarcaId = form.querySelector('.hidden-marca-id');
+      const hiddenMarcaNombre = form.querySelector('.hidden-marca-nombre');
+      const inputMarcaNuevo = form.querySelector('.input-marca-nuevo');
+      const precioInput = form.querySelector('.precio-unitario-input');
+      const tiempoInput = form.querySelector('input[name="tiempo_ejecucion_horas"]');
+
+      function tieneOpciones(input) {
+        if (!input) return false;
+        const listId = input.getAttribute('list');
+        if (!listId) return false;
+        const datalist = document.getElementById(listId);
+        if (!datalist) return false;
+        return Array.from(datalist.options).some(function(opt) {
+          return opt.getAttribute('data-id');
+        });
+      }
+
+      function encontrarOpcion(input) {
+        if (!input) return null;
+        const listId = input.getAttribute('list');
+        if (!listId) return null;
+        const datalist = document.getElementById(listId);
+        if (!datalist) return null;
+        return Array.from(datalist.options).find(function(opt) {
+          return opt.value === input.value;
+        }) || null;
+      }
+
+      function actualizarDesdeInput(input, hiddenField) {
+        if (!input || !hiddenField) return;
+        const opcion = encontrarOpcion(input);
+        if (opcion) {
+          hiddenField.value = opcion.getAttribute('data-id') || '';
+          if (precioInput) {
+            const precio = opcion.getAttribute('data-precio');
+            if (precio !== null && precio !== '') {
+              precioInput.value = precio;
+            }
+          }
+          if (tiempoInput) {
+            const tiempo = opcion.getAttribute('data-tiempo');
+            if (tiempo !== null && tiempo !== '') {
+              tiempoInput.value = tiempo;
+            }
+          }
+        } else {
+          hiddenField.value = '';
+        }
+      }
+
+      function setActivo(tipoDeseado) {
+        const servicioValido = tieneOpciones(servicioInput);
+        const materialGenericoValido = tieneOpciones(materialGenericoInput);
+        let tipoActual = tipoDeseado;
+
+        if (tipoActual === 'material_generico' && !materialGenericoValido && servicioValido) {
+          tipoActual = 'servicio';
+        } else if (tipoActual !== 'material_generico' && !servicioValido && materialGenericoValido) {
+          tipoActual = 'material_generico';
+        } else if (!servicioValido && !materialGenericoValido) {
+          tipoActual = null;
+        }
+
+        if (tipoActual === 'material_generico') {
+          if (servicioInput) {
+            servicioInput.style.display = 'none';
+            servicioInput.disabled = true;
+            servicioInput.required = false;
+            servicioInput.value = '';
+          }
+          if (hiddenItem) hiddenItem.value = '';
+          if (materialGenericoInput) {
+            materialGenericoInput.style.display = 'block';
+            materialGenericoInput.disabled = false;
+            materialGenericoInput.required = true;
+          }
+          if (hiddenMaterialGenerico) hiddenMaterialGenerico.value = '';
+          form.dataset.activo = 'material_generico';
+          if (sourceSelect) sourceSelect.value = 'material_generico';
+          actualizarDesdeInput(materialGenericoInput, hiddenMaterialGenerico);
+        } else if (tipoActual === 'servicio') {
+          if (materialGenericoInput) {
+            materialGenericoInput.style.display = 'none';
+            materialGenericoInput.disabled = true;
+            materialGenericoInput.required = false;
+            materialGenericoInput.value = '';
+          }
+          if (hiddenMaterialGenerico) hiddenMaterialGenerico.value = '';
+          if (servicioInput) {
+            servicioInput.style.display = 'block';
+            servicioInput.disabled = false;
+            servicioInput.required = true;
+          }
+          if (hiddenItem) hiddenItem.value = '';
+          form.dataset.activo = 'servicio';
+          if (sourceSelect) sourceSelect.value = 'servicio';
+          actualizarDesdeInput(servicioInput, hiddenItem);
+        } else {
+          form.dataset.activo = '';
+          if (servicioInput) {
+            servicioInput.style.display = 'none';
+            servicioInput.disabled = true;
+            servicioInput.required = false;
+            servicioInput.value = '';
+          }
+          if (materialGenericoInput) {
+            materialGenericoInput.style.display = 'none';
+            materialGenericoInput.disabled = true;
+            materialGenericoInput.required = false;
+            materialGenericoInput.value = '';
+          }
+          if (hiddenItem) hiddenItem.value = '';
+          if (hiddenMaterialGenerico) hiddenMaterialGenerico.value = '';
+          if (hiddenMarcaId) hiddenMarcaId.value = '';
+          if (hiddenMarcaNombre) hiddenMarcaNombre.value = '';
+          if (inputMarcaNuevo) inputMarcaNuevo.value = '';
+        }
+      }
+
+      if (sourceSelect) {
+        sourceSelect.addEventListener('change', function() {
+          setActivo(this.value);
+        });
+      }
+
+      if (servicioInput && hiddenItem) {
+        servicioInput.addEventListener('input', function() {
+          actualizarDesdeInput(servicioInput, hiddenItem);
+        });
+        servicioInput.addEventListener('change', function() {
+          actualizarDesdeInput(servicioInput, hiddenItem);
+        });
+      }
+
+      if (materialGenericoInput && hiddenMaterialGenerico) {
+        materialGenericoInput.addEventListener('input', function() {
+          actualizarDesdeInput(materialGenericoInput, hiddenMaterialGenerico);
+        });
+        materialGenericoInput.addEventListener('change', function() {
+          actualizarDesdeInput(materialGenericoInput, hiddenMaterialGenerico);
+        });
+      }
+
+      const tipoInicial = sourceSelect && sourceSelect.value
+        ? sourceSelect.value
+        : (tieneOpciones(servicioInput) ? 'servicio' : 'material_generico');
+      setActivo(tipoInicial);
+
+      if (inputMarcaNuevo) {
+        inputMarcaNuevo.addEventListener('input', function() {
+          const valor = (inputMarcaNuevo.value || '').trim().toUpperCase();
+          inputMarcaNuevo.value = valor;
+          if (hiddenMarcaNombre) hiddenMarcaNombre.value = valor;
+          if (hiddenMarcaId) hiddenMarcaId.value = valor && mapaMarcas[valor] ? mapaMarcas[valor] : '';
+        });
+      }
+
+      // Agregar listener para Enter en todos los campos
+      const todosLosInputs = form.querySelectorAll('input, select');
+      todosLosInputs.forEach(function(input) {
+        input.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            // Validar que haya un item seleccionado
+            const itemInput = form.dataset.activo === 'servicio' ? servicioInput : materialGenericoInput;
+            if (itemInput && itemInput.value.trim()) {
+              const subgrupoId = form.getAttribute('data-subgrupo-id');
+              agregarItemAsincrono(form, subgrupoId);
+            }
+          }
+        });
+      });
+    });
+
+    // Función para recalcular tiempos de subgrupos y presupuesto
+    // El tiempo se calcula como: cantidad × tiempo_ejecucion_horas para cada item
+    function recalcularTiempos() {
+      // Recalcular tiempo de cada subgrupo
+      document.querySelectorAll('.tiempo-subgrupo').forEach(function(tiempoEl) {
+        const subgrupoId = tiempoEl.getAttribute('data-subgrupo-id');
+        if (!subgrupoId) return;
+        
+        let tiempoTotal = 0;
+        // Buscar todos los items dentro del contenedor del subgrupo
+        const subgrupoContainer = tiempoEl.closest('[data-subgrupo-container="' + subgrupoId + '"]');
+        if (subgrupoContainer) {
+          // Buscar cada fila de item (tr) que contiene cantidad y tiempo
+          subgrupoContainer.querySelectorAll('tr').forEach(function(row) {
+            const cantidadInput = row.querySelector('.input-cantidad-item');
+            const tiempoInput = row.querySelector('.input-tiempo-item');
+            
+            if (cantidadInput && tiempoInput) {
+              const cantidad = parseFloat(cantidadInput.value) || 0;
+              const tiempo = parseFloat(tiempoInput.value) || 0;
+              tiempoTotal += cantidad * tiempo;
+            }
+          });
+        }
+        
+        tiempoEl.textContent = 'Tiempo: ' + tiempoTotal.toFixed(2) + ' horas';
+      });
+      
+      // Recalcular tiempo total del presupuesto (incluye todos los items, con y sin subgrupo)
+      const tiempoTotalEl = document.querySelector('.tiempo-total-presupuesto');
+      if (tiempoTotalEl) {
+        let tiempoTotalPresupuesto = 0;
+        
+        // Sumar tiempos de items en subgrupos
+        document.querySelectorAll('[data-subgrupo-container]').forEach(function(container) {
+          container.querySelectorAll('tr').forEach(function(row) {
+            const cantidadInput = row.querySelector('.input-cantidad-item');
+            const tiempoInput = row.querySelector('.input-tiempo-item');
+            
+            if (cantidadInput && tiempoInput) {
+              const cantidad = parseFloat(cantidadInput.value) || 0;
+              const tiempo = parseFloat(tiempoInput.value) || 0;
+              tiempoTotalPresupuesto += cantidad * tiempo;
+            }
+          });
+        });
+        
+        // Sumar tiempos de items sin subgrupo
+        const itemsSinSubgrupoContainer = document.querySelector('[data-items-sin-subgrupo]');
+        if (itemsSinSubgrupoContainer) {
+          itemsSinSubgrupoContainer.querySelectorAll('tr').forEach(function(row) {
+            const cantidadInput = row.querySelector('.input-cantidad-item');
+            const tiempoInput = row.querySelector('.input-tiempo-item');
+            
+            if (cantidadInput && tiempoInput) {
+              const cantidad = parseFloat(cantidadInput.value) || 0;
+              const tiempo = parseFloat(tiempoInput.value) || 0;
+              tiempoTotalPresupuesto += cantidad * tiempo;
+            }
+          });
+        }
+        
+        tiempoTotalEl.textContent = tiempoTotalPresupuesto.toFixed(2) + ' horas';
+      }
+    }
+
+    // Recalcular tiempos cuando cambia cualquier input de tiempo o cantidad
+    document.querySelectorAll('.input-tiempo-item, .input-cantidad-item').forEach(function(input) {
+      input.addEventListener('input', recalcularTiempos);
+      input.addEventListener('change', recalcularTiempos);
+    });
+
+    // Recalcular tiempos iniciales
+    recalcularTiempos();
+
+    // ==== Manejo asincrónico de marcas ====
+    const datalistMarcas = document.getElementById('datalist-marcas');
+    const mapaMarcas = {};
+    if (datalistMarcas) {
+      datalistMarcas.querySelectorAll('option').forEach(function(option) {
+        const nombre = (option.value || '').trim().toUpperCase();
+        if (!nombre) return;
+        const id = option.dataset.id || '';
+        if (!(nombre in mapaMarcas)) {
+          mapaMarcas[nombre] = id;
+        }
+      });
+    }
+
+    function agregarMarcaADatalist(nombre, id) {
+      if (!datalistMarcas || !nombre || !id || mapaMarcas[nombre]) return;
+      const option = document.createElement('option');
+      option.value = nombre;
+      option.dataset.id = id;
+      datalistMarcas.appendChild(option);
+      mapaMarcas[nombre] = id;
+    }
+
+    document.querySelectorAll('.form-marca-item').forEach(setupMarcaForm);
+
+    function setupMarcaForm(form) {
+      if (!form || form.dataset.marcaInit === 'true') return;
+      const input = form.querySelector('.input-marca-item');
+      const hiddenId = form.querySelector('.input-marca-id');
+      const status = form.querySelector('.marca-status');
+      let debounceTimer;
+      let ultimoValor = (input && input.value ? input.value.trim().toUpperCase() : '');
+
+      function syncMarcaId() {
+        if (!input) return '';
+        const valor = (input.value || '').trim().toUpperCase();
+        input.value = valor;
+        if (hiddenId) {
+          hiddenId.value = valor && mapaMarcas[valor] ? mapaMarcas[valor] : '';
+        }
+        return valor;
+      }
+
+      function mostrarEstado(texto, esError) {
+        if (!status) return;
+        if (!texto) {
+          status.textContent = '';
+          status.style.visibility = 'hidden';
+        } else {
+          status.textContent = texto;
+          status.style.visibility = 'visible';
+          status.style.color = esError ? '#dc3545' : '#666';
+        }
+      }
+
+      function guardarMarca() {
+        const valor = syncMarcaId();
+        if (valor === ultimoValor) {
+          mostrarEstado('', false);
+          return;
+        }
+        ultimoValor = valor;
+        const formData = new FormData(form);
+        fetch(form.action, {
+          method: 'POST',
+          body: formData,
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+          .then(resp => resp.json())
+          .then(data => {
+            if (data && data.success && data.item) {
+              const marcaNombre = (data.item.marca || '').trim().toUpperCase();
+              const marcaId = data.item.marca_id || '';
+              if (hiddenId) hiddenId.value = marcaId;
+              if (marcaNombre && marcaId) {
+                agregarMarcaADatalist(marcaNombre, marcaId);
+              }
+              mostrarEstado('✓ Guardado', false);
+              setTimeout(() => mostrarEstado('', false), 1500);
+            } else {
+              mostrarEstado('Error', true);
+            }
+          })
+          .catch(() => {
+            mostrarEstado('Error', true);
+          });
+      }
+
+      if (!input) return;
+
+      input.addEventListener('input', function() {
+        syncMarcaId();
+        mostrarEstado('Guardando...', false);
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(guardarMarca, 500);
+      });
+
+      input.addEventListener('change', function() {
+        syncMarcaId();
+        mostrarEstado('Guardando...', false);
+        clearTimeout(debounceTimer);
+        guardarMarca();
+      });
+
+      input.addEventListener('blur', function() {
+        syncMarcaId();
+        clearTimeout(debounceTimer);
+        mostrarEstado('Guardando...', false);
+        guardarMarca();
+      });
+      form.dataset.marcaInit = 'true';
+    }
+
+    // Función para escapar HTML
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Función para agregar item de forma asíncrona
+    function agregarItemAsincrono(form, subgrupoId) {
+      const formData = new FormData(form);
+      formData.append('X-Requested-With', 'XMLHttpRequest');
+      
+      // Deshabilitar todos los inputs mientras se procesa
+      const allInputs = form.querySelectorAll('input, select');
+      allInputs.forEach(function(input) {
+        input.disabled = true;
+      });
+      
+      fetch(form.action, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success && data.item) {
+          // Agregar el item a la tabla
+          agregarItemATabla(data.item, subgrupoId);
+          
+          // Limpiar el formulario
+          form.reset();
+          const hiddenItemId = form.querySelector('.hidden-item-id');
+          if (hiddenItemId) hiddenItemId.value = '';
+          const hiddenMaterialGenerico = form.querySelector('.hidden-material-generico-id');
+          if (hiddenMaterialGenerico) hiddenMaterialGenerico.value = '';
+          const hiddenMarcaId = form.querySelector('.hidden-marca-id');
+          if (hiddenMarcaId) hiddenMarcaId.value = '';
+          const hiddenMarcaNombre = form.querySelector('.hidden-marca-nombre');
+          if (hiddenMarcaNombre) hiddenMarcaNombre.value = '';
+          const inputMarcaNuevo = form.querySelector('.input-marca-nuevo');
+          if (inputMarcaNuevo) inputMarcaNuevo.value = '';
+          
+          // Limpiar también los campos de item
+          const servicioInput = form.querySelector('.item-input-servicio');
+          if (servicioInput) servicioInput.value = '';
+          const materialGenericoInput = form.querySelector('.item-input-material-generico');
+          if (materialGenericoInput) materialGenericoInput.value = '';
+          
+          // Restablecer valores por defecto
+          const cantidadInput = form.querySelector('input[name="cantidad"]');
+          if (cantidadInput) cantidadInput.value = '1';
+          const tiempoInput = form.querySelector('input[name="tiempo_ejecucion_horas"]');
+          if (tiempoInput) tiempoInput.value = '0';
+          
+          // Actualizar el orden para el próximo item
+          const ordenInput = form.querySelector('input[name="orden"]');
+          if (ordenInput) {
+            const nuevoOrden = parseInt(ordenInput.value) + 1;
+            ordenInput.value = nuevoOrden;
+          }
+          
+          // Recalcular totales
+          recalcularTiempos();
+          
+          // Enfocar el primer campo de entrada (item) después de un pequeño delay
+          // para asegurar que el DOM se haya actualizado
+          setTimeout(function() {
+            // Determinar qué tipo de input está activo
+            const tipoActivo = form.dataset.activo || 'material_generico';
+            let itemInput = null;
+            
+            if (tipoActivo === 'servicio') {
+              itemInput = form.querySelector('.item-input-servicio');
+            } else {
+              itemInput = form.querySelector('.item-input-material-generico');
+            }
+            
+            // Si encontramos el input y está visible, enfocarlo
+            if (itemInput && itemInput.offsetParent !== null) {
+              itemInput.focus();
+              itemInput.select(); // Seleccionar el texto si hay alguno
+            } else {
+              // Si no hay item input visible, enfocar el campo de marca
+              const marcaInput = form.querySelector('.input-marca-nuevo');
+              if (marcaInput) {
+                marcaInput.focus();
+                marcaInput.select();
+              }
+            }
+          }, 50);
+        } else {
+          alert('Error al agregar item: ' + (data.error || 'Error desconocido'));
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Error al agregar item. Por favor, recarga la página.');
+      })
+      .finally(() => {
+        // Rehabilitar todos los inputs
+        allInputs.forEach(function(input) {
+          input.disabled = false;
+        });
+      });
+      
+      return false;
+    }
+
+    // Función para agregar un item a la tabla del subgrupo o items sin subgrupo
+    function agregarItemATabla(item, subgrupoId) {
+      // Si subgrupoId es 0 o vacío, es un item sin subgrupo
+      if (!subgrupoId || subgrupoId === '0' || subgrupoId === 0) {
+        const containerSinSubgrupo = document.querySelector('[data-items-sin-subgrupo]');
+        if (!containerSinSubgrupo) return;
+        
+        // Buscar o crear la tabla
+        let table = containerSinSubgrupo.querySelector('table');
+        if (!table) {
+          table = document.createElement('table');
+          table.setAttribute('style', 'width:100%;');
+          table.innerHTML = `
+            <tr>
+              <th>Descripción</th>
+              <th>Marca</th>
+              <th>Unidad</th>
+              <th>Cantidad</th>
+              <th>Tiempo (h)</th>
+              <th>Acciones</th>
+            </tr>
+          `;
+          const formContainer = containerSinSubgrupo.querySelector('.form-agregar-item-rapido').parentElement;
+          containerSinSubgrupo.insertBefore(table, formContainer);
+        }
+        
+        // Crear la fila del item
+        const row = document.createElement('tr');
+        const listaId = {{ presupuesto.id }};
+        row.innerHTML = `
+          <td>${escapeHtml(item.descripcion)}</td>
+          <td>
+            <form method="post" action="/listas-materiales/items/${item.id}/actualizar" class="form-marca-item" data-item-id="${item.id}" style="display:flex; flex-direction:column; gap:4px; min-width:220px;">
+              <input type="hidden" name="lista_id" value="${listaId}">
+              <input type="hidden" name="marca_id" class="input-marca-id" value="${item.marca_id || ''}">
+              <input type="text" name="marca" value="${escapeHtml((item.marca || '').toUpperCase())}" placeholder="Marca" class="input-marca-item" style="padding:4px; text-transform:uppercase;" list="datalist-marcas">
+              <small class="marca-status" style="font-size:0.75em; color:#666; visibility:hidden;">&nbsp;</small>
+            </form>
+          </td>
+          <td>${escapeHtml(item.unidad || 'UND')}</td>
+          <td style="text-align:right;">
+            <form method="post" action="/listas-materiales/items/${item.id}/actualizar" style="display:inline;">
+              <input type="hidden" name="lista_id" value="${listaId}">
+              <input type="number" name="cantidad" step="0.01" value="${item.cantidad}" 
+                     class="input-cantidad-item" data-item-id="${item.id}"
+                     style="width:70px; padding:4px; text-align:right;" onchange="this.form.submit()">
+            </form>
+          </td>
+          <td style="text-align:right;">
+            <form method="post" action="/listas-materiales/items/${item.id}/actualizar" style="display:inline;" class="form-tiempo-item">
+              <input type="hidden" name="lista_id" value="${listaId}">
+              <input type="number" name="tiempo_ejecucion_horas" step="0.01" value="${item.tiempo_ejecucion_horas || 0}" 
+                     class="input-tiempo-item" data-item-id="${item.id}"
+                     style="width:70px; padding:4px; text-align:right;" onchange="this.form.submit()">
+            </form>
+          </td>
+          <td>
+            <form method="post" action="/listas-materiales/items/${item.id}/eliminar" style="display:inline;">
+              <input type="hidden" name="lista_id" value="${listaId}">
+              <button type="submit" onclick="return confirm('¿Eliminar este item?')" 
+                      style="padding:4px 8px; background:#dc3545; color:white; border:none; border-radius:4px; cursor:pointer; font-size:0.85em;">Eliminar</button>
+            </form>
+          </td>
+        `;
+        
+        // Agregar la fila después del header
+        const headerRow = table.querySelector('tr');
+        if (headerRow) {
+          headerRow.parentNode.insertBefore(row, headerRow.nextSibling);
+        } else {
+          table.appendChild(row);
+        }
+        
+        // Configurar el formulario de marca
+        const nuevaMarcaForm = row.querySelector('.form-marca-item');
+        if (nuevaMarcaForm) {
+          setupMarcaForm(nuevaMarcaForm);
+        }
+        
+        // Agregar listeners para los nuevos inputs
+        const cantidadInput = row.querySelector('.input-cantidad-item');
+        const tiempoInput = row.querySelector('.input-tiempo-item');
+        if (cantidadInput) {
+          cantidadInput.addEventListener('input', recalcularTiempos);
+          cantidadInput.addEventListener('change', recalcularTiempos);
+        }
+        if (tiempoInput) {
+          tiempoInput.addEventListener('input', recalcularTiempos);
+          tiempoInput.addEventListener('change', recalcularTiempos);
+        }
+        
+        return;
+      }
+      
+      const subgrupoContainer = document.querySelector('[data-subgrupo-container="' + subgrupoId + '"]');
+      if (!subgrupoContainer) return;
+      
+      let table = subgrupoContainer.querySelector('table');
+      if (!table) {
+        const emptyMessage = subgrupoContainer.querySelector('.subgrupo-empty');
+        if (emptyMessage) {
+          emptyMessage.remove();
+        }
+        table = document.createElement('table');
+        table.setAttribute('style', 'width:100%; background:white; border-radius:4px;');
+        table.innerHTML = `
+          <tr style="background:#f0f0f0;">
+            <th style="width:60px;">Nº</th>
+            <th style="width:45%;">Descripción</th>
+            <th style="width:150px;">Marca</th>
+            <th>Unidad</th>
+            <th style="width:80px;">Cant.</th>
+            <th style="width:80px;">Tiempo (h)</th>
+            <th style="width:100px;">Acciones</th>
+          </tr>
+        `;
+        const addBlock = subgrupoContainer.querySelector('.subgrupo-add-item');
+        if (addBlock) {
+          subgrupoContainer.insertBefore(table, addBlock);
+        } else {
+          subgrupoContainer.appendChild(table);
+        }
+      }
+      
+      // Obtener el número de subitem o generar uno automáticamente
+      let numeroSubitem = item.numero_subitem || '';
+      const subgrupoNumero = subgrupoContainer.querySelector('h4').textContent.match(/^(\d+)/);
+      const numeroBase = subgrupoNumero ? subgrupoNumero[1] : '';
+      
+      // Si no hay número de subitem, generar uno automáticamente
+      if (!numeroSubitem && numeroBase) {
+        // Contar los items existentes en la tabla (excluyendo el header)
+        const rows = table.querySelectorAll('tr');
+        const itemCount = rows.length - 1; // -1 para excluir el header
+        numeroSubitem = numeroBase + '.' + (itemCount + 1);
+      }
+      
+      const placeholderNumero = numeroBase ? numeroBase + '.' + (table.querySelectorAll('tr').length) : '';
+      
+      // Crear la fila del item
+      const row = document.createElement('tr');
+      const listaId = {{ presupuesto.id }};
+      row.innerHTML = `
+        <td style="text-align:center;">
+          <form method="post" action="/listas-materiales/items/${item.id}/actualizar" style="display:inline;">
+            <input type="hidden" name="lista_id" value="${listaId}">
+            <input type="hidden" name="subgrupo_id" value="${subgrupoId}">
+            <input type="hidden" name="material_id" value="${item.material_id || ''}">
+            <input type="text" name="numero_subitem" value="${numeroSubitem}" 
+                   style="width:50px; padding:2px; text-align:center;" 
+                   placeholder="${placeholderNumero}" 
+                   onchange="this.form.submit()">
+          </form>
+        </td>
+        <td>
+          <form method="post" action="/listas-materiales/items/${item.id}/actualizar" style="display:inline;">
+            <input type="hidden" name="lista_id" value="${listaId}">
+            <input type="hidden" name="subgrupo_id" value="${subgrupoId}">
+            <input type="hidden" name="material_id" value="${item.material_id || ''}">
+            <input type="text" name="descripcion" value="${escapeHtml(item.descripcion)}" 
+                   style="width:100%; padding:4px;" onchange="this.form.submit()">
+          </form>
+        </td>
+        <td>
+                  <form method="post" action="/listas-materiales/items/${item.id}/actualizar" class="form-marca-item" data-item-id="${item.id}" style="display:flex; flex-direction:column; gap:4px; max-width:150px;">
+                    <input type="hidden" name="lista_id" value="${listaId}">
+                    <input type="hidden" name="subgrupo_id" value="${subgrupoId}">
+                    <input type="hidden" name="material_id" value="${item.material_id || ''}">
+                    <input type="hidden" name="marca_id" class="input-marca-id" value="${item.marca_id || ''}">
+                    <input type="text" name="marca" value="${escapeHtml((item.marca || '').toUpperCase())}" placeholder="Marca" class="input-marca-item" style="padding:4px; text-transform:uppercase; width:100%; box-sizing:border-box;" list="datalist-marcas">
+            <small class="marca-status" style="font-size:0.75em; color:#666; visibility:hidden;">&nbsp;</small>
+          </form>
+        </td>
+        <td>${escapeHtml(item.unidad || 'UND')}</td>
+        <td style="text-align:right;">
+          <form method="post" action="/listas-materiales/items/${item.id}/actualizar" style="display:inline;">
+            <input type="hidden" name="lista_id" value="${listaId}">
+            <input type="hidden" name="subgrupo_id" value="${subgrupoId}">
+            <input type="hidden" name="material_id" value="${item.material_id || ''}">
+            <input type="number" name="cantidad" step="0.01" value="${item.cantidad}" 
+                   class="input-cantidad-item" data-item-id="${item.id}"
+                   style="width:70px; padding:4px; text-align:right;" onchange="this.form.submit()">
+          </form>
+        </td>
+        <td style="text-align:right;">
+          <form method="post" action="/listas-materiales/items/${item.id}/actualizar" class="form-tiempo-item" data-subgrupo-id="${subgrupoId}" data-item-row="${item.id}">
+            <input type="hidden" name="lista_id" value="${listaId}">
+            <input type="hidden" name="subgrupo_id" value="${subgrupoId}">
+            <input type="hidden" name="material_id" value="${item.material_id || ''}">
+            <input type="number" name="tiempo_ejecucion_horas" step="0.01" value="${item.tiempo_ejecucion_horas || 0}" 
+                   class="input-tiempo-item" data-item-id="${item.id}"
+                   style="width:70px; padding:4px; text-align:right;" onchange="this.form.submit()">
+          </form>
+        </td>
+        <td>
+          <form method="post" action="/listas-materiales/items/${item.id}/eliminar" style="display:inline;">
+            <input type="hidden" name="lista_id" value="${listaId}">
+            <button type="submit" onclick="return confirm('¿Eliminar este item?')" 
+                    style="padding:4px 8px; background:#dc3545; color:white; border:none; border-radius:4px; cursor:pointer; font-size:0.85em;">Eliminar</button>
+          </form>
+        </td>
+      `;
+      
+      // Agregar la fila a la tabla (después del header si existe, o al final)
+      const tbody = table.querySelector('tbody');
+      if (tbody) {
+        tbody.appendChild(row);
+      } else {
+        // Si no hay tbody, agregar después del header
+        const headerRow = table.querySelector('tr');
+        if (headerRow) {
+          headerRow.parentNode.insertBefore(row, headerRow.nextSibling);
+        } else {
+          table.appendChild(row);
+        }
+      }
+      const nuevaMarcaForm = row.querySelector('.form-marca-item');
+      if (nuevaMarcaForm) {
+        setupMarcaForm(nuevaMarcaForm);
+      }
+      
+      // Agregar listeners para los nuevos inputs
+      const cantidadInput = row.querySelector('.input-cantidad-item');
+      const tiempoInput = row.querySelector('.input-tiempo-item');
+      if (cantidadInput) {
+        cantidadInput.addEventListener('input', recalcularTiempos);
+        cantidadInput.addEventListener('change', recalcularTiempos);
+      }
+      if (tiempoInput) {
+        tiempoInput.addEventListener('input', recalcularTiempos);
+        tiempoInput.addEventListener('change', recalcularTiempos);
+      }
+    }
+
+    // Interceptar el submit de los formularios de agregar item
+    document.querySelectorAll('.form-agregar-item-rapido').forEach(function(form) {
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const subgrupoId = form.getAttribute('data-subgrupo-id') || form.querySelector('input[name="subgrupo_id"]').value;
+        agregarItemAsincrono(form, subgrupoId);
+        return false;
+      });
+    });
+  </script>
+{% endblock %}
+

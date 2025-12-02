@@ -1,0 +1,918 @@
+{% extends 'base.html' %}
+{% block title %}Cargar Presupuesto desde Imagen{% endblock %}
+{% block content %}
+<style>
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+</style>
+<h2>Cargar Presupuesto desde Imagen</h2>
+
+{% if error %}
+<div style="background:#f8d7da;color:#721c24;padding:12px;border-radius:6px;margin-bottom:20px;">
+  <strong>Error:</strong> {{ error }}
+</div>
+{% endif %}
+
+<div style="display:flex;gap:20px;flex-wrap:wrap;">
+  <!-- Panel izquierdo: Imagen y controles -->
+  <div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:20px;flex:1;min-width:500px;max-width:900px;">
+  <form id="ocrForm" method="post" enctype="multipart/form-data">
+    <div style="margin-bottom:15px;">
+      <label style="display:block;margin-bottom:8px;font-weight:600;">Seleccionar imagen del presupuesto:</label>
+      <input type="file" id="imagenInput" name="imagen" accept="image/*" required 
+             style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+      <small style="color:#666;display:block;margin-top:5px;">
+        Formatos permitidos: PNG, JPG, JPEG, GIF, BMP, WEBP (máx. 16MB)
+      </small>
+    </div>
+    
+    <!-- Área de visualización y selección -->
+    <div id="imagePreviewContainer" style="display:none;margin-bottom:15px;">
+      <div style="margin-bottom:10px;">
+        <strong>Selecciona el área del presupuesto a procesar:</strong>
+        <button type="button" id="resetSelectionBtn" style="margin-left:10px;padding:5px 10px;background:#f0f0f0;border:1px solid #ddd;border-radius:4px;cursor:pointer;">
+          Reiniciar Selección
+        </button>
+      </div>
+      
+      <!-- Controles de preprocesamiento -->
+      <div style="background:#f9f9f9;border:1px solid #ddd;border-radius:6px;padding:15px;margin-bottom:15px;">
+        <div style="margin-bottom:10px;">
+          <strong>⚙️ Ajustes de Preprocesamiento:</strong>
+          <button type="button" id="toggleFiltersBtn" style="margin-left:10px;padding:5px 10px;background:#4CAF50;color:white;border:none;border-radius:4px;cursor:pointer;">
+            Mostrar/Ocultar
+          </button>
+        </div>
+        <div id="filtersPanel" style="display:none;">
+          <div style="margin-bottom:10px;">
+            <label style="display:block;margin-bottom:5px;">
+              <input type="checkbox" id="enablePreprocessing" checked> 
+              Habilitar preprocesamiento de imagen
+            </label>
+          </div>
+          
+          <div style="margin-bottom:10px;">
+            <label style="display:block;margin-bottom:5px;">
+              Threshold (0-255): <span id="thresholdValue">128</span>
+              <input type="range" id="thresholdSlider" min="0" max="255" value="128" style="width:100%;">
+            </label>
+            <small style="color:#666;">Valores bajos = más oscuro, valores altos = más claro</small>
+          </div>
+          
+          <div style="margin-bottom:10px;">
+            <label style="display:block;margin-bottom:5px;">
+              Contraste (-100 a 100): <span id="contrastValue">0</span>
+              <input type="range" id="contrastSlider" min="-100" max="100" value="0" style="width:100%;">
+            </label>
+          </div>
+          
+          <div style="margin-bottom:10px;">
+            <label style="display:block;margin-bottom:5px;">
+              Brillo (-100 a 100): <span id="brightnessValue">0</span>
+              <input type="range" id="brightnessSlider" min="-100" max="100" value="0" style="width:100%;">
+            </label>
+          </div>
+          
+          <div style="margin-bottom:10px;">
+            <label style="display:block;margin-bottom:5px;">
+              <input type="checkbox" id="enableSmoothing" checked> 
+              Aplicar suavizado (reduce ruido)
+            </label>
+          </div>
+          
+          <div style="margin-bottom:10px;">
+            <label style="display:block;margin-bottom:5px;">
+              <input type="checkbox" id="enableGrayscale" checked> 
+              Convertir a escala de grises
+            </label>
+          </div>
+          
+          <div style="margin-bottom:10px;">
+            <label style="display:block;margin-bottom:5px;">
+              Modo PSM de Tesseract:
+              <select id="psmMode" style="padding:5px;width:100%;">
+                <option value="6" selected>6 - Bloque uniforme de texto</option>
+                <option value="3">3 - Texto completamente automático</option>
+                <option value="4">4 - Columna única de texto</option>
+                <option value="7">7 - Línea única de texto</option>
+                <option value="8">8 - Palabra única</option>
+                <option value="11">11 - Texto disperso</option>
+                <option value="12">12 - Texto con OSD</option>
+              </select>
+            </label>
+          </div>
+          
+          <button type="button" id="previewFiltersBtn" style="padding:8px 15px;background:#2196F3;color:white;border:none;border-radius:4px;cursor:pointer;width:100%;">
+            👁️ Vista Previa de Filtros
+          </button>
+        </div>
+      </div>
+      
+      <!-- Vista previa de imagen procesada -->
+      <div id="previewContainer" style="display:none;margin-bottom:15px;">
+        <strong>Vista Previa (Imagen Procesada):</strong>
+        <div style="position:relative;border:2px solid #2196F3;border-radius:4px;margin-top:10px;">
+          <canvas id="previewCanvas" style="max-width:100%;display:block;"></canvas>
+        </div>
+        <button type="button" id="closePreviewBtn" style="margin-top:10px;padding:5px 15px;background:#f44336;color:white;border:none;border-radius:4px;cursor:pointer;">
+          Cerrar Vista Previa
+        </button>
+      </div>
+      <div id="imageContainer" style="position:relative;border:2px solid #ddd;border-radius:4px;overflow:auto;max-height:600px;background:#f9f9f9;display:inline-block;">
+        <img id="imagePreview" style="max-width:100%;display:block;pointer-events:none;" alt="Vista previa">
+        <canvas id="selectionCanvas" style="position:absolute;top:0;left:0;cursor:crosshair;pointer-events:auto;z-index:10;"></canvas>
+      </div>
+      <div style="margin-top:8px;color:#666;font-size:14px;">
+        <span id="selectionInfo">Haz clic y arrastra para seleccionar el área del presupuesto</span>
+      </div>
+    </div>
+    
+    <div id="progressDiv" style="display:none;background:#e8f4f8;padding:12px;border-radius:6px;margin-bottom:15px;">
+      <div style="margin-bottom:8px;">
+        <strong>Procesando imagen con OCR...</strong>
+      </div>
+      <div style="background:#fff;border-radius:4px;height:20px;overflow:hidden;">
+        <div id="progressBar" style="background:#4CAF50;height:100%;width:0%;transition:width 0.3s;"></div>
+      </div>
+      <div id="progressText" style="margin-top:8px;color:#666;font-size:14px;">Inicializando Tesseract.js...</div>
+    </div>
+    
+    <input type="hidden" id="ocrText" name="ocr_text" value="">
+    <input type="hidden" id="ocrData" name="ocr_data" value="">
+    
+    <div style="background:#e8f4f8;padding:12px;border-radius:6px;margin-bottom:15px;">
+      <strong>Instrucciones:</strong>
+      <ul style="margin:8px 0 0 20px;padding:0;">
+        <li>Sube una imagen clara del presupuesto</li>
+        <li><strong>Opcional:</strong> Selecciona el área específica del presupuesto arrastrando el mouse sobre la imagen</li>
+        <li>El sistema procesará solo el área seleccionada (o toda la imagen si no seleccionas nada)</li>
+        <li>Podrás revisar y confirmar antes de guardar</li>
+      </ul>
+    </div>
+    
+    <button type="submit" id="submitBtn" class="button" style="width:100%;">
+      Procesar Imagen
+    </button>
+  </form>
+  </div>
+  
+  <!-- Panel derecho: Vista previa de datos extraídos -->
+  <div style="background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:20px;flex:1;min-width:400px;max-width:500px;">
+    <h3 style="margin-top:0;">📊 Datos Extraídos (Tiempo Real)</h3>
+    <div id="extractedDataPanel" style="max-height:600px;overflow-y:auto;">
+      <div style="padding:20px;text-align:center;color:#999;">
+        <p>Los datos aparecerán aquí mientras ajustas los filtros</p>
+        <small>Haz clic en "Probar OCR" para ver los resultados</small>
+      </div>
+    </div>
+    <div style="margin-top:15px;">
+      <button type="button" id="testOCRBtn" style="width:100%;padding:10px;background:#2196F3;color:white;border:none;border-radius:4px;cursor:pointer;">
+        🔍 Probar OCR con Filtros Actuales
+      </button>
+      <button type="button" id="clearDataBtn" style="width:100%;margin-top:10px;padding:8px;background:#f44336;color:white;border:none;border-radius:4px;cursor:pointer;">
+        🗑️ Limpiar Datos
+      </button>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:20px;">
+  <a href="{{ url_for('precios_index') }}" class="button button-secondary">← Volver a Precios</a>
+</div>
+
+<!-- OpenCV y Tesseract ahora se procesan en el backend -->
+
+<script>
+// Variables para selección de área
+let isSelecting = false;
+let startX = 0, startY = 0;
+let currentSelection = null;
+let imageElement = null;
+let canvas = null;
+let ctx = null;
+let imageLoaded = false;
+let lastOCRResult = null;
+let ocrTestInProgress = false;
+
+// Cargar imagen cuando se selecciona un archivo
+document.getElementById('imagenInput').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        imageElement = document.getElementById('imagePreview');
+        canvas = document.getElementById('selectionCanvas');
+        ctx = canvas.getContext('2d');
+        
+        imageElement.src = event.target.result;
+        imageElement.onload = function() {
+            // Esperar un momento para que el DOM se actualice
+            setTimeout(function() {
+                // Ajustar canvas al tamaño de la imagen visible
+                const imgWidth = imageElement.offsetWidth || imageElement.clientWidth;
+                const imgHeight = imageElement.offsetHeight || imageElement.clientHeight;
+                
+                // Configurar canvas con el tamaño de visualización
+                canvas.style.width = imgWidth + 'px';
+                canvas.style.height = imgHeight + 'px';
+                canvas.width = imageElement.naturalWidth;
+                canvas.height = imageElement.naturalHeight;
+                
+                // Asegurar que el canvas esté sobre la imagen
+                canvas.style.position = 'absolute';
+                canvas.style.top = '0';
+                canvas.style.left = '0';
+                canvas.style.zIndex = '10';
+                canvas.style.cursor = 'crosshair';
+                
+                // Mostrar contenedor
+                document.getElementById('imagePreviewContainer').style.display = 'block';
+                imageLoaded = true;
+                currentSelection = null;
+                
+                // Reinicializar eventos del canvas
+                setupCanvasEvents();
+                
+                drawSelection();
+                updateSelectionInfo();
+            }, 100);
+        };
+    };
+    reader.readAsDataURL(file);
+});
+
+// Manejar selección de área
+function setupCanvasEvents() {
+    if (!canvas || !imageElement || !imageLoaded) {
+        console.log('setupCanvasEvents: condiciones no cumplidas', {canvas: !!canvas, imageElement: !!imageElement, imageLoaded});
+        return;
+    }
+    
+    // Limpiar eventos anteriores clonando el canvas
+    const newCanvas = canvas.cloneNode(false);
+    canvas.parentNode.replaceChild(newCanvas, canvas);
+    canvas = newCanvas;
+    ctx = canvas.getContext('2d');
+    
+    // Reconfigurar canvas
+    const imgWidth = imageElement.offsetWidth || imageElement.clientWidth;
+    const imgHeight = imageElement.offsetHeight || imageElement.clientHeight;
+    canvas.style.width = imgWidth + 'px';
+    canvas.style.height = imgHeight + 'px';
+    canvas.width = imageElement.naturalWidth;
+    canvas.height = imageElement.naturalHeight;
+    canvas.style.position = 'absolute';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.zIndex = '10';
+    canvas.style.cursor = 'crosshair';
+    canvas.style.pointerEvents = 'auto';
+    
+    console.log('Canvas configurado:', canvas.width, canvas.height, canvas.style.width, canvas.style.height);
+    
+    canvas.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        isSelecting = true;
+        
+        const imgRect = imageElement.getBoundingClientRect();
+        const scaleX = imageElement.naturalWidth / imgRect.width;
+        const scaleY = imageElement.naturalHeight / imgRect.height;
+        
+        startX = (e.clientX - imgRect.left) * scaleX;
+        startY = (e.clientY - imgRect.top) * scaleY;
+        
+        console.log('Mouse down:', startX, startY, 'imgRect:', imgRect);
+    });
+    
+    canvas.addEventListener('mousemove', function(e) {
+        if (!isSelecting) return;
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const imgRect = imageElement.getBoundingClientRect();
+        const scaleX = imageElement.naturalWidth / imgRect.width;
+        const scaleY = imageElement.naturalHeight / imgRect.height;
+        
+        const currentX = (e.clientX - imgRect.left) * scaleX;
+        const currentY = (e.clientY - imgRect.top) * scaleY;
+        
+        currentSelection = {
+            x: Math.min(startX, currentX),
+            y: Math.min(startY, currentY),
+            width: Math.abs(currentX - startX),
+            height: Math.abs(currentY - startY)
+        };
+        
+        drawSelection();
+        updateSelectionInfo();
+    });
+    
+    canvas.addEventListener('mouseup', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        isSelecting = false;
+    });
+    
+    canvas.addEventListener('mouseleave', function(e) {
+        isSelecting = false;
+    });
+    
+    drawSelection();
+    console.log('Eventos del canvas configurados');
+}
+
+function drawSelection() {
+    if (!canvas || !imageLoaded) return;
+    
+    // Obtener contexto si no existe
+    if (!ctx) {
+        ctx = canvas.getContext('2d');
+    }
+    
+    // Limpiar canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    if (currentSelection && currentSelection.width > 0 && currentSelection.height > 0) {
+        // Dibujar área seleccionada con transparencia
+        ctx.fillStyle = 'rgba(0, 0, 255, 0.2)';
+        ctx.fillRect(currentSelection.x, currentSelection.y, currentSelection.width, currentSelection.height);
+        
+        // Dibujar borde
+        ctx.strokeStyle = '#0066ff';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.strokeRect(currentSelection.x, currentSelection.y, currentSelection.width, currentSelection.height);
+        ctx.setLineDash([]);
+    }
+}
+
+function updateSelectionInfo() {
+    const info = document.getElementById('selectionInfo');
+    if (currentSelection) {
+        info.textContent = `Área seleccionada: ${Math.round(currentSelection.width)}x${Math.round(currentSelection.height)} píxeles`;
+        info.style.color = '#0066ff';
+    } else {
+        info.textContent = 'Haz clic y arrastra para seleccionar el área del presupuesto';
+        info.style.color = '#666';
+    }
+}
+
+// Botón para reiniciar selección
+document.getElementById('resetSelectionBtn').addEventListener('click', function() {
+    currentSelection = null;
+    drawSelection();
+    updateSelectionInfo();
+});
+
+// Cargar configuración guardada
+function loadSavedConfig() {
+    const saved = localStorage.getItem('ocrFiltersConfig');
+    if (saved) {
+        try {
+            const config = JSON.parse(saved);
+            document.getElementById('enablePreprocessing').checked = config.enablePreprocessing !== false;
+            document.getElementById('thresholdSlider').value = config.threshold || 128;
+            document.getElementById('thresholdValue').textContent = config.threshold || 128;
+            document.getElementById('contrastSlider').value = config.contrast || 0;
+            document.getElementById('contrastValue').textContent = config.contrast || 0;
+            document.getElementById('brightnessSlider').value = config.brightness || 0;
+            document.getElementById('brightnessValue').textContent = config.brightness || 0;
+            document.getElementById('enableSmoothing').checked = config.enableSmoothing !== false;
+            document.getElementById('enableGrayscale').checked = config.enableGrayscale !== false;
+            document.getElementById('psmMode').value = config.psmMode || '6';
+        } catch (e) {
+            console.error('Error cargando configuración:', e);
+        }
+    }
+}
+
+// Guardar configuración
+function saveConfig() {
+    const config = {
+        enablePreprocessing: document.getElementById('enablePreprocessing').checked,
+        threshold: parseInt(document.getElementById('thresholdSlider').value),
+        contrast: parseInt(document.getElementById('contrastSlider').value),
+        brightness: parseInt(document.getElementById('brightnessSlider').value),
+        enableSmoothing: document.getElementById('enableSmoothing').checked,
+        enableGrayscale: document.getElementById('enableGrayscale').checked,
+        psmMode: document.getElementById('psmMode').value
+    };
+    localStorage.setItem('ocrFiltersConfig', JSON.stringify(config));
+}
+
+// Cargar configuración al iniciar
+loadSavedConfig();
+
+// Controles de preprocesamiento
+document.getElementById('toggleFiltersBtn').addEventListener('click', function() {
+    const panel = document.getElementById('filtersPanel');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+});
+
+// Actualizar valores de los sliders y guardar configuración
+document.getElementById('thresholdSlider').addEventListener('input', function(e) {
+    document.getElementById('thresholdValue').textContent = e.target.value;
+    saveConfig();
+});
+
+document.getElementById('contrastSlider').addEventListener('input', function(e) {
+    document.getElementById('contrastValue').textContent = e.target.value;
+    saveConfig();
+});
+
+document.getElementById('brightnessSlider').addEventListener('input', function(e) {
+    document.getElementById('brightnessValue').textContent = e.target.value;
+    saveConfig();
+});
+
+document.getElementById('enablePreprocessing').addEventListener('change', saveConfig);
+document.getElementById('enableSmoothing').addEventListener('change', saveConfig);
+document.getElementById('enableGrayscale').addEventListener('change', saveConfig);
+document.getElementById('psmMode').addEventListener('change', saveConfig);
+
+// Vista previa de filtros
+document.getElementById('previewFiltersBtn').addEventListener('click', function() {
+    if (!imageElement || !imageLoaded) {
+        alert('Por favor carga una imagen primero');
+        return;
+    }
+    
+    const options = getPreprocessingOptions();
+    const processedCanvas = preprocessImage(imageElement, options);
+    
+    const previewCanvas = document.getElementById('previewCanvas');
+    previewCanvas.width = processedCanvas.width;
+    previewCanvas.height = processedCanvas.height;
+    const previewCtx = previewCanvas.getContext('2d');
+    previewCtx.drawImage(processedCanvas, 0, 0);
+    
+    // Ajustar tamaño de visualización
+    const maxWidth = 800;
+    if (previewCanvas.width > maxWidth) {
+        previewCanvas.style.width = maxWidth + 'px';
+        previewCanvas.style.height = (processedCanvas.height * maxWidth / processedCanvas.width) + 'px';
+    } else {
+        previewCanvas.style.width = processedCanvas.width + 'px';
+        previewCanvas.style.height = processedCanvas.height + 'px';
+    }
+    
+    document.getElementById('previewContainer').style.display = 'block';
+});
+
+document.getElementById('closePreviewBtn').addEventListener('click', function() {
+    document.getElementById('previewContainer').style.display = 'none';
+});
+
+// Función para mostrar datos extraídos
+function displayExtractedData(text, words) {
+    const panel = document.getElementById('extractedDataPanel');
+    
+    if (!text || text.trim().length === 0) {
+        panel.innerHTML = '<div style="padding:20px;text-align:center;color:#999;"><p>No se extrajo texto</p></div>';
+        return;
+    }
+    
+    // Limpiar texto
+    const cleanedText = cleanOCRText(text);
+    const lineas = cleanedText.split('\n').filter(l => l.trim().length > 0);
+    
+    // Contar palabras y confianza promedio
+    const validWords = words.filter(w => w.confidence > 30);
+    const avgConfidence = validWords.length > 0 
+        ? (validWords.reduce((sum, w) => sum + w.confidence, 0) / validWords.length).toFixed(1)
+        : 0;
+    
+    let html = `
+        <div style="background:#e8f4f8;padding:10px;border-radius:6px;margin-bottom:15px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+                <strong>Palabras detectadas:</strong> <span>${validWords.length}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;">
+                <strong>Confianza promedio:</strong> <span>${avgConfidence}%</span>
+            </div>
+        </div>
+        <div style="background:#f9f9f9;padding:15px;border-radius:6px;margin-bottom:15px;">
+            <strong style="display:block;margin-bottom:10px;">Texto Extraído:</strong>
+            <div style="max-height:200px;overflow-y:auto;background:#fff;padding:10px;border:1px solid #ddd;border-radius:4px;font-family:monospace;font-size:12px;white-space:pre-wrap;">
+${cleanedText.substring(0, 2000)}${cleanedText.length > 2000 ? '...' : ''}
+            </div>
+        </div>
+    `;
+    
+    // Intentar extraer items básicos
+    const items = [];
+    for (let linea of lineas.slice(0, 20)) { // Primeras 20 líneas
+        if (linea.length > 10 && /[\d.,]/.test(linea)) {
+            const numeros = linea.match(/[\d.,]+/g);
+            if (numeros && numeros.length >= 1) {
+                const palabras = linea.match(/[A-Za-zÁÉÍÓÚáéíóúÑñ]{3,}/g) || [];
+                if (palabras.length > 0) {
+                    items.push({
+                        descripcion: palabras.slice(0, 5).join(' '),
+                        numeros: numeros.slice(0, 3)
+                    });
+                }
+            }
+        }
+    }
+    
+    if (items.length > 0) {
+        html += `
+            <div style="background:#fff3cd;padding:15px;border-radius:6px;">
+                <strong style="display:block;margin-bottom:10px;">Items Detectados (${items.length}):</strong>
+                <div style="max-height:300px;overflow-y:auto;">
+        `;
+        
+        items.slice(0, 10).forEach((item, idx) => {
+            html += `
+                <div style="background:#fff;padding:8px;margin-bottom:8px;border-left:3px solid #ffc107;border-radius:4px;">
+                    <div style="font-weight:600;margin-bottom:4px;">${item.descripcion}</div>
+                    <div style="color:#666;font-size:12px;">Números: ${item.numeros.join(', ')}</div>
+                </div>
+            `;
+        });
+        
+        html += `
+                </div>
+            </div>
+        `;
+    }
+    
+    panel.innerHTML = html;
+    lastOCRResult = { text: cleanedText, words: validWords };
+}
+
+// Función para probar OCR con configuración actual (usando backend OpenCV + Tesseract)
+async function testOCR() {
+    if (!imageElement || !imageLoaded || ocrTestInProgress) {
+        return;
+    }
+    
+    const fileInput = document.getElementById('imagenInput');
+    if (!fileInput.files || !fileInput.files[0]) {
+        alert('Por favor carga una imagen primero');
+        return;
+    }
+    
+    ocrTestInProgress = true;
+    const testBtn = document.getElementById('testOCRBtn');
+    const originalText = testBtn.textContent;
+    testBtn.disabled = true;
+    testBtn.textContent = '⏳ Procesando...';
+    
+    const panel = document.getElementById('extractedDataPanel');
+    panel.innerHTML = '<div style="padding:20px;text-align:center;"><div style="display:inline-block;border:4px solid #2196F3;border-top-color:transparent;border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite;"></div><p style="margin-top:10px;">Procesando OCR con OpenCV + Tesseract...</p></div>';
+    
+    try {
+        const options = getPreprocessingOptions();
+        const psmMode = document.getElementById('psmMode').value;
+        
+        // Crear FormData para enviar al backend
+        const formData = new FormData();
+        formData.append('imagen', fileInput.files[0]);
+        formData.append('enable_preprocessing', options.enablePreprocessing);
+        formData.append('threshold', options.threshold);
+        formData.append('contrast', options.contrast);
+        formData.append('brightness', options.brightness);
+        formData.append('enable_smoothing', options.enableSmoothing);
+        formData.append('enable_grayscale', options.enableGrayscale);
+        formData.append('psm_mode', psmMode);
+        formData.append('lang', 'spa+por+eng');
+        
+        // Agregar región de recorte si existe
+        if (currentSelection) {
+            formData.append('crop_region', JSON.stringify({
+                x: currentSelection.x,
+                y: currentSelection.y,
+                width: currentSelection.width,
+                height: currentSelection.height
+            }));
+        }
+        
+        // Enviar al backend
+        const response = await fetch('/api/ocr/process', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Error al procesar OCR');
+        }
+        
+        const result = await response.json();
+        
+        // Convertir palabras al formato esperado
+        const words = result.words.map(w => ({
+            text: w[1],
+            confidence: w[2] * 100,
+            bbox: {
+                x0: w[0][0][0],
+                y0: w[0][0][1],
+                x1: w[0][2][0],
+                y1: w[0][2][1]
+            }
+        }));
+        
+        displayExtractedData(result.text, words);
+        
+    } catch (error) {
+        panel.innerHTML = `<div style="padding:20px;background:#f8d7da;color:#721c24;border-radius:6px;">Error: ${error.message}</div>`;
+        console.error('Error en test OCR:', error);
+    } finally {
+        ocrTestInProgress = false;
+        testBtn.disabled = false;
+        testBtn.textContent = originalText;
+    }
+}
+
+// Botón para probar OCR
+document.getElementById('testOCRBtn').addEventListener('click', testOCR);
+
+// Botón para limpiar datos
+document.getElementById('clearDataBtn').addEventListener('click', function() {
+    document.getElementById('extractedDataPanel').innerHTML = '<div style="padding:20px;text-align:center;color:#999;"><p>Los datos aparecerán aquí mientras ajustas los filtros</p><small>Haz clic en "Probar OCR" para ver los resultados</small></div>';
+    lastOCRResult = null;
+});
+
+// Auto-probar OCR cuando cambien los filtros (con debounce)
+let testTimeout;
+function scheduleAutoTest() {
+    clearTimeout(testTimeout);
+    testTimeout = setTimeout(() => {
+        if (imageLoaded && document.getElementById('extractedDataPanel').innerHTML.includes('aparecerán aquí')) {
+            // Solo auto-probar si no hay datos mostrados
+            return;
+        }
+        // testOCR(); // Descomentar si quieres auto-probar
+    }, 2000); // Esperar 2 segundos después del último cambio
+}
+
+// Agregar listeners para auto-probar
+['thresholdSlider', 'contrastSlider', 'brightnessSlider', 'enablePreprocessing', 'enableSmoothing', 'enableGrayscale', 'psmMode'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+        el.addEventListener('change', scheduleAutoTest);
+        el.addEventListener('input', scheduleAutoTest);
+    }
+});
+
+// Función para preprocesar imagen con parámetros configurables
+function preprocessImage(image, options = {}) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    canvas.width = image.naturalWidth || image.width;
+    canvas.height = image.naturalHeight || image.height;
+    
+    // Dibujar imagen original
+    ctx.drawImage(image, 0, 0);
+    
+    // Obtener datos de píxeles
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    
+    // Parámetros por defecto
+    const threshold = options.threshold !== undefined ? options.threshold : 128;
+    const contrast = options.contrast !== undefined ? options.contrast : 0;
+    const brightness = options.brightness !== undefined ? options.brightness : 0;
+    const enableGrayscale = options.enableGrayscale !== false;
+    const enableSmoothing = options.enableSmoothing !== false;
+    
+    // Aplicar filtros
+    for (let i = 0; i < data.length; i += 4) {
+        let r = data[i];
+        let g = data[i + 1];
+        let b = data[i + 2];
+        
+        // Convertir a escala de grises si está habilitado
+        if (enableGrayscale) {
+            const gray = r * 0.299 + g * 0.587 + b * 0.114;
+            r = g = b = gray;
+        }
+        
+        // Aplicar brillo
+        r = Math.max(0, Math.min(255, r + brightness));
+        g = Math.max(0, Math.min(255, g + brightness));
+        b = Math.max(0, Math.min(255, b + brightness));
+        
+        // Aplicar contraste
+        const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+        r = Math.max(0, Math.min(255, factor * (r - 128) + 128));
+        g = Math.max(0, Math.min(255, factor * (g - 128) + 128));
+        b = Math.max(0, Math.min(255, factor * (b - 128) + 128));
+        
+        // Aplicar threshold (binarización)
+        const grayValue = (r + g + b) / 3;
+        const binary = grayValue > threshold ? 255 : 0;
+        
+        data[i] = binary;     // R
+        data[i + 1] = binary; // G
+        data[i + 2] = binary; // B
+        // data[i + 3] mantiene el alpha
+    }
+    
+    // Aplicar filtro de suavizado si está habilitado
+    if (enableSmoothing) {
+        const smoothedData = new Uint8ClampedArray(data);
+        for (let y = 1; y < canvas.height - 1; y++) {
+            for (let x = 1; x < canvas.width - 1; x++) {
+                const idx = (y * canvas.width + x) * 4;
+                let sum = 0;
+                let count = 0;
+                
+                // Promedio de 3x3
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        const nIdx = ((y + dy) * canvas.width + (x + dx)) * 4;
+                        sum += data[nIdx];
+                        count++;
+                    }
+                }
+                
+                const avg = Math.round(sum / count);
+                smoothedData[idx] = avg;
+                smoothedData[idx + 1] = avg;
+                smoothedData[idx + 2] = avg;
+            }
+        }
+        imageData.data.set(smoothedData);
+    } else {
+        imageData.data.set(data);
+    }
+    
+    ctx.putImageData(imageData, 0, 0);
+    
+    return canvas;
+}
+
+// Función para obtener parámetros actuales de los controles
+function getPreprocessingOptions() {
+    return {
+        enablePreprocessing: document.getElementById('enablePreprocessing').checked,
+        threshold: parseInt(document.getElementById('thresholdSlider').value),
+        contrast: parseInt(document.getElementById('contrastSlider').value),
+        brightness: parseInt(document.getElementById('brightnessSlider').value),
+        enableSmoothing: document.getElementById('enableSmoothing').checked,
+        enableGrayscale: document.getElementById('enableGrayscale').checked
+    };
+}
+
+// Función para recortar imagen
+function cropImage(image, selection) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    canvas.width = selection.width;
+    canvas.height = selection.height;
+    
+    ctx.drawImage(
+        image,
+        selection.x, selection.y, selection.width, selection.height,
+        0, 0, selection.width, selection.height
+    );
+    
+    return canvas;
+}
+
+// Función para limpiar y corregir texto OCR
+function cleanOCRText(text) {
+    if (!text) return '';
+    
+    // Correcciones comunes de OCR
+    const corrections = {
+        // Números mal reconocidos
+        'O': '0', 'o': '0', 'D': '0',
+        'I': '1', 'l': '1', '|': '1',
+        'Z': '2', 'z': '2',
+        'S': '5', 's': '5',
+        'G': '6', 'g': '6',
+        'B': '8', 'b': '8',
+        // Letras comunes
+        'rn': 'm', 'vv': 'w', 'ii': 'n',
+        // Espacios
+        '  ': ' ', '\t': ' ',
+    };
+    
+    let cleaned = text;
+    
+    // Aplicar correcciones básicas
+    cleaned = cleaned.replace(/\s+/g, ' '); // Múltiples espacios a uno
+    cleaned = cleaned.trim();
+    
+    // Corregir números en contextos específicos (precios, cantidades)
+    cleaned = cleaned.replace(/(\d+)[,.](\d+)/g, (match, intPart, decPart) => {
+        // Si parece un precio, mantener formato
+        if (decPart.length <= 2) {
+            return intPart + '.' + decPart;
+        }
+        return match;
+    });
+    
+    return cleaned;
+}
+
+document.getElementById('ocrForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const fileInput = document.getElementById('imagenInput');
+    const ocrTextInput = document.getElementById('ocrText');
+    const ocrDataInput = document.getElementById('ocrData');
+    const progressDiv = document.getElementById('progressDiv');
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    if (!fileInput.files || !fileInput.files[0]) {
+        alert('Por favor selecciona una imagen');
+        return;
+    }
+    
+    const file = fileInput.files[0];
+    
+    // Procesar directamente con el backend (OpenCV + Tesseract)
+    async function processOCR() {
+        // Mostrar progreso
+        progressDiv.style.display = 'block';
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Procesando...';
+        
+        try {
+            progressText.textContent = 'Enviando imagen al servidor...';
+            progressBar.style.width = '20%';
+            
+            const options = getPreprocessingOptions();
+            const psmMode = document.getElementById('psmMode').value;
+            
+            // Crear FormData para enviar al backend
+            const formData = new FormData();
+            formData.append('imagen', file);
+            formData.append('enable_preprocessing', options.enablePreprocessing);
+            formData.append('threshold', options.threshold);
+            formData.append('contrast', options.contrast);
+            formData.append('brightness', options.brightness);
+            formData.append('enable_smoothing', options.enableSmoothing);
+            formData.append('enable_grayscale', options.enableGrayscale);
+            formData.append('psm_mode', psmMode);
+            formData.append('lang', 'spa+por+eng');
+            
+            // Agregar región de recorte si existe
+            if (currentSelection) {
+                formData.append('crop_region', JSON.stringify({
+                    x: currentSelection.x,
+                    y: currentSelection.y,
+                    width: currentSelection.width,
+                    height: currentSelection.height
+                }));
+            }
+            
+            progressText.textContent = 'Procesando con OpenCV + Tesseract...';
+            progressBar.style.width = '50%';
+            
+            // Enviar al backend
+            const response = await fetch('/api/ocr/process', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Error al procesar OCR');
+            }
+            
+            progressBar.style.width = '80%';
+            progressText.textContent = 'Limpiando y corrigiendo texto...';
+            
+            const result = await response.json();
+            
+            // Limpiar y corregir texto OCR
+            const cleanedText = cleanOCRText(result.text);
+            
+            // Guardar resultados (el formato ya viene correcto del backend)
+            ocrTextInput.value = cleanedText;
+            ocrDataInput.value = JSON.stringify(result.words);
+            
+            progressBar.style.width = '100%';
+            progressText.textContent = 'Procesamiento completado!';
+            
+            // Enviar formulario
+            setTimeout(() => {
+                document.getElementById('ocrForm').submit();
+            }, 500);
+            
+        } catch (error) {
+            console.error('Error en OCR:', error);
+            alert('Error al procesar la imagen: ' + error.message);
+            progressDiv.style.display = 'none';
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Procesar Imagen';
+        }
+    }
+});
+</script>
+{% endblock %}
+

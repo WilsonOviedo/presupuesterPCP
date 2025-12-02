@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+{% block title %}{% if item %}Editar{% else %}Nuevo{% endif %} Item Mano de Obra{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('items_index') }}">← Volver</a>
+  </div>
+  <h2>{% if item %}Editar{% else %}Nuevo{% endif %} Item Mano de Obra</h2>
+
+  <form method="post" action="{% if item %}{{ url_for('items_editar', id=item.id) }}{% else %}{{ url_for('items_nuevo') }}{% endif %}" style="max-width:600px;">
+    <div style="display:grid; gap:15px;">
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Código:</label>
+        <input type="text" name="codigo" id="codigo_input" value="{{ item.codigo if item else '' }}" 
+               style="width:100%; padding:8px;" placeholder="Escriba el prefijo (ej: mon) y se completará automáticamente">
+        <small style="color:#666;">Escriba el prefijo (ej: mon, bl) y se asignará automáticamente el siguiente número disponible (ej: mon-001, bl-002)</small>
+      </div>
+
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Descripción: *</label>
+        <input type="text" name="descripcion" value="{{ item.descripcion if item else '' }}" 
+               required style="width:100%; padding:8px;" placeholder="Ej: Montaje de tablero eléctrico">
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+        <div>
+          <label style="display:block; margin-bottom:5px; font-weight:600;">Tipo: *</label>
+          <select name="tipo" required style="width:100%; padding:8px; height:38px;">
+            {% if tipos %}
+              {% for tipo in tipos %}
+                <option value="{{ tipo }}" {% if item and item.tipo == tipo %}selected{% endif %}>{{ tipo }}</option>
+              {% endfor %}
+            {% else %}
+              <option value="Montaje" {% if item and item.tipo == 'Montaje' %}selected{% endif %}>Montaje</option>
+              <option value="Programación" {% if item and item.tipo == 'Programación' %}selected{% endif %}>Programación</option>
+              <option value="Materiales" {% if item and item.tipo == 'Materiales' %}selected{% endif %}>Materiales</option>
+              <option value="Diseño" {% if item and item.tipo == 'Diseño' %}selected{% endif %}>Diseño</option>
+              <option value="Otros" {% if not item or item.tipo == 'Otros' %}selected{% endif %}>Otros</option>
+            {% endif %}
+          </select>
+        </div>
+
+        <div>
+          <label style="display:block; margin-bottom:5px; font-weight:600;">Unidad:</label>
+          <input type="text" name="unidad" value="{{ item.unidad if item else 'unidad' }}" 
+                 style="width:100%; padding:8px;" placeholder="unidad, hora, metro, kg">
+        </div>
+      </div>
+
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Precio: *</label>
+        <input type="number" name="precio_base" step="0.01" min="0" 
+               value="{{ item.precio_base if item else '0' }}" 
+               required style="width:100%; padding:8px;">
+      </div>
+
+      <div>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Notas:</label>
+        <textarea name="notas" rows="3" style="width:100%; padding:8px;">{{ item.notas if item else '' }}</textarea>
+      </div>
+
+      {% if item %}
+      <div>
+        <label style="display:flex; align-items:center; gap:8px; margin-bottom:5px;">
+          <input type="checkbox" name="activo" {% if item.activo %}checked{% endif %} style="width:auto;">
+          <span style="font-weight:600;">Item activo</span>
+        </label>
+        <small style="color:#666;">Los items inactivos no aparecerán en las listas al crear presupuestos.</small>
+      </div>
+      {% endif %}
+
+      <div class="actions">
+        <button type="submit" class="button">{% if item %}Actualizar{% else %}Crear{% endif %}</button>
+        <a href="{{ url_for('items_index') }}" class="button button-secondary">Cancelar</a>
+      </div>
+    </div>
+  </form>
+
+  {% if not item %}
+  <script>
+    (function() {
+      const codigoInput = document.getElementById('codigo_input');
+      let timeoutId = null;
+      let lastValue = '';
+
+      codigoInput.addEventListener('input', function(e) {
+        const value = e.target.value.trim().toUpperCase();
+        
+        // Limpiar timeout anterior
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+
+        // Si el campo está vacío o ya tiene el formato completo (prefijo-número), no hacer nada
+        if (!value || /^[A-Z0-9]+-\d{3}$/.test(value)) {
+          lastValue = value;
+          return;
+        }
+
+        // Si el valor cambió y no tiene el formato completo, esperar un momento antes de buscar
+        if (value !== lastValue) {
+          timeoutId = setTimeout(function() {
+            // Extraer solo el prefijo (todo antes del guión si existe, o todo el texto)
+            const prefijo = value.split('-')[0];
+            
+            // Solo buscar si el prefijo tiene al menos 2 caracteres
+            if (prefijo.length >= 2) {
+              fetch(`/api/obtener_codigo_por_prefijo?prefijo=${encodeURIComponent(prefijo)}`)
+                .then(response => response.json())
+                .then(data => {
+                  if (data.codigo && !codigoInput.value.includes('-')) {
+                    // Solo actualizar si el usuario no ha escrito un guión (no está editando manualmente)
+                    codigoInput.value = data.codigo;
+                    lastValue = data.codigo;
+                  }
+                })
+                .catch(error => {
+                  console.error('Error al obtener código:', error);
+                });
+            }
+          }, 500); // Esperar 500ms después de que el usuario deje de escribir
+        }
+
+        lastValue = value;
+      });
+
+      // Si el usuario borra todo y vuelve a escribir, resetear
+      codigoInput.addEventListener('focus', function() {
+        if (codigoInput.value && /^[A-Z0-9]+-\d{3}$/.test(codigoInput.value)) {
+          // Si tiene formato completo, dejar solo el prefijo al enfocar
+          const prefijo = codigoInput.value.split('-')[0];
+          codigoInput.value = prefijo;
+          lastValue = prefijo;
+        }
+      });
+    })();
+  </script>
+  {% endif %}
+{% endblock %}
+

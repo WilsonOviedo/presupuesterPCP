@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% block title %}Materiales Genéricos{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('listas_materiales_index') }}">← Volver</a>
+    <a class="button" href="{{ url_for('materiales_genericos_nuevo') }}">+ Nuevo Material Genérico</a>
+    <a class="button" style="background:#007bff;" href="{{ url_for('materiales_genericos_exportar_csv') }}">📤 Exportar CSV</a>
+    <button type="button" class="button" style="background:#28a745;" onclick="document.getElementById('importar-csv-form').style.display = 'block';">📥 Importar CSV</button>
+  </div>
+  <h2>Materiales Genéricos</h2>
+
+  {% if mensaje_importacion %}
+    <div style="background:{% if mensaje_importacion.tipo == 'exito' %}#d4edda{% else %}#f8d7da{% endif %}; color:{% if mensaje_importacion.tipo == 'exito' %}#155724{% else %}#721c24{% endif %}; padding:12px; border-radius:6px; margin-bottom:15px; border:1px solid {% if mensaje_importacion.tipo == 'exito' %}#c3e6cb{% else %}#f5c6cb{% endif %};">
+      <strong>{% if mensaje_importacion.tipo == 'exito' %}✓{% else %}✗{% endif %} {{ mensaje_importacion.mensaje }}</strong>
+      {% if mensaje_importacion.detalles %}
+        <ul style="margin:8px 0 0 0; padding-left:20px;">
+          {% for detalle in mensaje_importacion.detalles %}
+            <li>{{ detalle }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <div id="importar-csv-form" style="display:none; background:#e8f4f8; padding:20px; border-radius:8px; margin-bottom:20px; border:2px solid #1976d2;">
+    <h3 style="margin-top:0;">Importar Materiales desde CSV</h3>
+    <p style="color:#666; margin-bottom:15px;">
+      El archivo CSV debe tener las siguientes columnas: <strong>descripcion</strong> (obligatorio), <strong>unidad</strong> (opcional, por defecto UND), <strong>tiempo_instalacion</strong> (opcional, por defecto 0).<br>
+      La primera fila debe contener los nombres de las columnas. El archivo debe usar codificación UTF-8.
+    </p>
+    <form method="post" action="{{ url_for('materiales_genericos_importar_csv') }}" enctype="multipart/form-data" style="display:flex; gap:10px; align-items:end;">
+      <div style="flex:1;">
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Archivo CSV:</label>
+        <input type="file" name="archivo_csv" accept=".csv" required style="width:100%; padding:6px;">
+      </div>
+      <div>
+        <button type="submit" class="button" style="background:#28a745;">Importar</button>
+        <button type="button" class="button button-secondary" onclick="document.getElementById('importar-csv-form').style.display = 'none';">Cancelar</button>
+      </div>
+    </form>
+  </div>
+
+  <form method="get" action="{{ url_for('materiales_genericos_index') }}" style="margin-bottom:20px; padding:15px; background:#f7f7f7; border-radius:6px;">
+    <div style="display:flex; gap:10px; align-items:end;">
+      <div style="flex:1;">
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Descripción:</label>
+        <input type="text" name="descripcion" value="{{ descripcion_filtro }}" placeholder="Buscar por descripción" style="width:100%; padding:6px;">
+      </div>
+      <div>
+        <button type="submit" class="button">Buscar</button>
+        <a href="{{ url_for('materiales_genericos_index') }}" class="button button-secondary">Limpiar</a>
+      </div>
+    </div>
+  </form>
+
+  {% if materiales %}
+    <table>
+      <tr>
+        <th style="width:50%; text-align:left;">Descripción</th>
+        <th style="width:15%; text-align:left;">Unidad</th>
+        <th style="width:15%; text-align:right;">Tiempo Instalación (h)</th>
+        <th style="width:20%; text-align:left;">Acciones</th>
+      </tr>
+      {% for material in materiales %}
+        <tr>
+          <td style="text-align:left;">{{ material.descripcion }}</td>
+          <td style="text-align:left;">{{ material.unidad or 'UND' }}</td>
+          <td style="text-align:right;">{{ "{:,.2f}".format(material.tiempo_instalacion) if material.tiempo_instalacion is not none else '0.00' }}</td>
+          <td style="white-space:nowrap; text-align:left;">
+            <a href="{{ url_for('materiales_genericos_editar', id=material.id) }}" class="button" style="padding:4px 8px; font-size:0.85em;">Editar</a>
+            <form method="post" action="{{ url_for('materiales_genericos_eliminar', id=material.id) }}" style="display:inline;">
+              <button type="submit" class="button button-secondary" style="padding:4px 8px; font-size:0.85em; background:#dc3545;" onclick="return confirm('¿Eliminar este material genérico?')">Eliminar</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p>No hay materiales genéricos cargados.</p>
+  {% endif %}
+{% endblock %}
+

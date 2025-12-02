@@ -1,0 +1,228 @@
+{% extends 'base.html' %}
+{% block title %}Nueva lista de materiales{% endblock %}
+{% block content %}
+<style>
+  .wizard-steps {display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:15px;}
+  .wizard-step {border:2px solid #000;border-radius:4px;padding:10px;position:relative;background:#fff;cursor:pointer;transition:all 0.3s ease;min-height:60px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;}
+  .wizard-step:hover {transform:translateY(-1px);box-shadow:0 2px 6px rgba(0,0,0,0.15);}
+  .wizard-step.completed {background:#fff;border-color:#000;color:#000;}
+  .wizard-step.active {background:#FFD700;border-color:#000;box-shadow:0 0 0 2px rgba(255,215,0,0.3);}
+  .wizard-step.pendiente {background:#fff;border-color:#000;color:#000;}
+  .wizard-step h4 {margin:5px 0 4px 0;font-size:0.9rem;font-weight:bold;}
+  .wizard-step span.step-number {width:25px;height:25px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:0.9em;margin-bottom:5px;border:2px solid #000;}
+  .wizard-step.completed span.step-number {background:#000;color:#fff;}
+  .wizard-step.active span.step-number {background:#000;color:#FFD700;}
+  .wizard-step.pendiente span.step-number {background:#fff;color:#000;}
+  .wizard-step small {font-size:0.7em;color:#666;display:block;margin-top:2px;}
+  .wizard-step.completed small {color:#666;}
+  .wizard-step.pendiente small {color:#666;}
+  .card-section {background:#fff;border:1px solid #e0e0e0;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-radius:8px;padding:20px;margin-bottom:20px;}
+  .card-section h3 {margin-top:0;}
+  .card-section.disabled {opacity:0.5;pointer-events:none;}
+  .grid-two {display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:15px;}
+  .summary {background:#f5f9ff;border-radius:6px;padding:12px;margin-top:10px;font-size:0.95em;}
+  .badge {display:inline-block;padding:2px 8px;border-radius:20px;font-size:0.75em;background:#4caf50;color:#fff;margin-left:8px;}
+  table.resumen {width:100%;border-collapse:collapse;}
+  table.resumen th, table.resumen td {border:1px solid #e0e0e0;padding:6px;text-align:left;font-size:0.9em;}
+  table.resumen th {background:#f7f7f7;}
+  .empty-state {padding:20px;text-align:center;background:#fafafa;border:1px dashed #d0d0d0;border-radius:8px;color:#666;}
+  .step-label {display:flex;flex-direction:column;align-items:center;width:100%;}
+  @media (max-width: 768px) {
+    .wizard-steps {grid-template-columns:repeat(2,1fr);}
+  }
+  @media (max-width: 480px) {
+    .wizard-steps {grid-template-columns:1fr;}
+  }
+</style>
+
+<script>
+  function scrollToPaso(paso) {
+    const elemento = document.getElementById('paso' + paso);
+    if (elemento) {
+      elemento.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+</script>
+
+<h2>Flujo: proyecto → lista → precios → resumen</h2>
+
+<div class="wizard-steps">
+  <div class="wizard-step {% if paso1_completado %}completed{% elif paso_activo == 1 %}active{% else %}pendiente{% endif %}" onclick="scrollToPaso(1)" style="cursor:pointer;">
+    <div class="step-label">
+      <span class="step-number">1</span>
+      <h4>Crear proyecto</h4>
+      <small>Datos base del proyecto/lista.</small>
+    </div>
+  </div>
+  <div class="wizard-step {% if paso2_completado %}completed{% elif paso_activo == 2 %}active{% else %}pendiente{% endif %}" onclick="{% if paso1_completado %}scrollToPaso(2){% endif %}" style="cursor:{% if paso1_completado %}pointer{% else %}not-allowed{% endif %};">
+    <div class="step-label">
+      <span class="step-number">2</span>
+      <h4>Crear lista de materiales</h4>
+      <small>Agregar subgrupos e items.</small>
+    </div>
+  </div>
+  <div class="wizard-step {% if paso3_completado %}completed{% elif paso_activo == 3 %}active{% else %}pendiente{% endif %}" onclick="{% if paso2_completado %}scrollToPaso(3){% endif %}" style="cursor:{% if paso2_completado %}pointer{% else %}not-allowed{% endif %};">
+    <div class="step-label">
+      <span class="step-number">3</span>
+      <h4>Asignar precios</h4>
+      <small>Comparar proveedores.</small>
+    </div>
+  </div>
+  <div class="wizard-step {% if paso4_completado %}completed{% elif paso_activo == 4 %}active{% else %}pendiente{% endif %}" onclick="{% if paso2_completado %}scrollToPaso(4){% endif %}" style="cursor:{% if paso2_completado %}pointer{% else %}not-allowed{% endif %};">
+    <div class="step-label">
+      <span class="step-number">4</span>
+      <h4>Visualizar tabla</h4>
+      <small>Resumen de materiales + precios.</small>
+    </div>
+  </div>
+</div>
+
+<div class="card-section {% if paso_activo != 1 %}collapsed{% endif %}" id="paso1">
+  <h3>1. Crear proyecto / lista</h3>
+  {% if not paso1_completado %}
+    <form method="post" class="grid-two" style="margin-top:10px;">
+      <div>
+        <label>Número de lista</label>
+        <input type="text" name="numero_presupuesto" value="{{ numero_presupuesto }}" required style="width:100%;padding:8px;">
+      </div>
+      <div>
+        <label>Cliente / Proyecto</label>
+        <select name="cliente_id" style="width:100%;padding:8px;height:38px;">
+          <option value="">Sin cliente</option>
+          {% for cliente in clientes %}
+            <option value="{{ cliente.id }}">{{ cliente.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Título del proyecto</label>
+        <input type="text" name="titulo" placeholder="Ej: Montaje planta agua" style="width:100%;padding:8px;">
+      </div>
+      <div>
+        <label>Fecha estimada</label>
+        <input type="date" name="fecha_lista" style="width:100%;padding:8px;">
+      </div>
+      <div>
+        <label>Estado</label>
+        <select name="estado" style="width:100%;padding:8px;height:38px;">
+          <option value="borrador">Borrador</option>
+          <option value="en_construccion">En construcción</option>
+          <option value="asignando_precios">Asignando precios</option>
+        </select>
+      </div>
+      <div>
+        <label>I.V.A. (%)</label>
+        <input type="number" step="0.01" name="iva_porcentaje" value="21" style="width:100%;padding:8px;">
+      </div>
+      <div>
+        <label>Validez (días)</label>
+        <input type="number" name="validez_dias" value="30" style="width:100%;padding:8px;">
+      </div>
+      <div style="grid-column:1 / -1;">
+        <label>Descripción / notas</label>
+        <textarea name="descripcion" rows="3" style="width:100%;padding:8px;"></textarea>
+      </div>
+      <div style="grid-column:1 / -1;text-align:right;">
+        <button type="submit" class="button">Guardar proyecto</button>
+      </div>
+    </form>
+  {% else %}
+    <div class="summary">
+      <strong>Proyecto creado:</strong> {{ lista.titulo or lista.numero_presupuesto }}<br>
+      Número: {{ lista.numero_presupuesto }}<br>
+      Cliente: {{ lista.nombre_cliente }}<br>
+      Estado: {{ lista.estado|upper }} · Ítems: {{ lista.cantidad_items }}<br>
+      <a class="button button-secondary" href="{{ url_for('listas_materiales_editar', id=lista.id) }}">Editar datos</a>
+    </div>
+  {% endif %}
+</div>
+
+<div class="card-section {% if not paso1_completado %}disabled{% endif %}" id="paso2">
+  <h3>2. Crear lista de materiales</h3>
+  {% if not paso1_completado %}
+    <p>Completa el paso anterior para habilitar este contenido.</p>
+  {% else %}
+    <p>Agrega subgrupos, items y marcas en la vista de lista de materiales.</p>
+    <a class="button" href="{{ url_for('listas_materiales_ver', id=lista.id) }}" target="_blank">Abrir editor de lista</a>
+    {% if paso2_completado %}
+      <span class="badge">Listo</span>
+      <small style="display:block;margin-top:6px;color:#2e7d32;">La lista ya tiene {{ cantidad_items }} items.</small>
+    {% else %}
+      <small style="display:block;margin-top:6px;color:#d32f2f;">Aún no hay items cargados.</small>
+    {% endif %}
+  {% endif %}
+</div>
+
+<div class="card-section {% if not paso2_completado %}disabled{% endif %}" id="paso3">
+  <h3>3. Asignar precios</h3>
+  {% if not paso2_completado %}
+    <p>Primero agrega materiales a la lista.</p>
+  {% else %}
+    <p>Registra hasta cinco proveedores por item y selecciona el precio objetivo.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <a class="button button-secondary" href="{{ url_for('listas_materiales_precios', id=lista.id) }}" target="_blank">Abrir módulo de precios</a>
+      {% if precios_asignados %}
+        <span class="badge">Con precios seleccionados</span>
+      {% else %}
+        <small style="align-self:center;color:#d97706;">Sin precios seleccionados aún.</small>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+
+<div class="card-section {% if not paso2_completado %}disabled{% endif %}" id="paso4">
+  <h3>4. Visualizar tabla consolidada</h3>
+  {% if not paso2_completado %}
+    <p>Agrega items para poder ver el resumen.</p>
+  {% else %}
+    {% if tabla_items %}
+      <div style="overflow-x:auto;">
+        <table class="resumen">
+          <thead>
+            <tr>
+              <th>Subgrupo</th>
+              <th>Item</th>
+              <th>Marca</th>
+              <th>Cant.</th>
+              <th>Unidad</th>
+              <th>Tiempo (h)</th>
+              <th>Proveedor seleccionado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in tabla_items %}
+              {% set precio = item.precio_seleccionado %}
+              <tr>
+                <td>{{ item.subgrupo }}</td>
+                <td>
+                  <strong>{{ item.numero or loop.index }}.</strong> {{ item.descripcion }}
+                </td>
+                <td>{{ item.marca or '-' }}</td>
+                <td style="text-align:right;">{{ item.cantidad }}</td>
+                <td>{{ item.unidad }}</td>
+                <td style="text-align:right;">{{ "{:,.2f}".format(item.tiempo_total or 0) }}</td>
+                <td>
+                  {% if precio %}
+                    {{ precio.proveedor_nombre }} ({{ precio.moneda }} {{ "{:,.2f}".format(precio.precio) }})
+                  {% else %}
+                    <span style="color:#d32f2f;">Sin seleccionar</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top:10px;">
+        <a class="button button-secondary" href="{{ url_for('listas_materiales_ver', id=lista.id) }}" target="_blank">Ver lista completa</a>
+        <a class="button button-secondary" href="{{ url_for('listas_materiales_pdf', id=lista.id) }}" target="_blank">Generar PDF</a>
+      </div>
+    {% else %}
+      <div class="empty-state">
+        Aún no hay materiales en esta lista. Agrega items para visualizar el resumen de precios.
+      </div>
+    {% endif %}
+  {% endif %}
+</div>
+{% endblock %}
+

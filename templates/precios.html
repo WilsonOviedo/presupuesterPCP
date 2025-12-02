@@ -12,6 +12,8 @@
 {% block content %}
   <div class="actions" style="margin-bottom:10px;">
     <a class="button button-secondary" href="{{ url_for('menu') }}">← Volver</a>
+    <a class="button" href="{{ url_for('precios_cargar_presupuesto') }}" style="background:#4caf50;">📷 Cargar Presupuesto desde Imagen</a>
+    <a class="button" href="{{ url_for('precios_cargar_manual') }}" style="background:#2196F3;">➕ Cargar Precios Manualmente</a>
   </div>
   <h2>Buscar en la base de datos de precios</h2>
 
@@ -69,6 +71,15 @@
     </div>
   {% endif %}
 
+  {% if request.args.get('mensaje') %}
+    <div style="margin-top:15px; padding:10px; border-radius:6px; background:#d4edda; border:1px solid #c3e6cb; color:#155724;">
+      ✅ {{ request.args.get('mensaje') }}
+      {% if request.args.get('items_guardados') %}
+        <br><small>Items guardados: {{ request.args.get('items_guardados') }}</small>
+      {% endif %}
+    </div>
+  {% endif %}
+
   {% if rows is not none %}
     <h3>Resultados ({{rows|length}})</h3>
     {% if rows|length == 0 %}
@@ -81,8 +92,8 @@
             <td>{{ r.proveedor }}</td>
             <td>{{ r.fecha.strftime("%Y-%m-%d %H:%M:%S") if r.fecha else "" }}</td>
             <td>{{ r.producto }}</td>
-          <td style="text-align:right;">{{ r.precio|gs_currency if r.precio is not none else "" }}</td>
-          <td style="text-align:right;">{{ r.precio_venta|gs_currency if r.precio_venta is not none else "" }}</td>
+            <td style="text-align:right;">{{ "{:,.2f}".format(r.precio) if r.precio is not none else "" }}</td>
+            <td style="text-align:right;">{{ "{:,.2f}".format(r.precio_venta) if r.precio_venta is not none else "" }}</td>
             <td>
               <form method="post" action="{{ url_for('precios_agregar_material') }}" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
                 <input type="hidden" name="precio" value="{{ r.precio_venta if r.precio_venta is not none else (r.precio or 0) }}">

@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}{% if template %}Editar{% else %}Nuevo{% endif %} Template{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{% if template %}{{ url_for('templates_ver', id=template.id) }}{% else %}{{ url_for('templates_index') }}{% endif %}">← Volver</a>
+  </div>
+  <h2>{% if template %}Editar{% else %}Nuevo{% endif %} Template</h2>
+  <form method="post" style="max-width:600px; background:white; padding:20px; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+    <div style="margin-bottom:12px;">
+      <label style="display:block; margin-bottom:6px; font-weight:600;">Nombre *</label>
+      <input type="text" name="nombre" value="{{ template.nombre if template else '' }}" required style="width:100%; padding:8px;">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="display:block; margin-bottom:6px; font-weight:600;">Descripción</label>
+      <textarea name="descripcion" rows="3" style="width:100%; padding:8px;">{{ template.descripcion if template else '' }}</textarea>
+    </div>
+    <div style="margin-top:20px; display:flex; gap:10px;">
+      <button type="submit" class="button">Guardar</button>
+      <a href="{% if template %}{{ url_for('templates_ver', id=template.id) }}{% else %}{{ url_for('templates_index') }}{% endif %}" class="button button-secondary">Cancelar</a>
+    </div>
+  </form>
+{% endblock %}
+

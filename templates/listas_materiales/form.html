@@ -2,11 +2,11 @@
 {% block title %}{% if presupuesto %}Editar{% else %}Nuevo{% endif %} Presupuesto{% endblock %}
 {% block content %}
   <div class="actions" style="margin-bottom:10px;">
-    <a class="button button-secondary" href="{{ url_for('presupuestos_index') }}">← Volver</a>
+    <a class="button button-secondary" href="{{ url_for('listas_materiales_index') }}">← Volver</a>
   </div>
   <h2>{% if presupuesto %}Editar{% else %}Nuevo{% endif %} Presupuesto</h2>
 
-  <form method="post" action="{% if presupuesto %}{{ url_for('presupuestos_editar', id=presupuesto.id) }}{% else %}{{ url_for('presupuestos_nuevo') }}{% endif %}" style="max-width:800px;">
+  <form method="post" action="{% if presupuesto %}{{ url_for('listas_materiales_editar', id=presupuesto.id) }}{% else %}{{ url_for('listas_materiales_nuevo') }}{% endif %}" style="max-width:800px;">
     <div style="display:grid; gap:15px;">
       <div>
         <label style="display:block; margin-bottom:5px; font-weight:600;">Número de presupuesto:</label>
@@ -76,7 +76,7 @@
 
       <div class="actions">
         <button type="submit" class="button">{% if presupuesto %}Actualizar{% else %}Crear{% endif %}</button>
-        <a href="{{ url_for('presupuestos_index') }}" class="button button-secondary">Cancelar</a>
+        <a href="{{ url_for('listas_materiales_index') }}" class="button button-secondary">Cancelar</a>
       </div>
     </div>
   </form>
