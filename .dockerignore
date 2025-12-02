@@ -31,6 +31,7 @@ uploads/*
 *.zip
 *.tar.gz
 *.sql
+!schema_presupuestos.sql
 *.md
 !README.md
 !INSTALAR_TESSERACT.md

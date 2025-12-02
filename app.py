@@ -21,7 +21,14 @@ from flask import make_response
 from datetime import datetime
 from collections import OrderedDict
 import procesar_presupuesto_ocr as ocr_processor
-import procesar_ocr_opencv as ocr_opencv
+
+# Importación opcional de OCR con OpenCV (solo si está disponible)
+try:
+    import procesar_ocr_opencv as ocr_opencv
+    OCR_OPENCV_AVAILABLE = True
+except ImportError:
+    ocr_opencv = None
+    OCR_OPENCV_AVAILABLE = False
 
 
 app = Flask(__name__)
@@ -405,6 +412,11 @@ def api_ocr_process():
                 pass
         
         # Procesar OCR (local o remoto según configuración)
+        if not OCR_OPENCV_AVAILABLE:
+            return jsonify({
+                'error': 'OCR con OpenCV no está disponible. Por favor, instala las dependencias necesarias o configura un servidor OCR remoto.'
+            }), 503
+        
         result = ocr_opencv.process_ocr(image_bytes, config)
         
         # Convertir palabras al formato esperado
