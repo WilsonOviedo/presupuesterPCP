@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, redirect, url_for, jsonify
+from flask import Flask, request, render_template, redirect, url_for, jsonify, session
 import io
 from contextlib import redirect_stdout
 from threading import Thread, Lock
@@ -17,10 +17,16 @@ load_dotenv()
 import buscar_precios_web as precios
 import leer_factura as facturas
 import presupuestos_db as presupuestos
+import presupuestos_db
 from flask import make_response
 from datetime import datetime
 from collections import OrderedDict
 import procesar_presupuesto_ocr as ocr_processor
+import auth
+import psycopg2
+import facturacion
+import reportes_clientes
+import financiero
 
 # Importación opcional de OCR con OpenCV (solo si está disponible)
 try:
@@ -34,6 +40,10 @@ except ImportError:
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'change-this-secret-key-in-production')
+
+# Agregar funciones útiles al contexto global de Jinja2
+app.jinja_env.globals['abs'] = abs
 
 # Crear carpeta de uploads si no existe
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -56,9 +66,294 @@ def _to_upper(valor):
     return texto.upper()
 
 
+# ============================================
+# RUTAS DE AUTENTICACIÓN
+# ============================================
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    """Ruta de login"""
+    if request.method == "POST":
+        username_or_email = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        next_url = request.form.get('next') or url_for('menu')
+        
+        # Verificar primero si el usuario tiene registro incompleto (antes de pedir contraseña)
+        usuario_incompleto = auth.verificar_usuario_incompleto_por_email(username_or_email)
+        if usuario_incompleto:
+            # Si es un usuario incompleto, redirigir directamente a completar registro
+            session['usuario_incompleto_id'] = usuario_incompleto['id']
+            session['usuario_incompleto_email'] = usuario_incompleto['email']
+            return redirect(url_for('completar_registro'))
+        
+        # Si no es usuario incompleto, intentar login normal (requiere contraseña)
+        if not password:
+            return render_template('login.html', error='Por favor ingresa tu contraseña')
+        
+        usuario = auth.login_user(username_or_email, password)
+        if usuario:
+            # Si el usuario tiene registro incompleto, redirigir a completar registro
+            if usuario.get('incompleto'):
+                session['usuario_incompleto_id'] = usuario['id']
+                session['usuario_incompleto_email'] = usuario['email']
+                return redirect(url_for('completar_registro'))
+            
+            session['user_id'] = usuario['id']
+            session['username'] = usuario['username']
+            session['es_admin'] = usuario['es_admin']
+            return redirect(next_url)
+        else:
+            return render_template('login.html', error='Usuario o contraseña incorrectos')
+    
+    return render_template('login.html')
+
+
+@app.route("/logout")
+def logout():
+    """Ruta de logout"""
+    session.clear()
+    return redirect(url_for('login', mensaje='Sesión cerrada correctamente'))
+
+
+@app.route("/completar-registro", methods=["GET", "POST"])
+def completar_registro():
+    """Ruta para completar el registro de usuarios creados solo con email"""
+    # Verificar que hay un usuario incompleto en sesión
+    if 'usuario_incompleto_id' not in session:
+        return redirect(url_for('login', error='No hay registro pendiente'))
+    
+    usuario_id = session.get('usuario_incompleto_id')
+    email = session.get('usuario_incompleto_email')
+    
+    if request.method == "POST":
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        password_confirm = request.form.get('password_confirm', '').strip()
+        nombre_completo = request.form.get('nombre_completo', '').strip() or None
+        
+        # Validaciones
+        if not username:
+            return render_template('completar_registro.html', 
+                                 email=email,
+                                 error='El nombre de usuario es requerido')
+        
+        if not password:
+            return render_template('completar_registro.html', 
+                                 email=email,
+                                 error='La contraseña es requerida')
+        
+        if password != password_confirm:
+            return render_template('completar_registro.html', 
+                                 email=email,
+                                 error='Las contraseñas no coinciden')
+        
+        if len(password) < 6:
+            return render_template('completar_registro.html', 
+                                 email=email,
+                                 error='La contraseña debe tener al menos 6 caracteres')
+        
+        # Verificar que el username no esté en uso
+        if not auth.verificar_username_disponible(username):
+            return render_template('completar_registro.html', 
+                                 email=email,
+                                 error='El nombre de usuario ya está en uso. Por favor, elige otro.')
+        
+        # Completar el registro
+        if auth.completar_registro(usuario_id, username, password, nombre_completo):
+            # Limpiar sesión temporal
+            session.pop('usuario_incompleto_id', None)
+            session.pop('usuario_incompleto_email', None)
+            
+            # Iniciar sesión automáticamente
+            usuario = auth.login_user(username, password)
+            if usuario:
+                session['user_id'] = usuario['id']
+                session['username'] = usuario['username']
+                session['es_admin'] = usuario['es_admin']
+                return redirect(url_for('menu', mensaje='Registro completado correctamente. Bienvenido!'))
+        
+        return render_template('completar_registro.html', 
+                             email=email,
+                             error='Error al completar el registro. Por favor, intenta nuevamente.')
+    
+    return render_template('completar_registro.html', email=email)
+
+
 @app.route("/")
+@auth.login_required
 def menu():
-    return render_template('menu.html')
+    usuario = auth.get_current_user()
+    error = request.args.get('error')
+    return render_template('menu.html', usuario=usuario, error=error)
+
+# ============================================
+# RUTAS DE GESTIÓN DE USUARIOS (Solo Admin)
+# ============================================
+
+@app.route("/usuarios", methods=["GET"])
+@auth.admin_required
+def usuarios_index():
+    """Lista de usuarios"""
+    usuarios = auth.obtener_usuarios()
+    error = request.args.get('error')
+    mensaje = request.args.get('mensaje')
+    return render_template('usuarios/index.html', 
+                         usuarios=usuarios, 
+                         error=error, 
+                         mensaje=mensaje)
+
+
+@app.route("/usuarios/nuevo", methods=["GET", "POST"])
+@auth.admin_required
+def usuarios_nuevo():
+    """Crear nuevo usuario (solo con email, el usuario completará el registro después)"""
+    if request.method == "POST":
+        email = request.form.get('email', '').strip()
+        es_admin = request.form.get('es_admin') == '1'
+        activo = request.form.get('activo') == '1'
+        
+        if not email:
+            return render_template('usuarios/form.html', 
+                                 usuario=None,
+                                 error='El email es requerido')
+        
+        try:
+            conn, cur = precios.conectar()
+            try:
+                # Crear usuario solo con email, sin username ni password
+                cur.execute("""
+                    INSERT INTO usuarios (email, es_admin, activo, registro_completo)
+                    VALUES (%s, %s, %s, FALSE)
+                    RETURNING id
+                """, (email, es_admin, activo))
+                
+                usuario_id = cur.fetchone()['id']
+                conn.commit()
+                return redirect(url_for('usuarios_index', mensaje=f'Usuario con email {email} creado. El usuario deberá completar su registro al iniciar sesión.'))
+            except psycopg2.IntegrityError as e:
+                if 'usuarios_email_key' in str(e) or 'unique' in str(e).lower():
+                    return render_template('usuarios/form.html', 
+                                         usuario=None,
+                                         error='El email ya está registrado')
+                raise
+            finally:
+                cur.close()
+                conn.close()
+        except Exception as e:
+            return render_template('usuarios/form.html', 
+                                 usuario=None,
+                                 error=f'Error al crear usuario: {str(e)}')
+    
+    return render_template('usuarios/form.html', usuario=None)
+
+
+@app.route("/usuarios/<int:id>/editar", methods=["GET", "POST"])
+@auth.admin_required
+def usuarios_editar(id):
+    """Editar usuario"""
+    try:
+        conn, cur = precios.conectar()
+        try:
+            if request.method == "POST":
+                nombre_completo = request.form.get('nombre_completo', '').strip() or None
+                email = request.form.get('email', '').strip() or None
+                password = request.form.get('password', '').strip()
+                es_admin = request.form.get('es_admin') == '1'
+                activo = request.form.get('activo') == '1'
+                
+                if password:
+                    password_hash = auth.hash_password(password)
+                    cur.execute("""
+                        UPDATE usuarios 
+                        SET nombre_completo = %s, email = %s, password_hash = %s, 
+                            es_admin = %s, activo = %s
+                        WHERE id = %s
+                    """, (nombre_completo, email, password_hash, es_admin, activo, id))
+                else:
+                    cur.execute("""
+                        UPDATE usuarios 
+                        SET nombre_completo = %s, email = %s, es_admin = %s, activo = %s
+                        WHERE id = %s
+                    """, (nombre_completo, email, es_admin, activo, id))
+                
+                conn.commit()
+                return redirect(url_for('usuarios_index', mensaje='Usuario actualizado correctamente'))
+            
+            # GET: mostrar formulario
+            cur.execute("""
+                SELECT id, username, nombre_completo, email, es_admin, activo
+                FROM usuarios
+                WHERE id = %s
+            """, (id,))
+            usuario = cur.fetchone()
+            
+            if not usuario:
+                return redirect(url_for('usuarios_index', error='Usuario no encontrado'))
+            
+            return render_template('usuarios/form.html', usuario=dict(usuario))
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as e:
+        return redirect(url_for('usuarios_index', error=f'Error: {str(e)}'))
+
+
+@app.route("/usuarios/<int:id>/permisos", methods=["GET", "POST"])
+@auth.admin_required
+def usuarios_permisos(id):
+    """Gestionar permisos de usuario"""
+    try:
+        conn, cur = precios.conectar()
+        try:
+            # Obtener usuario
+            cur.execute("""
+                SELECT id, username, es_admin
+                FROM usuarios
+                WHERE id = %s
+            """, (id,))
+            usuario = cur.fetchone()
+            
+            if not usuario:
+                return redirect(url_for('usuarios_index', error='Usuario no encontrado'))
+            
+            usuario_dict = dict(usuario)
+            
+            if request.method == "POST":
+                # Obtener permisos seleccionados
+                permisos_seleccionados = request.form.getlist('permisos')
+                permisos_seleccionados = [int(p) for p in permisos_seleccionados]
+                
+                # Obtener permisos actuales
+                permisos_actuales = auth.obtener_permisos_usuario(id)
+                permisos_actuales_ids = [p['id'] for p in permisos_actuales]
+                
+                # Agregar nuevos permisos
+                for permiso_id in permisos_seleccionados:
+                    if permiso_id not in permisos_actuales_ids:
+                        auth.asignar_permiso(id, permiso_id)
+                
+                # Revocar permisos no seleccionados
+                for permiso_id in permisos_actuales_ids:
+                    if permiso_id not in permisos_seleccionados:
+                        auth.revocar_permiso(id, permiso_id)
+                
+                return redirect(url_for('usuarios_index', mensaje='Permisos actualizados correctamente'))
+            
+            # GET: mostrar formulario
+            permisos_disponibles = auth.obtener_permisos_rutas()
+            permisos_usuario = auth.obtener_permisos_usuario(id)
+            permisos_usuario_ids = [p['id'] for p in permisos_usuario]
+            
+            return render_template('usuarios/permisos.html',
+                                 usuario=usuario_dict,
+                                 permisos_disponibles=permisos_disponibles,
+                                 permisos_usuario_ids=permisos_usuario_ids)
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as e:
+        return redirect(url_for('usuarios_index', error=f'Error: {str(e)}'))
+
 _job_state = {"running": False, "output": "", "finished": False, "started_at": None}
 _job_lock = Lock()
 
@@ -77,6 +372,8 @@ def _run_leer_facturas_job():
 
 
 @app.route("/precios", methods=["GET"])
+@auth.login_required
+@auth.permission_required('/precios')
 def precios_index():
     proveedor = request.args.get("proveedor") or None
     producto = request.args.get("producto") or None
@@ -132,7 +429,144 @@ def precios_index():
     return render_template('precios.html', rows=rows, request=request, current_query=current_query)
 
 
+@app.route("/precios/cargar-proveedores", methods=["GET", "POST"])
+@auth.login_required
+@auth.permission_required('/precios/cargar-proveedores')
+def precios_cargar_proveedores():
+    """Cargar proveedores únicos desde la tabla precios a la tabla proveedores"""
+    if request.method == "POST":
+        # Procesar carga de proveedores
+        try:
+            conn, cur = precios.conectar()
+            
+            # Obtener proveedores seleccionados del formulario
+            proveedores_seleccionados = request.form.getlist('proveedores')
+            
+            if not proveedores_seleccionados:
+                return redirect(url_for('precios_cargar_proveedores', 
+                                      mensaje='No se seleccionaron proveedores para cargar'))
+            
+            proveedores_cargados = 0
+            proveedores_duplicados = 0
+            errores = []
+            
+            for nombre_proveedor in proveedores_seleccionados:
+                if not nombre_proveedor or not nombre_proveedor.strip():
+                    continue
+                
+                nombre_upper = _to_upper(nombre_proveedor.strip())
+                
+                try:
+                    # Verificar si ya existe en la tabla proveedores
+                    cur.execute("""
+                        SELECT id FROM proveedores 
+                        WHERE LOWER(nombre) = LOWER(%s)
+                    """, (nombre_upper,))
+                    
+                    if cur.fetchone():
+                        proveedores_duplicados += 1
+                        continue
+                    
+                    # Insertar en la tabla proveedores
+                    cur.execute("""
+                        INSERT INTO proveedores (nombre, activo, creado_en, actualizado_en)
+                        VALUES (%s, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """, (nombre_upper,))
+                    
+                    proveedores_cargados += 1
+                    
+                except Exception as e:
+                    errores.append(f"{nombre_upper}: {str(e)}")
+            
+            conn.commit()
+            cur.close()
+            conn.close()
+            
+            mensaje = f"Se cargaron {proveedores_cargados} proveedores correctamente."
+            if proveedores_duplicados > 0:
+                mensaje += f" {proveedores_duplicados} ya existían y se omitieron."
+            if errores:
+                mensaje += f" Errores: {len(errores)}"
+            
+            return redirect(url_for('precios_cargar_proveedores', mensaje=mensaje))
+            
+        except Exception as e:
+            import traceback
+            error_trace = traceback.format_exc()
+            print(f"Error al cargar proveedores: {e}")
+            print(error_trace)
+            return redirect(url_for('precios_cargar_proveedores', 
+                                  error=f"Error al cargar proveedores: {str(e)}"))
+    
+    # GET: mostrar lista de proveedores únicos
+    try:
+        conn, cur = precios.conectar()
+        
+        # Obtener todos los proveedores únicos de la tabla precios
+        cur.execute("""
+            SELECT DISTINCT proveedor as nombre
+            FROM precios
+            WHERE proveedor IS NOT NULL 
+              AND proveedor != ''
+              AND TRIM(proveedor) != ''
+            ORDER BY proveedor ASC
+        """)
+        proveedores_precios = [row['nombre'] for row in cur.fetchall()]
+        
+        # Obtener proveedores que ya están en la tabla proveedores
+        proveedores_existentes = []
+        try:
+            cur.execute("""
+                SELECT LOWER(nombre) as nombre_lower, nombre
+                FROM proveedores
+                ORDER BY nombre ASC
+            """)
+            proveedores_existentes = {row['nombre_lower']: row['nombre'] for row in cur.fetchall()}
+        except:
+            # Si la tabla proveedores no existe, continuar sin error
+            pass
+        
+        cur.close()
+        conn.close()
+        
+        # Filtrar proveedores que ya existen (comparación case-insensitive)
+        proveedores_nuevos = []
+        proveedores_ya_existen = []
+        
+        for prov in proveedores_precios:
+            prov_lower = prov.lower().strip()
+            if prov_lower in proveedores_existentes:
+                proveedores_ya_existen.append(prov)
+            else:
+                proveedores_nuevos.append(prov)
+        
+        mensaje = request.args.get('mensaje')
+        error = request.args.get('error')
+        
+        return render_template('precios/cargar_proveedores.html',
+                             proveedores_nuevos=proveedores_nuevos,
+                             proveedores_ya_existen=proveedores_ya_existen,
+                             total_nuevos=len(proveedores_nuevos),
+                             total_existentes=len(proveedores_ya_existen),
+                             mensaje=mensaje,
+                             error=error)
+        
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Error al obtener proveedores: {e}")
+        print(error_trace)
+        return render_template('precios/cargar_proveedores.html',
+                             proveedores_nuevos=[],
+                             proveedores_ya_existen=[],
+                             total_nuevos=0,
+                             total_existentes=0,
+                             error=f"Error al obtener proveedores: {str(e)}")
+
+
 @app.route("/precios/cargar-manual", methods=["GET", "POST"])
+@auth.login_required
+@auth.permission_required('/precios/cargar-manual')
 def precios_cargar_manual():
     """Cargar precios manualmente con el mismo formato que IMAP"""
     if request.method == "GET":
@@ -273,6 +707,8 @@ def precios_agregar_material():
 
 
 @app.route("/leer-facturas", methods=["GET", "POST"])
+@auth.login_required
+@auth.permission_required('/leer-facturas')
 def leer_facturas_page():
     if request.method == "POST":
         with _job_lock:
@@ -287,7 +723,21 @@ def leer_facturas_page():
         running = _job_state["running"]
         finished = _job_state["finished"]
         salida = _job_state["output"]
-    return render_template('leer_facturas.html', salida=salida, running=running, finished=finished)
+    
+    # Obtener información de la base de datos
+    db_host = os.getenv('DB_HOST', 'No configurado')
+    db_port = os.getenv('DB_PORT', 'No configurado')
+    db_name = os.getenv('DB_NAME', 'No configurado')
+    db_user = os.getenv('DB_USER', 'No configurado')
+    
+    return render_template('leer_facturas.html', 
+                         salida=salida, 
+                         running=running, 
+                         finished=finished,
+                         db_host=db_host,
+                         db_port=db_port,
+                         db_name=db_name,
+                         db_user=db_user)
 
 @app.route("/leer-facturas/status", methods=["GET"])
 def leer_facturas_status():
@@ -300,6 +750,8 @@ def leer_facturas_status():
 
 
 @app.route("/calculadora", methods=["GET"])
+@auth.login_required
+@auth.permission_required('/calculadora')
 def calculadora():
     precio_str = request.args.get("precio")
     margen_str = request.args.get("margen")
@@ -316,6 +768,8 @@ def calculadora():
     return render_template('calculadora.html', request=request, resultado=resultado)
 
 @app.route("/historial", methods=["GET"])
+@auth.login_required
+@auth.permission_required('/historial')
 def historial():
     producto = request.args.get('producto')
     items = None
@@ -591,6 +1045,8 @@ def precios_confirmar_presupuesto():
 # ==================== RUTAS DE PRESUPUESTOS ====================
 
 @app.route("/listas-materiales", methods=["GET"], endpoint="listas_materiales_index")
+@auth.login_required
+@auth.permission_required('/listas-materiales')
 @app.route("/presupuestos", methods=["GET"], endpoint="presupuestos_index")
 def listas_materiales_index():
     """Lista de presupuestos"""
@@ -639,9 +1095,9 @@ def listas_materiales_nuevo():
             validez_dias = 30
         iva_porcentaje = request.form.get("iva_porcentaje")
         try:
-            iva_porcentaje = float(iva_porcentaje) if iva_porcentaje else 21.0
+            iva_porcentaje = float(iva_porcentaje) if iva_porcentaje else 10.0
         except ValueError:
-            iva_porcentaje = 21.0
+            iva_porcentaje = 10.0
         notas = _to_upper(request.form.get("notas")) if request.form.get("notas") else None
         
         lista_id_nueva = presupuestos.crear_lista_material(
@@ -1166,6 +1622,8 @@ def listas_materiales_pdf(id):
 # ==================== RUTAS DE ITEMS MANO DE OBRA ====================
 
 @app.route("/listas-materiales/items_mano_de_obra", methods=["GET"])
+@auth.login_required
+@auth.permission_required('/listas-materiales/items_mano_de_obra')
 def items_index():
     """Lista de items"""
     tipo = request.args.get("tipo")
@@ -1270,6 +1728,8 @@ def items_editar(id):
 # ==================== RUTAS DE CLIENTES ====================
 
 @app.route("/listas-materiales/clientes", methods=["GET"])
+@auth.login_required
+@auth.permission_required('/listas-materiales/clientes')
 def clientes_index():
     """Lista de clientes"""
     clientes_lista = presupuestos.obtener_clientes()
@@ -1362,67 +1822,11 @@ def clientes_eliminar(id):
         return redirect(url_for('clientes_index'))
     return "Error al eliminar cliente", 400
 
-@app.route("/listas-materiales/materiales", methods=["GET"])
-def materiales_index():
-    descripcion = request.args.get("descripcion") or None
-    marca = request.args.get("marca") or None
-    materiales = presupuestos.buscar_materiales(descripcion=descripcion, marca=marca)
-    materiales_list = [dict(m) for m in materiales]
-    marcas = [dict(m) for m in presupuestos.obtener_marcas_materiales(activo=True)]
-    return render_template(
-        'listas_materiales/materiales/index.html',
-        materiales=materiales_list,
-        descripcion_filtro=descripcion or "",
-        marca_filtro=marca or "",
-        marcas=marcas,
-        request=request
-    )
-
-@app.route("/listas-materiales/materiales/<int:id>/editar", methods=["GET", "POST"])
-def materiales_editar(id):
-    material = presupuestos.obtener_material_por_id(id)
-    if not material:
-        return "Material no encontrado", 404
-    if request.method == "POST":
-        descripcion = _to_upper(request.form.get("descripcion")) if request.form.get("descripcion") else None
-        marca = _to_upper(request.form.get("marca")) if request.form.get("marca") else None
-        marca_id = request.form.get("marca_id")
-        try:
-            marca_id = int(marca_id) if marca_id else None
-        except ValueError:
-            marca_id = None
-        precio = request.form.get("precio")
-        tiempo = request.form.get("tiempo_instalacion")
-        try:
-            precio = float(precio) if precio else None
-        except ValueError:
-            precio = None
-        try:
-            tiempo = float(tiempo) if tiempo else None
-        except ValueError:
-            tiempo = None
-        presupuestos.actualizar_material(
-            material_id=id,
-            descripcion=descripcion,
-            marca=marca,
-            marca_id=marca_id,
-            precio=precio,
-            tiempo_instalacion=tiempo
-        )
-        return redirect(url_for('materiales_index'))
-    marcas = [dict(m) for m in presupuestos.obtener_marcas_materiales()]
-    return render_template('listas_materiales/materiales/form.html', material=dict(material), marcas=marcas, request=request)
-
-
-@app.route("/listas-materiales/materiales/<int:id>/eliminar", methods=["POST"])
-def materiales_eliminar(id):
-    if presupuestos.eliminar_material(id):
-        return redirect(url_for('materiales_index'))
-    return "Error al eliminar material", 400
-
 # ==================== RUTAS DE MARCAS DE MATERIALES ====================
 
 @app.route("/listas-materiales/marcas_materiales", methods=["GET"])
+@auth.login_required
+@auth.permission_required('/listas-materiales/marcas')
 def marcas_materiales_index():
     """Listado de marcas para materiales"""
     busqueda = request.args.get("q") or None
@@ -1617,6 +2021,8 @@ def proveedores_eliminar(id):
 # ==================== RUTAS DE MATERIALES GENÉRICOS ====================
 
 @app.route("/listas-materiales/materiales_genericos", methods=["GET"])
+@auth.login_required
+@auth.permission_required('/listas-materiales/materiales_genericos')
 def materiales_genericos_index():
     """Lista de materiales genéricos"""
     descripcion_filtro = request.args.get("descripcion") or None
@@ -2237,6 +2643,8 @@ def listas_materiales_aplicar_template(lista_id):
 # ==================== RUTAS DE PREFIJOS DE CÓDIGOS ====================
 
 @app.route("/listas-materiales/prefijos_codigos", methods=["GET"])
+@auth.login_required
+@auth.permission_required('/listas-materiales/prefijos_codigos')
 def prefijos_codigos_index():
     """Lista de prefijos de códigos"""
     prefijos = presupuestos.obtener_prefijos_codigos()
@@ -2320,6 +2728,1834 @@ def api_obtener_codigo_por_prefijo():
         return jsonify({"codigo": codigo})
     else:
         return jsonify({"error": "No se pudo generar el código"}), 400
+
+# ============================================
+# RUTAS DE FACTURACIÓN
+# ============================================
+
+@app.route("/facturacion", methods=["GET"])
+@auth.login_required
+@auth.permission_required('/facturacion')
+def facturacion_index():
+    """Página principal de facturación - formulario para crear factura"""
+    error = request.args.get('error')
+    # Obtener lista de clientes para autocompletado
+    clientes = presupuestos.obtener_clientes()
+    return render_template('facturacion/form.html', error=error, clientes=clientes)
+
+
+@app.route("/api/facturacion/buscar-cliente", methods=["GET"])
+@auth.login_required
+@auth.permission_required('/facturacion')
+def api_buscar_cliente():
+    """API para buscar cliente por nombre y retornar sus datos"""
+    nombre = request.args.get('nombre', '').strip()
+    if not nombre:
+        return jsonify({'error': 'Nombre requerido'}), 400
+    
+    try:
+        conn, cur = presupuestos.conectar()
+        try:
+            cur.execute("""
+                SELECT id, nombre, ruc, direccion, telefono, email, razon_social
+                FROM clientes
+                WHERE UPPER(nombre) = UPPER(%s) OR UPPER(COALESCE(razon_social, '')) = UPPER(%s)
+                LIMIT 1
+            """, (nombre, nombre))
+            
+            cliente = cur.fetchone()
+            if cliente:
+                return jsonify({
+                    'id': cliente['id'],
+                    'nombre': cliente['nombre'],
+                    'ruc': cliente['ruc'] or '',
+                    'direccion': cliente['direccion'] or '',
+                    'telefono': cliente['telefono'] or '',
+                    'email': cliente['email'] or ''
+                })
+            else:
+                return jsonify({'error': 'Cliente no encontrado'}), 404
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as e:
+        import traceback
+        print(f"Error al buscar cliente: {e}")
+        print(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route("/api/facturacion/crear-cliente", methods=["POST"])
+@auth.login_required
+@auth.permission_required('/facturacion')
+def api_crear_cliente():
+    """API para crear un nuevo cliente desde el formulario de facturación"""
+    try:
+        data = request.get_json()
+        nombre = _to_upper(data.get('nombre', '').strip())
+        
+        if not nombre:
+            return jsonify({'error': 'Nombre es requerido'}), 400
+        
+        def _campo(valor):
+            if not valor or not valor.strip():
+                return None
+            return _to_upper(valor.strip())
+        
+        razon_social = _campo(data.get('razon_social'))
+        ruc = _campo(data.get('ruc'))
+        direccion = _campo(data.get('direccion'))
+        telefono = _campo(data.get('telefono'))
+        email = data.get('email', '').strip() or None
+        notas = _campo(data.get('notas'))
+        
+        cliente_id = presupuestos.crear_cliente(
+            nombre=nombre,
+            razon_social=razon_social,
+            ruc=ruc,
+            direccion=direccion,
+            telefono=telefono,
+            email=email,
+            notas=notas
+        )
+        
+        # Obtener el cliente creado
+        cliente = presupuestos.obtener_cliente_por_id(cliente_id)
+        
+        return jsonify({
+            'success': True,
+            'cliente': {
+                'id': cliente['id'],
+                'nombre': cliente['nombre'],
+                'ruc': cliente['ruc'] or '',
+                'direccion': cliente['direccion'] or '',
+                'telefono': cliente['telefono'] or '',
+                'email': cliente['email'] or ''
+            }
+        })
+    except Exception as e:
+        import traceback
+        print(f"Error al crear cliente: {e}")
+        print(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route("/facturacion/generar", methods=["POST"])
+@auth.login_required
+@auth.permission_required('/facturacion')
+def facturacion_generar():
+    """Genera una nueva factura"""
+    try:
+        # Obtener datos del formulario
+        fecha_str = request.form.get('fecha', '').strip()
+        cliente = _to_upper(request.form.get('cliente', '').strip())
+        ruc = request.form.get('ruc', '').strip() or None
+        direccion = request.form.get('direccion', '').strip() or None
+        nota_remision = request.form.get('remision', '').strip() or None
+        moneda = 'USD' if request.form.get('moneda') == '1' else 'Gs'
+        tipo_venta = 'Crédito' if request.form.get('tipoVenta') == '1' else 'Contado'
+        plazo_dias = None
+        if tipo_venta == 'Crédito':
+            plazo_dias_str = request.form.get('plazo_dias', '').strip()
+            if plazo_dias_str:
+                try:
+                    plazo_dias = int(plazo_dias_str)
+                    if plazo_dias < 1:
+                        return render_template('facturacion/form.html', 
+                                             error='El plazo debe ser mayor a 0 días')
+                except ValueError:
+                    return render_template('facturacion/form.html', 
+                                         error='El plazo debe ser un número válido')
+            else:
+                return render_template('facturacion/form.html', 
+                                     error='El plazo de crédito es obligatorio para ventas a crédito')
+        
+        if not fecha_str or not cliente:
+            return render_template('facturacion/form.html', 
+                                 error='Fecha y Cliente son requeridos')
+        
+        # Parsear fecha
+        try:
+            fecha = datetime.strptime(fecha_str, "%Y-%m-%d").date()
+        except ValueError:
+            return render_template('facturacion/form.html', 
+                                 error='Fecha inválida')
+        
+        # Obtener items del formulario
+        items = []
+        item_count = 0
+        while True:
+            cantidad_key = f'item_cantidad_{item_count}'
+            descripcion_key = f'item_descripcion_{item_count}'
+            precio_key = f'item_precio_{item_count}'
+            impuesto_key = f'item_impuesto_{item_count}'
+            
+            if cantidad_key not in request.form:
+                break
+            
+            cantidad = request.form.get(cantidad_key, '').strip()
+            descripcion = request.form.get(descripcion_key, '').strip()
+            precio = request.form.get(precio_key, '').strip()
+            impuesto = request.form.get(impuesto_key, 'exc')
+            
+            if cantidad and descripcion and precio:
+                try:
+                    items.append({
+                        'cantidad': float(cantidad),
+                        'descripcion': _to_upper(descripcion),
+                        'precio_unitario': float(precio),
+                        'impuesto': impuesto
+                    })
+                except ValueError:
+                    pass  # Ignorar items con valores inválidos
+            
+            item_count += 1
+        
+        if not items:
+            return render_template('facturacion/form.html', 
+                                 error='Debe ingresar al menos un item válido')
+        
+        # Crear factura
+        factura_id = facturacion.crear_factura(
+            fecha=fecha,
+            cliente=cliente,
+            ruc=ruc,
+            direccion=direccion,
+            nota_remision=nota_remision,
+            moneda=moneda,
+            tipo_venta=tipo_venta,
+            plazo_dias=plazo_dias,
+            items=items
+        )
+        
+        return redirect(url_for('facturacion_pdf', id=factura_id))
+        
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Error al generar factura: {e}")
+        print(error_trace)
+        return render_template('facturacion/form.html', 
+                             error=f'Error al generar factura: {str(e)}')
+
+
+@app.route("/facturacion/<int:id>/pdf", methods=["GET"])
+@auth.login_required
+@auth.permission_required('/facturacion')
+def facturacion_pdf(id):
+    """Genera el PDF de una factura"""
+    try:
+        datos = facturacion.obtener_factura_por_id(id)
+        if not datos:
+            return "Factura no encontrada", 404
+        
+        factura = datos['factura']
+        items = datos['items']
+        
+        # Calcular totales
+        items_dict = [{
+            'cantidad': item['cantidad'],
+            'descripcion': item['descripcion'],
+            'precio_unitario': float(item['precio_unitario']),
+            'impuesto': item['impuesto']
+        } for item in items]
+        
+        totales = facturacion.calcular_totales(items_dict)
+        totales['enLetras'] = facturacion.numero_a_letras(totales['total'], True, factura['moneda'])
+        
+        # Formatear fecha
+        fecha_obj = factura['fecha']
+        if isinstance(fecha_obj, str):
+            fecha_obj = datetime.strptime(fecha_obj, "%Y-%m-%d").date()
+        
+        dia = fecha_obj.day
+        mes = fecha_obj.month
+        año = fecha_obj.year
+        fecha_formateada = f"{dia:02d}-{mes:02d}-{año}"
+        
+        factura['fecha_formateada'] = fecha_formateada
+        
+        # Renderizar HTML
+        html = render_template('facturacion/pdf.html',
+                             factura=factura,
+                             items=items,
+                             totales=totales)
+        
+        # Generar PDF - intentar WeasyPrint primero, luego xhtml2pdf como alternativa
+        try:
+            from weasyprint import HTML
+            pdf = HTML(string=html, base_url=request.host_url).write_pdf()
+            response = make_response(pdf)
+            response.headers['Content-Type'] = 'application/pdf'
+            response.headers['Content-Disposition'] = f'inline; filename=factura_{factura["numero_factura"]}.pdf'
+            return response
+        except (ImportError, OSError, Exception) as e:
+            # Si WeasyPrint falla, intentar con xhtml2pdf
+            try:
+                from xhtml2pdf import pisa
+                from io import BytesIO
+                
+                pdf_buffer = BytesIO()
+                pisa_status = pisa.CreatePDF(html, dest=pdf_buffer)
+                
+                if pisa_status.err:
+                    # Si xhtml2pdf falla, mostrar HTML
+                    return html
+                
+                pdf_buffer.seek(0)
+                response = make_response(pdf_buffer.getvalue())
+                response.headers['Content-Type'] = 'application/pdf'
+                response.headers['Content-Disposition'] = f'inline; filename=factura_{factura["numero_factura"]}.pdf'
+                return response
+            except ImportError:
+                # Si ninguna librería está disponible, mostrar HTML
+                return html
+            except Exception as e2:
+                # Si hay otro error, mostrar HTML con mensaje
+                return html + f"<br><br><p style='color:red;'>Nota: No se pudo generar PDF automáticamente. Error: {str(e2)}</p>"
+            
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Error al generar PDF de factura: {e}")
+        print(error_trace)
+        return f"Error: {str(e)}", 500
+
+
+@app.route("/reportes/clientes", methods=["GET"], endpoint="reportes_clientes_index")
+@auth.login_required
+@auth.permission_required('/reportes/clientes')
+def reportes_clientes_index():
+    """Página de reportes de clientes"""
+    cliente_nombre = request.args.get('cliente', '').strip() or None
+    fecha_desde = request.args.get('fecha_desde', '').strip() or None
+    fecha_hasta = request.args.get('fecha_hasta', '').strip() or None
+    estado_filtro = request.args.get('estado', '').strip() or None
+    
+    # Obtener lista de clientes para el filtro
+    clientes = reportes_clientes.obtener_clientes_con_facturas()
+    
+    # Obtener reportes
+    reportes = reportes_clientes.obtener_reportes_cliente(
+        cliente_nombre=cliente_nombre,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        estado_pago_filtro=estado_filtro
+    )
+    
+    # Filtrar por estado si se especifica
+    if estado_filtro:
+        reportes = [r for r in reportes if r['estado_pago'].lower() == estado_filtro.lower()]
+    
+    return render_template('reportes/clientes.html',
+                         reportes=reportes,
+                         clientes=clientes,
+                         cliente_seleccionado=cliente_nombre or '',
+                         fecha_desde=fecha_desde or '',
+                         fecha_hasta=fecha_hasta or '',
+                         estado_seleccionado=estado_filtro or '')
+
+
+@app.route("/reportes/cuentas-a-pagar", methods=["GET"], endpoint="reportes_cuentas_a_pagar_index")
+@auth.login_required
+@auth.permission_required('/reportes/cuentas-a-pagar')
+def reportes_cuentas_a_pagar_index():
+    """Página de reportes de cuentas a pagar"""
+    proveedor_nombre = request.args.get('proveedor', '').strip() or None
+    fecha_desde = request.args.get('fecha_desde', '').strip() or None
+    fecha_hasta = request.args.get('fecha_hasta', '').strip() or None
+    estado_filtro = request.args.get('estado', '').strip() or None
+    
+    # Obtener lista de proveedores para el filtro
+    proveedores = reportes_clientes.obtener_proveedores_con_cuentas()
+    
+    # Obtener reportes
+    reportes = reportes_clientes.obtener_reportes_cuentas_a_pagar(
+        proveedor_nombre=proveedor_nombre,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        estado_pago_filtro=estado_filtro
+    )
+    
+    # Filtrar por estado si se especifica
+    if estado_filtro:
+        reportes = [r for r in reportes if r['estado_pago'].lower() == estado_filtro.lower()]
+    
+    return render_template('reportes/cuentas_a_pagar.html',
+                         reportes=reportes,
+                         proveedores=proveedores,
+                         proveedor_seleccionado=proveedor_nombre or '',
+                         fecha_desde=fecha_desde or '',
+                         fecha_hasta=fecha_hasta or '',
+                         estado_seleccionado=estado_filtro or '')
+
+
+@app.route("/reportes/cuentas-a-recibir", methods=["GET"], endpoint="reportes_cuentas_a_recibir_index")
+@auth.login_required
+@auth.permission_required('/reportes/cuentas-a-recibir')
+def reportes_cuentas_a_recibir_index():
+    """Página de reportes de cuentas a recibir"""
+    cliente_nombre = request.args.get('cliente', '').strip() or None
+    fecha_desde = request.args.get('fecha_desde', '').strip() or None
+    fecha_hasta = request.args.get('fecha_hasta', '').strip() or None
+    estado_filtro = request.args.get('estado', '').strip() or None
+    
+    # Obtener lista de clientes para el filtro
+    clientes = reportes_clientes.obtener_clientes_con_cuentas_a_recibir()
+    
+    # Obtener reportes
+    reportes = reportes_clientes.obtener_reportes_cuentas_a_recibir(
+        cliente_nombre=cliente_nombre,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        estado_pago_filtro=estado_filtro
+    )
+    
+    # Filtrar por estado si se especifica
+    if estado_filtro:
+        reportes = [r for r in reportes if r['estado_pago'].lower() == estado_filtro.lower()]
+    
+    return render_template('reportes/cuentas_a_recibir.html',
+                         reportes=reportes,
+                         clientes=clientes,
+                         cliente_seleccionado=cliente_nombre or '',
+                         fecha_desde=fecha_desde or '',
+                         fecha_hasta=fecha_hasta or '',
+                         estado_seleccionado=estado_filtro or '')
+
+
+@app.route("/api/facturacion/eliminar-factura/<int:factura_id>", methods=["DELETE"])
+@auth.login_required
+@auth.permission_required('/facturacion')
+def api_eliminar_factura(factura_id):
+    """API para eliminar una factura"""
+    try:
+        resultado = facturacion.eliminar_factura(factura_id)
+        if resultado:
+            return jsonify({'success': True, 'message': 'Factura eliminada correctamente'}), 200
+        else:
+            return jsonify({'success': False, 'message': 'Factura no encontrada'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error al eliminar factura: {str(e)}'}), 500
+
+
+@app.route("/api/facturacion/actualizar-factura/<int:factura_id>", methods=["POST"])
+@auth.login_required
+@auth.permission_required('/facturacion')
+def api_actualizar_factura(factura_id):
+    """API para actualizar fecha de pago y estado de una factura"""
+    try:
+        data = request.get_json()
+        fecha_pago = data.get('fecha_pago')
+        estado_pago = data.get('estado_pago')
+        
+        # Convertir fecha_pago vacía a None
+        if fecha_pago == '' or fecha_pago is None:
+            fecha_pago = None
+        else:
+            # Validar formato de fecha
+            try:
+                fecha_pago = datetime.strptime(fecha_pago, "%Y-%m-%d").date()
+            except ValueError:
+                return jsonify({'error': 'Formato de fecha inválido'}), 400
+        
+        # Validar estado_pago
+        estados_validos = ['Pagado', 'Pendiente', 'En día', 'Atrasado', 'Adelantado']
+        if estado_pago and estado_pago not in estados_validos:
+            return jsonify({'error': 'Estado de pago inválido'}), 400
+        
+        # Actualizar factura
+        resultado = facturacion.actualizar_factura(
+            factura_id=factura_id,
+            fecha_pago=fecha_pago,
+            estado_pago=estado_pago
+        )
+        
+        if resultado:
+            return jsonify({'success': True, 'message': 'Factura actualizada correctamente'})
+        else:
+            return jsonify({'error': 'No se pudo actualizar la factura'}), 400
+            
+    except Exception as e:
+        import traceback
+        print(f"Error al actualizar factura: {e}")
+        print(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+
+# ==================== RUTAS FINANCIERAS ====================
+
+@app.route("/financiero", methods=["GET"], endpoint="financiero_index")
+@auth.login_required
+@auth.permission_required('/financiero')
+def financiero_index():
+    """Menú principal del módulo financiero"""
+    return render_template('financiero/index.html')
+
+
+@app.route("/financiero/tipos-ingresos", methods=["GET"], endpoint="tipos_ingresos_index")
+@auth.login_required
+@auth.permission_required('/financiero/tipos-ingresos')
+def tipos_ingresos_index():
+    """Página principal de gestión de tipos de ingresos"""
+    categorias = financiero.obtener_categorias_ingresos()
+    tipos = financiero.obtener_tipos_ingresos()
+    
+    # Organizar tipos por categoría
+    tipos_por_categoria = {}
+    for tipo in tipos:
+        cat_id = tipo['categoria_id']
+        if cat_id not in tipos_por_categoria:
+            tipos_por_categoria[cat_id] = []
+        tipos_por_categoria[cat_id].append(tipo)
+    
+    error = request.args.get('error')
+    mensaje = request.args.get('mensaje')
+    
+    return render_template('financiero/tipos_ingresos/index.html',
+                         categorias=categorias,
+                         tipos_por_categoria=tipos_por_categoria,
+                         error=error,
+                         mensaje=mensaje)
+
+
+@app.route("/financiero/tipos-ingresos/categoria/nuevo", methods=["GET", "POST"], endpoint="categoria_ingreso_nuevo")
+@auth.login_required
+@auth.permission_required('/financiero/tipos-ingresos')
+def categoria_ingreso_nuevo():
+    """Crear nueva categoría de ingreso"""
+    if request.method == 'POST':
+        nombre = request.form.get('nombre', '').strip()
+        orden_str = request.form.get('orden', '').strip()
+        
+        if not nombre:
+            return redirect(url_for('tipos_ingresos_index', error='El nombre es obligatorio'))
+        
+        try:
+            orden = int(orden_str) if orden_str else None
+            financiero.crear_categoria_ingreso(nombre, orden)
+            return redirect(url_for('tipos_ingresos_index', mensaje='Categoría creada correctamente'))
+        except Exception as e:
+            return redirect(url_for('tipos_ingresos_index', error=f'Error al crear categoría: {str(e)}'))
+    
+    return render_template('financiero/tipos_ingresos/categoria_form.html', categoria=None)
+
+
+@app.route("/financiero/tipos-ingresos/categoria/<int:id>/editar", methods=["GET", "POST"], endpoint="categoria_ingreso_editar")
+@auth.login_required
+@auth.permission_required('/financiero/tipos-ingresos')
+def categoria_ingreso_editar(id):
+    """Editar categoría de ingreso"""
+    categoria = financiero.obtener_categoria_por_id(id)
+    if not categoria:
+        return redirect(url_for('tipos_ingresos_index', error='Categoría no encontrada'))
+    
+    if request.method == 'POST':
+        nombre = request.form.get('nombre', '').strip()
+        orden_str = request.form.get('orden', '').strip()
+        activo = request.form.get('activo') == 'on'
+        
+        if not nombre:
+            return redirect(url_for('tipos_ingresos_index', error='El nombre es obligatorio'))
+        
+        try:
+            orden = int(orden_str) if orden_str else None
+            financiero.actualizar_categoria_ingreso(id, nombre, orden, activo)
+            return redirect(url_for('tipos_ingresos_index', mensaje='Categoría actualizada correctamente'))
+        except Exception as e:
+            return redirect(url_for('tipos_ingresos_index', error=f'Error al actualizar categoría: {str(e)}'))
+    
+    return render_template('financiero/tipos_ingresos/categoria_form.html', categoria=dict(categoria))
+
+
+@app.route("/financiero/tipos-ingresos/categoria/<int:id>/eliminar", methods=["POST"], endpoint="categoria_ingreso_eliminar")
+@auth.login_required
+@auth.permission_required('/financiero/tipos-ingresos')
+def categoria_ingreso_eliminar(id):
+    """Eliminar categoría de ingreso"""
+    try:
+        financiero.eliminar_categoria_ingreso(id)
+        return redirect(url_for('tipos_ingresos_index', mensaje='Categoría eliminada correctamente'))
+    except Exception as e:
+        return redirect(url_for('tipos_ingresos_index', error=f'Error al eliminar categoría: {str(e)}'))
+
+
+@app.route("/financiero/tipos-ingresos/tipo/nuevo", methods=["GET", "POST"], endpoint="tipo_ingreso_nuevo")
+@auth.login_required
+@auth.permission_required('/financiero/tipos-ingresos')
+def tipo_ingreso_nuevo():
+    """Crear nuevo tipo de ingreso"""
+    categoria_id = request.args.get('categoria_id', type=int)
+    
+    if request.method == 'POST':
+        categoria_id = request.form.get('categoria_id', type=int)
+        descripcion = request.form.get('descripcion', '').strip()
+        orden_str = request.form.get('orden', '').strip()
+        
+        if not categoria_id or not descripcion:
+            return redirect(url_for('tipos_ingresos_index', error='Categoría y descripción son obligatorios'))
+        
+        try:
+            orden = int(orden_str) if orden_str else None
+            financiero.crear_tipo_ingreso(categoria_id, descripcion, orden)
+            return redirect(url_for('tipos_ingresos_index', mensaje='Tipo de ingreso creado correctamente'))
+        except Exception as e:
+            return redirect(url_for('tipos_ingresos_index', error=f'Error al crear tipo de ingreso: {str(e)}'))
+    
+    categorias = financiero.obtener_categorias_ingresos(activo=True)
+    categoria_seleccionada = None
+    if categoria_id:
+        categoria_seleccionada = financiero.obtener_categoria_por_id(categoria_id)
+    
+    return render_template('financiero/tipos_ingresos/tipo_form.html',
+                         tipo=None,
+                         categorias=categorias,
+                         categoria_seleccionada=dict(categoria_seleccionada) if categoria_seleccionada else None)
+
+
+@app.route("/financiero/tipos-ingresos/tipo/<int:id>/editar", methods=["GET", "POST"], endpoint="tipo_ingreso_editar")
+@auth.login_required
+@auth.permission_required('/financiero/tipos-ingresos')
+def tipo_ingreso_editar(id):
+    """Editar tipo de ingreso"""
+    tipo = financiero.obtener_tipo_ingreso_por_id(id)
+    if not tipo:
+        return redirect(url_for('tipos_ingresos_index', error='Tipo de ingreso no encontrado'))
+    
+    if request.method == 'POST':
+        descripcion = request.form.get('descripcion', '').strip()
+        orden_str = request.form.get('orden', '').strip()
+        activo = request.form.get('activo') == 'on'
+        
+        if not descripcion:
+            return redirect(url_for('tipos_ingresos_index', error='La descripción es obligatoria'))
+        
+        try:
+            orden = int(orden_str) if orden_str else None
+            financiero.actualizar_tipo_ingreso(id, descripcion, orden, activo)
+            return redirect(url_for('tipos_ingresos_index', mensaje='Tipo de ingreso actualizado correctamente'))
+        except Exception as e:
+            return redirect(url_for('tipos_ingresos_index', error=f'Error al actualizar tipo de ingreso: {str(e)}'))
+    
+    categorias = financiero.obtener_categorias_ingresos(activo=True)
+    return render_template('financiero/tipos_ingresos/tipo_form.html',
+                         tipo=dict(tipo),
+                         categorias=categorias,
+                         categoria_seleccionada=None)
+
+
+@app.route("/financiero/tipos-ingresos/tipo/<int:id>/eliminar", methods=["POST"], endpoint="tipo_ingreso_eliminar")
+@auth.login_required
+@auth.permission_required('/financiero/tipos-ingresos')
+def tipo_ingreso_eliminar(id):
+    """Eliminar tipo de ingreso"""
+    try:
+        financiero.eliminar_tipo_ingreso(id)
+        return redirect(url_for('tipos_ingresos_index', mensaje='Tipo de ingreso eliminado correctamente'))
+    except Exception as e:
+        return redirect(url_for('tipos_ingresos_index', error=f'Error al eliminar tipo de ingreso: {str(e)}'))
+
+
+# ==================== RUTAS PARA TIPOS DE GASTOS ====================
+
+@app.route("/financiero/tipos-gastos", methods=["GET"], endpoint="tipos_gastos_index")
+@auth.login_required
+@auth.permission_required('/financiero/tipos-gastos')
+def tipos_gastos_index():
+    """Página principal de gestión de tipos de gastos"""
+    categorias = financiero.obtener_categorias_gastos()
+    tipos = financiero.obtener_tipos_gastos()
+    
+    # Organizar tipos por categoría
+    tipos_por_categoria = {}
+    for tipo in tipos:
+        cat_id = tipo['categoria_id']
+        if cat_id not in tipos_por_categoria:
+            tipos_por_categoria[cat_id] = []
+        tipos_por_categoria[cat_id].append(tipo)
+    
+    error = request.args.get('error')
+    mensaje = request.args.get('mensaje')
+    
+    return render_template('financiero/tipos_gastos/index.html',
+                         categorias=categorias,
+                         tipos_por_categoria=tipos_por_categoria,
+                         error=error,
+                         mensaje=mensaje)
+
+
+@app.route("/financiero/tipos-gastos/categoria/nuevo", methods=["GET", "POST"], endpoint="categoria_gasto_nuevo")
+@auth.login_required
+@auth.permission_required('/financiero/tipos-gastos')
+def categoria_gasto_nuevo():
+    """Crear nueva categoría de gasto"""
+    if request.method == 'POST':
+        nombre = request.form.get('nombre', '').strip()
+        orden_str = request.form.get('orden', '').strip()
+        
+        if not nombre:
+            return redirect(url_for('tipos_gastos_index', error='El nombre es obligatorio'))
+        
+        try:
+            orden = int(orden_str) if orden_str else None
+            financiero.crear_categoria_gasto(nombre, orden)
+            return redirect(url_for('tipos_gastos_index', mensaje='Categoría creada correctamente'))
+        except Exception as e:
+            return redirect(url_for('tipos_gastos_index', error=f'Error al crear categoría: {str(e)}'))
+    
+    return render_template('financiero/tipos_gastos/categoria_form.html', categoria=None)
+
+
+@app.route("/financiero/tipos-gastos/categoria/<int:id>/editar", methods=["GET", "POST"], endpoint="categoria_gasto_editar")
+@auth.login_required
+@auth.permission_required('/financiero/tipos-gastos')
+def categoria_gasto_editar(id):
+    """Editar categoría de gasto"""
+    categoria = financiero.obtener_categoria_gasto_por_id(id)
+    if not categoria:
+        return redirect(url_for('tipos_gastos_index', error='Categoría no encontrada'))
+    
+    if request.method == 'POST':
+        nombre = request.form.get('nombre', '').strip()
+        orden_str = request.form.get('orden', '').strip()
+        activo = request.form.get('activo') == 'on'
+        
+        if not nombre:
+            return redirect(url_for('tipos_gastos_index', error='El nombre es obligatorio'))
+        
+        try:
+            orden = int(orden_str) if orden_str else None
+            financiero.actualizar_categoria_gasto(id, nombre, orden, activo)
+            return redirect(url_for('tipos_gastos_index', mensaje='Categoría actualizada correctamente'))
+        except Exception as e:
+            return redirect(url_for('tipos_gastos_index', error=f'Error al actualizar categoría: {str(e)}'))
+    
+    return render_template('financiero/tipos_gastos/categoria_form.html', categoria=dict(categoria))
+
+
+@app.route("/financiero/tipos-gastos/categoria/<int:id>/eliminar", methods=["POST"], endpoint="categoria_gasto_eliminar")
+@auth.login_required
+@auth.permission_required('/financiero/tipos-gastos')
+def categoria_gasto_eliminar(id):
+    """Eliminar categoría de gasto"""
+    try:
+        financiero.eliminar_categoria_gasto(id)
+        return redirect(url_for('tipos_gastos_index', mensaje='Categoría eliminada correctamente'))
+    except Exception as e:
+        return redirect(url_for('tipos_gastos_index', error=f'Error al eliminar categoría: {str(e)}'))
+
+
+@app.route("/financiero/tipos-gastos/tipo/nuevo", methods=["GET", "POST"], endpoint="tipo_gasto_nuevo")
+@auth.login_required
+@auth.permission_required('/financiero/tipos-gastos')
+def tipo_gasto_nuevo():
+    """Crear nuevo tipo de gasto"""
+    categoria_id = request.args.get('categoria_id', type=int)
+    
+    if request.method == 'POST':
+        categoria_id = request.form.get('categoria_id', type=int)
+        descripcion = request.form.get('descripcion', '').strip()
+        orden_str = request.form.get('orden', '').strip()
+        
+        if not categoria_id or not descripcion:
+            return redirect(url_for('tipos_gastos_index', error='Categoría y descripción son obligatorios'))
+        
+        try:
+            orden = int(orden_str) if orden_str else None
+            financiero.crear_tipo_gasto(categoria_id, descripcion, orden)
+            return redirect(url_for('tipos_gastos_index', mensaje='Tipo de gasto creado correctamente'))
+        except Exception as e:
+            return redirect(url_for('tipos_gastos_index', error=f'Error al crear tipo de gasto: {str(e)}'))
+    
+    categorias = financiero.obtener_categorias_gastos(activo=True)
+    categoria_seleccionada = None
+    if categoria_id:
+        categoria_seleccionada = financiero.obtener_categoria_gasto_por_id(categoria_id)
+    
+    return render_template('financiero/tipos_gastos/tipo_form.html',
+                         tipo=None,
+                         categorias=categorias,
+                         categoria_seleccionada=dict(categoria_seleccionada) if categoria_seleccionada else None)
+
+
+@app.route("/financiero/tipos-gastos/tipo/<int:id>/editar", methods=["GET", "POST"], endpoint="tipo_gasto_editar")
+@auth.login_required
+@auth.permission_required('/financiero/tipos-gastos')
+def tipo_gasto_editar(id):
+    """Editar tipo de gasto"""
+    tipo = financiero.obtener_tipo_gasto_por_id(id)
+    if not tipo:
+        return redirect(url_for('tipos_gastos_index', error='Tipo de gasto no encontrado'))
+    
+    if request.method == 'POST':
+        descripcion = request.form.get('descripcion', '').strip()
+        orden_str = request.form.get('orden', '').strip()
+        activo = request.form.get('activo') == 'on'
+        
+        if not descripcion:
+            return redirect(url_for('tipos_gastos_index', error='La descripción es obligatoria'))
+        
+        try:
+            orden = int(orden_str) if orden_str else None
+            financiero.actualizar_tipo_gasto(id, descripcion, orden, activo)
+            return redirect(url_for('tipos_gastos_index', mensaje='Tipo de gasto actualizado correctamente'))
+        except Exception as e:
+            return redirect(url_for('tipos_gastos_index', error=f'Error al actualizar tipo de gasto: {str(e)}'))
+    
+    categorias = financiero.obtener_categorias_gastos(activo=True)
+    return render_template('financiero/tipos_gastos/tipo_form.html',
+                         tipo=dict(tipo),
+                         categorias=categorias,
+                         categoria_seleccionada=None)
+
+
+@app.route("/financiero/tipos-gastos/tipo/<int:id>/eliminar", methods=["POST"], endpoint="tipo_gasto_eliminar")
+@auth.login_required
+@auth.permission_required('/financiero/tipos-gastos')
+def tipo_gasto_eliminar(id):
+    """Eliminar tipo de gasto"""
+    try:
+        financiero.eliminar_tipo_gasto(id)
+        return redirect(url_for('tipos_gastos_index', mensaje='Tipo de gasto eliminado correctamente'))
+    except Exception as e:
+        return redirect(url_for('tipos_gastos_index', error=f'Error al eliminar tipo de gasto: {str(e)}'))
+
+
+# ==================== RUTAS PARA PROYECTOS ====================
+
+@app.route("/financiero/proyectos", methods=["GET"], endpoint="proyectos_index")
+@auth.login_required
+@auth.permission_required('/financiero/proyectos')
+def proyectos_index():
+    """Página principal de gestión de proyectos"""
+    proyectos = financiero.obtener_proyectos()
+    error = request.args.get('error')
+    mensaje = request.args.get('mensaje')
+    
+    return render_template('financiero/proyectos/index.html',
+                         proyectos=proyectos,
+                         error=error,
+                         mensaje=mensaje)
+
+
+@app.route("/financiero/proyectos/nuevo", methods=["GET", "POST"], endpoint="proyecto_nuevo")
+@auth.login_required
+@auth.permission_required('/financiero/proyectos')
+def proyecto_nuevo():
+    """Crear nuevo proyecto"""
+    if request.method == 'POST':
+        nombre = request.form.get('nombre', '').strip()
+        
+        if not nombre:
+            return redirect(url_for('proyectos_index', error='El nombre es obligatorio'))
+        
+        try:
+            financiero.crear_proyecto(nombre)
+            return redirect(url_for('proyectos_index', mensaje='Proyecto creado correctamente'))
+        except Exception as e:
+            return redirect(url_for('proyectos_index', error=f'Error al crear proyecto: {str(e)}'))
+    
+    return render_template('financiero/proyectos/form.html', proyecto=None)
+
+
+@app.route("/financiero/proyectos/<int:id>/editar", methods=["GET", "POST"], endpoint="proyecto_editar")
+@auth.login_required
+@auth.permission_required('/financiero/proyectos')
+def proyecto_editar(id):
+    """Editar proyecto"""
+    proyecto = financiero.obtener_proyecto_por_id(id)
+    if not proyecto:
+        return redirect(url_for('proyectos_index', error='Proyecto no encontrado'))
+    
+    if request.method == 'POST':
+        nombre = request.form.get('nombre', '').strip()
+        activo = request.form.get('activo') == 'on'
+        
+        if not nombre:
+            return redirect(url_for('proyectos_index', error='El nombre es obligatorio'))
+        
+        try:
+            financiero.actualizar_proyecto(id, nombre, activo)
+            return redirect(url_for('proyectos_index', mensaje='Proyecto actualizado correctamente'))
+        except Exception as e:
+            return redirect(url_for('proyectos_index', error=f'Error al actualizar proyecto: {str(e)}'))
+    
+    return render_template('financiero/proyectos/form.html', proyecto=dict(proyecto))
+
+
+@app.route("/financiero/proyectos/<int:id>/eliminar", methods=["POST"], endpoint="proyecto_eliminar")
+@auth.login_required
+@auth.permission_required('/financiero/proyectos')
+def proyecto_eliminar(id):
+    """Eliminar proyecto"""
+    try:
+        financiero.eliminar_proyecto(id)
+        return redirect(url_for('proyectos_index', mensaje='Proyecto eliminado correctamente'))
+    except Exception as e:
+        return redirect(url_for('proyectos_index', error=f'Error al eliminar proyecto: {str(e)}'))
+
+
+# ==================== RUTAS PARA TIPOS DE DOCUMENTOS ====================
+
+@app.route("/financiero/tipos-documentos", methods=["GET"], endpoint="tipos_documentos_index")
+@auth.login_required
+@auth.permission_required('/financiero/tipos-documentos')
+def tipos_documentos_index():
+    """Página principal de gestión de tipos de documentos"""
+    tipos = financiero.obtener_tipos_documentos()
+    error = request.args.get('error')
+    mensaje = request.args.get('mensaje')
+    
+    return render_template('financiero/tipos_documentos/index.html',
+                         tipos=tipos,
+                         error=error,
+                         mensaje=mensaje)
+
+
+@app.route("/financiero/tipos-documentos/nuevo", methods=["GET", "POST"], endpoint="tipo_documento_nuevo")
+@auth.login_required
+@auth.permission_required('/financiero/tipos-documentos')
+def tipo_documento_nuevo():
+    """Crear nuevo tipo de documento"""
+    if request.method == 'POST':
+        nombre = request.form.get('nombre', '').strip()
+        
+        if not nombre:
+            return redirect(url_for('tipos_documentos_index', error='El nombre es obligatorio'))
+        
+        try:
+            financiero.crear_tipo_documento(nombre)
+            return redirect(url_for('tipos_documentos_index', mensaje='Tipo de documento creado correctamente'))
+        except Exception as e:
+            return redirect(url_for('tipos_documentos_index', error=f'Error al crear tipo de documento: {str(e)}'))
+    
+    return render_template('financiero/tipos_documentos/form.html', tipo=None)
+
+
+@app.route("/financiero/tipos-documentos/<int:id>/editar", methods=["GET", "POST"], endpoint="tipo_documento_editar")
+@auth.login_required
+@auth.permission_required('/financiero/tipos-documentos')
+def tipo_documento_editar(id):
+    """Editar tipo de documento"""
+    tipo = financiero.obtener_tipo_documento_por_id(id)
+    if not tipo:
+        return redirect(url_for('tipos_documentos_index', error='Tipo de documento no encontrado'))
+    
+    if request.method == 'POST':
+        nombre = request.form.get('nombre', '').strip()
+        activo = request.form.get('activo') == 'on'
+        
+        if not nombre:
+            return redirect(url_for('tipos_documentos_index', error='El nombre es obligatorio'))
+        
+        try:
+            financiero.actualizar_tipo_documento(id, nombre, activo)
+            return redirect(url_for('tipos_documentos_index', mensaje='Tipo de documento actualizado correctamente'))
+        except Exception as e:
+            return redirect(url_for('tipos_documentos_index', error=f'Error al actualizar tipo de documento: {str(e)}'))
+    
+    return render_template('financiero/tipos_documentos/form.html', tipo=dict(tipo))
+
+
+@app.route("/financiero/tipos-documentos/<int:id>/eliminar", methods=["POST"], endpoint="tipo_documento_eliminar")
+@auth.login_required
+@auth.permission_required('/financiero/tipos-documentos')
+def tipo_documento_eliminar(id):
+    """Eliminar tipo de documento"""
+    try:
+        financiero.eliminar_tipo_documento(id)
+        return redirect(url_for('tipos_documentos_index', mensaje='Tipo de documento eliminado correctamente'))
+    except Exception as e:
+        return redirect(url_for('tipos_documentos_index', error=f'Error al eliminar tipo de documento: {str(e)}'))
+
+
+# ==================== RUTAS PARA SALDOS INICIALES (BANCOS) ====================
+
+@app.route("/financiero/saldos-iniciales", methods=["GET"], endpoint="saldos_iniciales_index")
+@auth.login_required
+@auth.permission_required('/financiero/saldos-iniciales')
+def saldos_iniciales_index():
+    """Página principal de gestión de bancos y saldos iniciales"""
+    bancos = financiero.obtener_bancos()
+    fecha_saldo_inicial = financiero.obtener_fecha_saldo_inicial()
+    error = request.args.get('error')
+    mensaje = request.args.get('mensaje')
+    
+    return render_template('financiero/saldos_iniciales/index.html',
+                         bancos=bancos,
+                         fecha_saldo_inicial=fecha_saldo_inicial,
+                         error=error,
+                         mensaje=mensaje)
+
+
+@app.route("/api/financiero/actualizar-fecha-saldo-inicial", methods=["POST"], endpoint="actualizar_fecha_saldo_inicial")
+@auth.login_required
+@auth.permission_required('/financiero/saldos-iniciales')
+def actualizar_fecha_saldo_inicial():
+    """API para actualizar la fecha global de saldos iniciales"""
+    try:
+        data = request.get_json()
+        fecha_str = data.get('fecha', '').strip()
+        
+        if not fecha_str:
+            return jsonify({'success': False, 'message': 'La fecha es obligatoria'}), 400
+        
+        from datetime import datetime
+        fecha = datetime.strptime(fecha_str, "%Y-%m-%d").date()
+        
+        financiero.actualizar_fecha_saldo_inicial(fecha)
+        return jsonify({'success': True, 'message': 'Fecha de saldo inicial actualizada correctamente'}), 200
+    except ValueError:
+        return jsonify({'success': False, 'message': 'Formato de fecha inválido'}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error al actualizar fecha: {str(e)}'}), 500
+
+
+@app.route("/financiero/saldos-iniciales/nuevo", methods=["GET", "POST"], endpoint="banco_nuevo")
+@auth.login_required
+@auth.permission_required('/financiero/saldos-iniciales')
+def banco_nuevo():
+    """Crear nuevo banco"""
+    if request.method == 'POST':
+        nombre = request.form.get('nombre', '').strip()
+        saldo_inicial_str = request.form.get('saldo_inicial', '0').strip()
+        
+        if not nombre:
+            return redirect(url_for('saldos_iniciales_index', error='El nombre es obligatorio'))
+        
+        try:
+            saldo_inicial = float(saldo_inicial_str) if saldo_inicial_str else 0
+            financiero.crear_banco(nombre, saldo_inicial)
+            return redirect(url_for('saldos_iniciales_index', mensaje='Banco creado correctamente'))
+        except ValueError:
+            return redirect(url_for('saldos_iniciales_index', error='El saldo inicial debe ser un número válido'))
+        except Exception as e:
+            return redirect(url_for('saldos_iniciales_index', error=f'Error al crear banco: {str(e)}'))
+    
+    return render_template('financiero/saldos_iniciales/form.html', banco=None)
+
+
+@app.route("/financiero/saldos-iniciales/<int:id>/editar", methods=["GET", "POST"], endpoint="banco_editar")
+@auth.login_required
+@auth.permission_required('/financiero/saldos-iniciales')
+def banco_editar(id):
+    """Editar banco"""
+    banco = financiero.obtener_banco_por_id(id)
+    if not banco:
+        return redirect(url_for('saldos_iniciales_index', error='Banco no encontrado'))
+    
+    if request.method == 'POST':
+        nombre = request.form.get('nombre', '').strip()
+        saldo_inicial_str = request.form.get('saldo_inicial', '0').strip()
+        activo = request.form.get('activo') == 'on'
+        
+        if not nombre:
+            return redirect(url_for('saldos_iniciales_index', error='El nombre es obligatorio'))
+        
+        try:
+            saldo_inicial = float(saldo_inicial_str) if saldo_inicial_str else 0
+            financiero.actualizar_banco(id, nombre, saldo_inicial, activo)
+            return redirect(url_for('saldos_iniciales_index', mensaje='Banco actualizado correctamente'))
+        except ValueError:
+            return redirect(url_for('saldos_iniciales_index', error='El saldo inicial debe ser un número válido'))
+        except Exception as e:
+            return redirect(url_for('saldos_iniciales_index', error=f'Error al actualizar banco: {str(e)}'))
+    
+    return render_template('financiero/saldos_iniciales/form.html', banco=dict(banco))
+
+
+@app.route("/financiero/saldos-iniciales/<int:id>/eliminar", methods=["POST"], endpoint="banco_eliminar")
+@auth.login_required
+@auth.permission_required('/financiero/saldos-iniciales')
+def banco_eliminar(id):
+    """Eliminar banco"""
+    try:
+        financiero.eliminar_banco(id)
+        return redirect(url_for('saldos_iniciales_index', mensaje='Banco eliminado correctamente'))
+    except Exception as e:
+        return redirect(url_for('saldos_iniciales_index', error=f'Error al eliminar banco: {str(e)}'))
+
+
+# ==================== RUTAS PARA CUENTAS A RECIBIR ====================
+
+@app.route("/financiero/cuentas-a-recibir", methods=["GET"], endpoint="cuentas_a_recibir_index")
+@auth.login_required
+@auth.permission_required('/financiero/cuentas-a-recibir')
+def cuentas_a_recibir_index():
+    """Página principal de gestión de cuentas a recibir"""
+    # Obtener datos para los dropdowns
+    documentos = financiero.obtener_tipos_documentos(activo=True)
+    bancos = financiero.obtener_bancos(activo=True)
+    categorias_ingresos = financiero.obtener_categorias_ingresos(activo=True)
+    proyectos = financiero.obtener_proyectos(activo=True)
+    
+    # Obtener todos los tipos de ingresos para el JavaScript
+    tipos_ingresos_raw = financiero.obtener_tipos_ingresos(activo=True)
+    # Convertir DictRow a diccionarios normales para JSON
+    tipos_ingresos = [dict(tipo) for tipo in tipos_ingresos_raw]
+    
+    # Obtener clientes
+    try:
+        clientes_lista = presupuestos.obtener_clientes()
+        clientes = [c['nombre'] for c in clientes_lista]
+    except:
+        clientes = []
+    
+    # Filtros
+    filtros = {}
+    fecha_desde = request.args.get('fecha_desde', '').strip()
+    fecha_hasta = request.args.get('fecha_hasta', '').strip()
+    cliente_filtro = request.args.get('cliente', '').strip()
+    estado_filtro = request.args.get('estado', '').strip()
+    banco_filtro = request.args.get('banco_id', type=int)
+    
+    if fecha_desde:
+        filtros['fecha_desde'] = fecha_desde
+    if fecha_hasta:
+        filtros['fecha_hasta'] = fecha_hasta
+    if cliente_filtro:
+        filtros['cliente'] = cliente_filtro
+    if estado_filtro:
+        filtros['estado'] = estado_filtro
+    if banco_filtro:
+        filtros['banco_id'] = banco_filtro
+    
+    cuentas = financiero.obtener_cuentas_a_recibir(filtros if filtros else None)
+    error = request.args.get('error')
+    mensaje = request.args.get('mensaje')
+    
+    return render_template('financiero/cuentas_a_recibir/index.html',
+                         cuentas=cuentas,
+                         documentos=documentos,
+                         bancos=bancos,
+                         categorias_ingresos=categorias_ingresos,
+                         tipos_ingresos=tipos_ingresos,
+                         proyectos=proyectos,
+                         clientes=clientes,
+                         fecha_desde=fecha_desde,
+                         fecha_hasta=fecha_hasta,
+                         cliente_filtro=cliente_filtro,
+                         estado_filtro=estado_filtro,
+                         banco_filtro=banco_filtro,
+                         error=error,
+                         mensaje=mensaje)
+
+
+@app.route("/financiero/cuentas-a-recibir/nuevo", methods=["GET", "POST"], endpoint="cuenta_a_recibir_nuevo")
+@auth.login_required
+@auth.permission_required('/financiero/cuentas-a-recibir')
+def cuenta_a_recibir_nuevo():
+    """Crear nueva cuenta a recibir"""
+    if request.method == 'POST':
+        fecha_emision_str = request.form.get('fecha_emision', '').strip()
+        documento_id_str = request.form.get('documento_id', '').strip()
+        cuenta_id_str = request.form.get('cuenta', '').strip()
+        plano_cuenta = request.form.get('plano_cuenta', '').strip()
+        proyecto_id_str = request.form.get('proyecto', '').strip()
+        tipo = request.form.get('tipo', 'FCON').strip()
+        cliente = request.form.get('cliente', '').strip()
+        factura = request.form.get('factura', '').strip()
+        descripcion = request.form.get('descripcion', '').strip()
+        banco_id_str = request.form.get('banco_id', '').strip()
+        valor_str = request.form.get('valor', '0').strip()
+        num_cuotas_str = request.form.get('num_cuotas', '1').strip()
+        valor_cuota_str = request.form.get('valor_cuota', '').strip()
+        vencimiento_str = request.form.get('vencimiento', '').strip()
+        fecha_recibo_str = request.form.get('fecha_recibo', '').strip()
+        
+        # Validar campos obligatorios
+        if not fecha_emision_str:
+            return redirect(url_for('cuentas_a_recibir_index', error='La fecha de emisión es obligatoria'))
+        if not documento_id_str:
+            return redirect(url_for('cuentas_a_recibir_index', error='El documento es obligatorio'))
+        if not cuenta_id_str:
+            return redirect(url_for('cuentas_a_recibir_index', error='La cuenta es obligatoria'))
+        if not plano_cuenta:
+            return redirect(url_for('cuentas_a_recibir_index', error='El plano de cuenta es obligatorio'))
+        if not proyecto_id_str:
+            return redirect(url_for('cuentas_a_recibir_index', error='El proyecto es obligatorio'))
+        if not cliente:
+            return redirect(url_for('cuentas_a_recibir_index', error='El cliente es obligatorio'))
+        if not descripcion:
+            return redirect(url_for('cuentas_a_recibir_index', error='La descripción es obligatoria'))
+        if not banco_id_str:
+            return redirect(url_for('cuentas_a_recibir_index', error='El banco es obligatorio'))
+        if not valor_str:
+            return redirect(url_for('cuentas_a_recibir_index', error='El valor total es obligatorio'))
+        if not vencimiento_str:
+            return redirect(url_for('cuentas_a_recibir_index', error='El vencimiento es obligatorio'))
+        
+        try:
+            fecha_emision = datetime.strptime(fecha_emision_str, "%Y-%m-%d").date()
+            documento_id = int(documento_id_str)
+            cuenta_categoria_id = int(cuenta_id_str)
+            proyecto_id = int(proyecto_id_str) if proyecto_id_str else None
+            banco_id = int(banco_id_str)
+            valor_total = float(valor_str.replace('.', '').replace(',', '.'))
+            num_cuotas = int(num_cuotas_str) if num_cuotas_str else 1
+            vencimiento_base = datetime.strptime(vencimiento_str, "%Y-%m-%d").date()
+            fecha_recibo = datetime.strptime(fecha_recibo_str, "%Y-%m-%d").date() if fecha_recibo_str else None
+            
+            # Si es NCRE, hacer el valor negativo
+            if tipo == 'NCRE':
+                valor_total = -abs(valor_total)
+            
+            # Calcular valor de cuota
+            valor_cuota = abs(valor_total) / num_cuotas if num_cuotas > 0 else abs(valor_total)
+            # Si es NOCRE, el valor_cuota también debe ser negativo
+            if tipo == 'NOCRE':
+                valor_cuota = -valor_cuota
+            
+            # Calcular estado automáticamente
+            estado = 'RECIBIDO' if fecha_recibo else 'ABIERTO'
+            
+            # Si hay múltiples cuotas, crear un registro por cada cuota
+            from datetime import timedelta
+            cuentas_creadas = []
+            
+            for i in range(1, num_cuotas + 1):
+                # Calcular vencimiento de esta cuota (30 días de diferencia)
+                vencimiento_cuota = vencimiento_base + timedelta(days=(i - 1) * 30)
+                
+                # Calcular status_recibo si hay fecha_recibo
+                status_recibo = None
+                if fecha_recibo:
+                    if fecha_recibo < vencimiento_cuota:
+                        status_recibo = 'ADELANTADO'
+                    elif fecha_recibo > vencimiento_cuota:
+                        status_recibo = 'ATRASADO'
+                    else:
+                        status_recibo = 'EN DIA'
+                
+                cuenta_id = financiero.crear_cuenta_a_recibir(
+                    fecha_emision=fecha_emision,
+                    documento_id=documento_id,
+                    cuenta_id=cuenta_categoria_id,
+                    plano_cuenta=plano_cuenta,
+                    tipo=tipo,
+                    cliente=cliente,
+                    factura=factura if factura else None,
+                    descripcion=descripcion,
+                    banco_id=banco_id,
+                    valor=valor_total,  # Puede ser negativo si es NCRE
+                    cuotas=f"{i} de {num_cuotas}",
+                    valor_cuota=valor_cuota,  # Puede ser negativo si es NCRE
+                    vencimiento=vencimiento_cuota,
+                    fecha_recibo=fecha_recibo,
+                    estado=estado,
+                    proyecto_id=proyecto_id
+                )
+                cuentas_creadas.append(cuenta_id)
+            
+            mensaje = f'{"Cuenta" if num_cuotas == 1 else f"{num_cuotas} cuotas"} creada{"s" if num_cuotas > 1 else ""} correctamente'
+            return redirect(url_for('cuentas_a_recibir_index', mensaje=mensaje))
+        except ValueError as e:
+            return redirect(url_for('cuentas_a_recibir_index', error=f'Error en los datos: {str(e)}'))
+        except Exception as e:
+            return redirect(url_for('cuentas_a_recibir_index', error=f'Error al crear cuenta a recibir: {str(e)}'))
+    
+    # GET: mostrar formulario
+    documentos = financiero.obtener_tipos_documentos(activo=True)
+    bancos = financiero.obtener_bancos(activo=True)
+    categorias_ingresos = financiero.obtener_categorias_ingresos(activo=True)
+    tipos_ingresos_raw = financiero.obtener_tipos_ingresos(activo=True)
+    proyectos = financiero.obtener_proyectos(activo=True)
+    
+    # Convertir DictRow a diccionarios normales para JSON
+    tipos_ingresos = [dict(tipo) for tipo in tipos_ingresos_raw]
+    
+    # Obtener clientes
+    try:
+        clientes_lista = presupuestos.obtener_clientes()
+        clientes = [c['nombre'] for c in clientes_lista]
+    except:
+        clientes = []
+    
+    return render_template('financiero/cuentas_a_recibir/form.html',
+                         cuenta=None,
+                         documentos=documentos,
+                         bancos=bancos,
+                         categorias_ingresos=categorias_ingresos,
+                         tipos_ingresos=tipos_ingresos,
+                         proyectos=proyectos,
+                         clientes=clientes)
+
+
+@app.route("/financiero/cuentas-a-recibir/<int:id>/editar", methods=["GET", "POST"], endpoint="cuenta_a_recibir_editar")
+@auth.login_required
+@auth.permission_required('/financiero/cuentas-a-recibir')
+def cuenta_a_recibir_editar(id):
+    """Editar cuenta a recibir"""
+    cuenta = financiero.obtener_cuenta_a_recibir_por_id(id)
+    if not cuenta:
+        return redirect(url_for('cuentas_a_recibir_index', error='Cuenta a recibir no encontrada'))
+    
+    if request.method == 'POST':
+        fecha_emision_str = request.form.get('fecha_emision', '').strip()
+        documento_id_str = request.form.get('documento_id', '').strip()
+        cuenta_id_str = request.form.get('cuenta', '').strip()
+        plano_cuenta = request.form.get('plano_cuenta', '').strip()
+        proyecto_id_str = request.form.get('proyecto', '').strip()
+        tipo = request.form.get('tipo', 'FCON').strip()
+        cliente = request.form.get('cliente', '').strip()
+        factura = request.form.get('factura', '').strip()
+        descripcion = request.form.get('descripcion', '').strip()
+        banco_id_str = request.form.get('banco_id', '').strip()
+        valor_str = request.form.get('valor', '0').strip()
+        num_cuotas_str = request.form.get('num_cuotas', '1').strip()
+        valor_cuota_str = request.form.get('valor_cuota', '').strip()
+        vencimiento_str = request.form.get('vencimiento', '').strip()
+        fecha_recibo_str = request.form.get('fecha_recibo', '').strip()
+        
+        if not fecha_emision_str:
+            return redirect(url_for('cuentas_a_recibir_index', error='La fecha de emisión es obligatoria'))
+        
+        try:
+            fecha_emision = datetime.strptime(fecha_emision_str, "%Y-%m-%d").date()
+            documento_id = int(documento_id_str) if documento_id_str else None
+            cuenta_categoria_id = int(cuenta_id_str) if cuenta_id_str else None
+            proyecto_id = int(proyecto_id_str) if proyecto_id_str else None
+            banco_id = int(banco_id_str) if banco_id_str else None
+            valor = float(valor_str.replace('.', '').replace(',', '.')) if valor_str else 0
+            valor_cuota = float(valor_cuota_str.replace('.', '').replace(',', '.')) if valor_cuota_str else None
+            vencimiento = datetime.strptime(vencimiento_str, "%Y-%m-%d").date() if vencimiento_str else None
+            fecha_recibo = datetime.strptime(fecha_recibo_str, "%Y-%m-%d").date() if fecha_recibo_str else None
+            
+            # Si es NCRE, hacer el valor negativo
+            if tipo == 'NCRE':
+                valor = -abs(valor)
+                if valor_cuota is not None:
+                    valor_cuota = -abs(valor_cuota)
+            
+            # Calcular estado automáticamente
+            estado = 'RECIBIDO' if fecha_recibo else 'ABIERTO'
+            
+            financiero.actualizar_cuenta_a_recibir(
+                cuenta_id=id,
+                fecha_emision=fecha_emision,
+                documento_id=documento_id,
+                cuenta_categoria_id=cuenta_categoria_id,
+                plano_cuenta=plano_cuenta if plano_cuenta else None,
+                tipo=tipo,
+                cliente=cliente if cliente else None,
+                factura=factura if factura else None,
+                descripcion=descripcion if descripcion else None,
+                banco_id=banco_id,
+                valor=valor,
+                cuotas=request.form.get('cuotas', '').strip() if request.form.get('cuotas') else None,
+                valor_cuota=valor_cuota,
+                vencimiento=vencimiento,
+                fecha_recibo=fecha_recibo,
+                estado=estado,
+                proyecto_id=proyecto_id,
+                actualizar_fecha_recibo=True  # Siempre actualizar fecha_recibo cuando se edita desde el formulario
+            )
+            return redirect(url_for('cuentas_a_recibir_index', mensaje='Cuenta a recibir actualizada correctamente'))
+        except ValueError as e:
+            return redirect(url_for('cuentas_a_recibir_index', error=f'Error en los datos: {str(e)}'))
+        except Exception as e:
+            return redirect(url_for('cuentas_a_recibir_index', error=f'Error al actualizar cuenta a recibir: {str(e)}'))
+    
+    # GET: mostrar formulario
+    documentos = financiero.obtener_tipos_documentos(activo=True)
+    bancos = financiero.obtener_bancos(activo=True)
+    categorias_ingresos = financiero.obtener_categorias_ingresos(activo=True)
+    tipos_ingresos_raw = financiero.obtener_tipos_ingresos(activo=True)
+    proyectos = financiero.obtener_proyectos(activo=True)
+    
+    # Convertir DictRow a diccionarios normales para JSON
+    tipos_ingresos = [dict(tipo) for tipo in tipos_ingresos_raw]
+    
+    # Obtener clientes
+    try:
+        clientes_lista = presupuestos.obtener_clientes()
+        clientes = [c['nombre'] for c in clientes_lista]
+    except:
+        clientes = []
+    
+    return render_template('financiero/cuentas_a_recibir/form.html',
+                         cuenta=dict(cuenta),
+                         documentos=documentos,
+                         bancos=bancos,
+                         categorias_ingresos=categorias_ingresos,
+                         tipos_ingresos=tipos_ingresos,
+                         proyectos=proyectos,
+                         clientes=clientes)
+
+
+@app.route("/financiero/cuentas-a-recibir/<int:id>/eliminar", methods=["POST"], endpoint="cuenta_a_recibir_eliminar")
+@auth.login_required
+@auth.permission_required('/financiero/cuentas-a-recibir')
+def cuenta_a_recibir_eliminar(id):
+    """Eliminar cuenta a recibir"""
+    try:
+        financiero.eliminar_cuenta_a_recibir(id)
+        return redirect(url_for('cuentas_a_recibir_index', mensaje='Cuenta a recibir eliminada correctamente'))
+    except Exception as e:
+        return redirect(url_for('cuentas_a_recibir_index', error=f'Error al eliminar cuenta a recibir: {str(e)}'))
+
+
+@app.route("/financiero/cuentas-a-recibir/exportar-csv", methods=["GET"], endpoint="cuentas_a_recibir_exportar_csv")
+@auth.login_required
+@auth.permission_required('/financiero/cuentas-a-recibir')
+def cuentas_a_recibir_exportar_csv():
+    """Exportar cuentas a recibir a CSV"""
+    try:
+        # Aplicar los mismos filtros que en el index
+        filtros = {}
+        fecha_desde = request.args.get('fecha_desde', '')
+        fecha_hasta = request.args.get('fecha_hasta', '')
+        cliente_filtro = request.args.get('cliente', '')
+        estado_filtro = request.args.get('estado', '')
+        banco_filtro = request.args.get('banco_id', '')
+        
+        if fecha_desde:
+            filtros['fecha_desde'] = fecha_desde
+        if fecha_hasta:
+            filtros['fecha_hasta'] = fecha_hasta
+        if cliente_filtro:
+            filtros['cliente'] = cliente_filtro
+        if estado_filtro:
+            filtros['estado'] = estado_filtro
+        if banco_filtro:
+            filtros['banco_id'] = banco_filtro
+        
+        csv_content = financiero.exportar_cuentas_a_recibir_csv(filtros if filtros else None)
+        
+        response = make_response(csv_content)
+        response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+        response.headers['Content-Disposition'] = f'attachment; filename=cuentas_a_recibir_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+        return response
+    except Exception as e:
+        return redirect(url_for('cuentas_a_recibir_index', error=f'Error al exportar CSV: {str(e)}'))
+
+
+@app.route("/financiero/cuentas-a-recibir/importar-csv", methods=["POST"], endpoint="cuentas_a_recibir_importar_csv")
+@auth.login_required
+@auth.permission_required('/financiero/cuentas-a-recibir')
+def cuentas_a_recibir_importar_csv():
+    """Importar cuentas a recibir desde CSV"""
+    try:
+        if 'archivo_csv' not in request.files:
+            return redirect(url_for('cuentas_a_recibir_index', error='No se seleccionó ningún archivo'))
+        
+        archivo = request.files['archivo_csv']
+        if archivo.filename == '':
+            return redirect(url_for('cuentas_a_recibir_index', error='No se seleccionó ningún archivo'))
+        
+        if not archivo.filename.endswith('.csv'):
+            return redirect(url_for('cuentas_a_recibir_index', error='El archivo debe ser CSV'))
+        
+        csv_content = archivo.read().decode('utf-8')
+        cuentas_importadas, errores = financiero.importar_cuentas_a_recibir_csv(csv_content)
+        
+        mensaje = f'Se importaron {len(cuentas_importadas)} cuenta(s) correctamente'
+        if errores:
+            mensaje += f'. Errores: {len(errores)}'
+            # Guardar errores en sesión para mostrarlos
+            session['errores_importacion'] = errores
+        
+        return redirect(url_for('cuentas_a_recibir_index', mensaje=mensaje))
+    except Exception as e:
+        return redirect(url_for('cuentas_a_recibir_index', error=f'Error al importar CSV: {str(e)}'))
+
+
+# ==================== RUTAS PARA CUENTAS A PAGAR ====================
+
+@app.route("/financiero/cuentas-a-pagar", methods=["GET"], endpoint="cuentas_a_pagar_index")
+@auth.login_required
+@auth.permission_required('/financiero/cuentas-a-pagar')
+def cuentas_a_pagar_index():
+    """Listar cuentas a pagar"""
+    documentos = financiero.obtener_tipos_documentos(activo=True)
+    bancos = financiero.obtener_bancos(activo=True)
+    categorias_gastos = financiero.obtener_categorias_gastos(activo=True)
+    tipos_gastos_raw = financiero.obtener_tipos_gastos(activo=True)
+    tipos_gastos = [dict(tipo) for tipo in tipos_gastos_raw]  # Convertir DictRow a dict
+    proyectos = financiero.obtener_proyectos(activo=True)
+    
+    # Obtener lista de proveedores
+    proveedores_raw = presupuestos.obtener_proveedores(activo=True)
+    proveedores = [p['nombre'] for p in proveedores_raw if p.get('nombre')]
+    
+    # Filtros
+    filtros = {}
+    fecha_desde = request.args.get('fecha_desde', '')
+    fecha_hasta = request.args.get('fecha_hasta', '')
+    proveedor_filtro = request.args.get('proveedor', '')
+    estado_filtro = request.args.get('estado', '')
+    banco_filtro = request.args.get('banco_id', '')
+    
+    if fecha_desde:
+        filtros['fecha_desde'] = fecha_desde
+    if fecha_hasta:
+        filtros['fecha_hasta'] = fecha_hasta
+    if proveedor_filtro:
+        filtros['proveedor'] = proveedor_filtro
+    if estado_filtro:
+        filtros['estado'] = estado_filtro
+    if banco_filtro:
+        filtros['banco_id'] = banco_filtro
+    
+    cuentas = financiero.obtener_cuentas_a_pagar(filtros if filtros else None)
+    error = request.args.get('error')
+    mensaje = request.args.get('mensaje')
+    
+    return render_template('financiero/cuentas_a_pagar/index.html',
+                         cuentas=cuentas,
+                         documentos=documentos,
+                         bancos=bancos,
+                         categorias_gastos=categorias_gastos,
+                         tipos_gastos=tipos_gastos,
+                         proyectos=proyectos,
+                         proveedores=proveedores,
+                         fecha_desde=fecha_desde,
+                         fecha_hasta=fecha_hasta,
+                         proveedor_filtro=proveedor_filtro,
+                         estado_filtro=estado_filtro,
+                         banco_filtro=banco_filtro,
+                         error=error,
+                         mensaje=mensaje)
+
+
+@app.route("/financiero/cuentas-a-pagar/nuevo", methods=["GET", "POST"], endpoint="cuenta_a_pagar_nuevo")
+@auth.login_required
+@auth.permission_required('/financiero/cuentas-a-pagar')
+def cuenta_a_pagar_nuevo():
+    """Crear nueva cuenta a pagar"""
+    if request.method == 'POST':
+        fecha_emision_str = request.form.get('fecha_emision', '').strip()
+        documento_id_str = request.form.get('documento_id', '').strip()
+        cuenta_id_str = request.form.get('cuenta', '').strip()
+        plano_cuenta = request.form.get('plano_cuenta', '').strip()
+        proyecto_id_str = request.form.get('proyecto', '').strip()
+        tipo = request.form.get('tipo', 'FCON').strip()
+        proveedor = request.form.get('proveedor', '').strip()
+        factura = request.form.get('factura', '').strip()
+        descripcion = request.form.get('descripcion', '').strip()
+        banco_id_str = request.form.get('banco_id', '').strip()
+        valor_str = request.form.get('valor', '0').strip()
+        num_cuotas_str = request.form.get('num_cuotas', '1').strip()
+        valor_cuota_str = request.form.get('valor_cuota', '').strip()
+        vencimiento_str = request.form.get('vencimiento', '').strip()
+        fecha_pago_str = request.form.get('fecha_pago', '').strip()
+        
+        # Validar campos obligatorios
+        if not fecha_emision_str:
+            return redirect(url_for('cuentas_a_pagar_index', error='La fecha de emisión es obligatoria'))
+        if not documento_id_str:
+            return redirect(url_for('cuentas_a_pagar_index', error='El documento es obligatorio'))
+        if not cuenta_id_str:
+            return redirect(url_for('cuentas_a_pagar_index', error='La cuenta es obligatoria'))
+        if not plano_cuenta:
+            return redirect(url_for('cuentas_a_pagar_index', error='El plano de cuenta es obligatorio'))
+        if not proyecto_id_str:
+            return redirect(url_for('cuentas_a_pagar_index', error='El proyecto es obligatorio'))
+        if not proveedor:
+            return redirect(url_for('cuentas_a_pagar_index', error='El proveedor es obligatorio'))
+        if not descripcion:
+            return redirect(url_for('cuentas_a_pagar_index', error='La descripción es obligatoria'))
+        if not banco_id_str:
+            return redirect(url_for('cuentas_a_pagar_index', error='El banco es obligatorio'))
+        if not valor_str:
+            return redirect(url_for('cuentas_a_pagar_index', error='El valor total es obligatorio'))
+        if not vencimiento_str:
+            return redirect(url_for('cuentas_a_pagar_index', error='El vencimiento es obligatorio'))
+        
+        try:
+            fecha_emision = datetime.strptime(fecha_emision_str, "%Y-%m-%d").date()
+            documento_id = int(documento_id_str)
+            cuenta_categoria_id = int(cuenta_id_str)
+            proyecto_id = int(proyecto_id_str) if proyecto_id_str else None
+            banco_id = int(banco_id_str)
+            valor_total = float(valor_str.replace('.', '').replace(',', '.'))
+            num_cuotas = int(num_cuotas_str) if num_cuotas_str else 1
+            vencimiento_base = datetime.strptime(vencimiento_str, "%Y-%m-%d").date()
+            fecha_pago = datetime.strptime(fecha_pago_str, "%Y-%m-%d").date() if fecha_pago_str else None
+            
+            # Si es NCRE, hacer el valor negativo
+            if tipo == 'NCRE':
+                valor_total = -abs(valor_total)
+            
+            # Calcular valor de cuota
+            valor_cuota = abs(valor_total) / num_cuotas if num_cuotas > 0 else abs(valor_total)
+            # Si es NOCRE, el valor_cuota también debe ser negativo
+            if tipo == 'NOCRE':
+                valor_cuota = -valor_cuota
+            
+            # Calcular estado automáticamente
+            estado = 'PAGADO' if fecha_pago else 'ABIERTO'
+            
+            # Si hay múltiples cuotas, crear un registro por cada cuota
+            from datetime import timedelta
+            cuentas_creadas = []
+            
+            for i in range(1, num_cuotas + 1):
+                # Calcular vencimiento de esta cuota (30 días de diferencia)
+                vencimiento_cuota = vencimiento_base + timedelta(days=(i - 1) * 30)
+                
+                # Calcular status_pago si hay fecha_pago
+                status_pago = None
+                if fecha_pago:
+                    if fecha_pago < vencimiento_cuota:
+                        status_pago = 'ADELANTADO'
+                    elif fecha_pago > vencimiento_cuota:
+                        status_pago = 'ATRASADO'
+                    else:
+                        status_pago = 'EN DIA'
+                
+                cuenta_id = financiero.crear_cuenta_a_pagar(
+                    fecha_emision=fecha_emision,
+                    documento_id=documento_id,
+                    cuenta_id=cuenta_categoria_id,
+                    plano_cuenta=plano_cuenta,
+                    tipo=tipo,
+                    proveedor=proveedor,
+                    factura=factura if factura else None,
+                    descripcion=descripcion,
+                    banco_id=banco_id,
+                    valor=valor_total,  # Puede ser negativo si es NCRE
+                    cuotas=f"{i} de {num_cuotas}",
+                    valor_cuota=valor_cuota,  # Puede ser negativo si es NCRE
+                    vencimiento=vencimiento_cuota,
+                    fecha_pago=fecha_pago,
+                    estado=estado,
+                    proyecto_id=proyecto_id
+                )
+                cuentas_creadas.append(cuenta_id)
+            
+            mensaje = f'{"Cuenta" if num_cuotas == 1 else f"{num_cuotas} cuotas"} creada{"s" if num_cuotas > 1 else ""} correctamente'
+            return redirect(url_for('cuentas_a_pagar_index', mensaje=mensaje))
+        except ValueError as e:
+            return redirect(url_for('cuentas_a_pagar_index', error=f'Error en los datos: {str(e)}'))
+        except Exception as e:
+            return redirect(url_for('cuentas_a_pagar_index', error=f'Error al crear cuenta a pagar: {str(e)}'))
+    
+    # GET: mostrar formulario
+    documentos = financiero.obtener_tipos_documentos(activo=True)
+    bancos = financiero.obtener_bancos(activo=True)
+    categorias_gastos = financiero.obtener_categorias_gastos(activo=True)
+    tipos_gastos_raw = financiero.obtener_tipos_gastos(activo=True)
+    tipos_gastos = [dict(tipo) for tipo in tipos_gastos_raw]  # Convertir DictRow a dict
+    proyectos = financiero.obtener_proyectos(activo=True)
+    
+    # Obtener lista de proveedores
+    proveedores_raw = presupuestos.obtener_proveedores(activo=True)
+    proveedores = [p['nombre'] for p in proveedores_raw if p.get('nombre')]
+    
+    return render_template('financiero/cuentas_a_pagar/form.html',
+                         cuenta=None,
+                         documentos=documentos,
+                         bancos=bancos,
+                         categorias_gastos=categorias_gastos,
+                         tipos_gastos=tipos_gastos,
+                         proyectos=proyectos,
+                         proveedores=proveedores)
+
+
+@app.route("/financiero/cuentas-a-pagar/<int:id>/editar", methods=["GET", "POST"], endpoint="cuenta_a_pagar_editar")
+@auth.login_required
+@auth.permission_required('/financiero/cuentas-a-pagar')
+def cuenta_a_pagar_editar(id):
+    """Editar cuenta a pagar"""
+    cuenta = financiero.obtener_cuenta_a_pagar_por_id(id)
+    if not cuenta:
+        return redirect(url_for('cuentas_a_pagar_index', error='Cuenta a pagar no encontrada'))
+    
+    if request.method == 'POST':
+        fecha_emision_str = request.form.get('fecha_emision', '').strip()
+        documento_id_str = request.form.get('documento_id', '').strip()
+        cuenta_id_str = request.form.get('cuenta', '').strip()
+        plano_cuenta = request.form.get('plano_cuenta', '').strip()
+        proyecto_id_str = request.form.get('proyecto', '').strip()
+        tipo = request.form.get('tipo', 'FCON').strip()
+        proveedor = request.form.get('proveedor', '').strip()
+        factura = request.form.get('factura', '').strip()
+        descripcion = request.form.get('descripcion', '').strip()
+        banco_id_str = request.form.get('banco_id', '').strip()
+        valor_str = request.form.get('valor', '0').strip()
+        num_cuotas_str = request.form.get('num_cuotas', '1').strip()
+        valor_cuota_str = request.form.get('valor_cuota', '').strip()
+        vencimiento_str = request.form.get('vencimiento', '').strip()
+        fecha_pago_str = request.form.get('fecha_pago', '').strip()
+        
+        if not fecha_emision_str:
+            return redirect(url_for('cuentas_a_pagar_index', error='La fecha de emisión es obligatoria'))
+        
+        try:
+            fecha_emision = datetime.strptime(fecha_emision_str, "%Y-%m-%d").date()
+            documento_id = int(documento_id_str) if documento_id_str else None
+            cuenta_categoria_id = int(cuenta_id_str) if cuenta_id_str else None
+            proyecto_id = int(proyecto_id_str) if proyecto_id_str else None
+            banco_id = int(banco_id_str) if banco_id_str else None
+            valor = float(valor_str.replace('.', '').replace(',', '.')) if valor_str else 0
+            valor_cuota = float(valor_cuota_str.replace('.', '').replace(',', '.')) if valor_cuota_str else None
+            vencimiento = datetime.strptime(vencimiento_str, "%Y-%m-%d").date() if vencimiento_str else None
+            fecha_pago = datetime.strptime(fecha_pago_str, "%Y-%m-%d").date() if fecha_pago_str else None
+            
+            # Si es NCRE, hacer el valor negativo
+            if tipo == 'NCRE':
+                valor = -abs(valor)
+                if valor_cuota is not None:
+                    valor_cuota = -abs(valor_cuota)
+            
+            # Calcular estado automáticamente
+            estado = 'PAGADO' if fecha_pago else 'ABIERTO'
+            
+            financiero.actualizar_cuenta_a_pagar(
+                cuenta_id=id,
+                fecha_emision=fecha_emision,
+                documento_id=documento_id,
+                cuenta_categoria_id=cuenta_categoria_id,
+                plano_cuenta=plano_cuenta if plano_cuenta else None,
+                tipo=tipo,
+                proveedor=proveedor if proveedor else None,
+                factura=factura if factura else None,
+                descripcion=descripcion if descripcion else None,
+                banco_id=banco_id,
+                valor=valor,
+                cuotas=request.form.get('cuotas', '').strip() if request.form.get('cuotas') else None,
+                valor_cuota=valor_cuota,
+                vencimiento=vencimiento,
+                fecha_pago=fecha_pago,
+                estado=estado,
+                proyecto_id=proyecto_id,
+                actualizar_fecha_pago=True  # Siempre actualizar fecha_pago cuando se edita desde el formulario
+            )
+            return redirect(url_for('cuentas_a_pagar_index', mensaje='Cuenta a pagar actualizada correctamente'))
+        except ValueError as e:
+            return redirect(url_for('cuentas_a_pagar_index', error=f'Error en los datos: {str(e)}'))
+        except Exception as e:
+            return redirect(url_for('cuentas_a_pagar_index', error=f'Error al actualizar cuenta a pagar: {str(e)}'))
+    
+    # GET: mostrar formulario
+    documentos = financiero.obtener_tipos_documentos(activo=True)
+    bancos = financiero.obtener_bancos(activo=True)
+    categorias_gastos = financiero.obtener_categorias_gastos(activo=True)
+    tipos_gastos_raw = financiero.obtener_tipos_gastos(activo=True)
+    tipos_gastos = [dict(tipo) for tipo in tipos_gastos_raw]  # Convertir DictRow a dict
+    proyectos = financiero.obtener_proyectos(activo=True)
+    
+    # Obtener lista de proveedores
+    proveedores_raw = presupuestos.obtener_proveedores(activo=True)
+    proveedores = [p['nombre'] for p in proveedores_raw if p.get('nombre')]
+    
+    return render_template('financiero/cuentas_a_pagar/form.html',
+                         cuenta=cuenta,
+                         documentos=documentos,
+                         bancos=bancos,
+                         categorias_gastos=categorias_gastos,
+                         tipos_gastos=tipos_gastos,
+                         proyectos=proyectos,
+                         proveedores=proveedores)
+
+
+@app.route("/financiero/cuentas-a-pagar/<int:id>/eliminar", methods=["POST"], endpoint="cuenta_a_pagar_eliminar")
+@auth.login_required
+@auth.permission_required('/financiero/cuentas-a-pagar')
+def cuenta_a_pagar_eliminar(id):
+    """Eliminar cuenta a pagar"""
+    try:
+        financiero.eliminar_cuenta_a_pagar(id)
+        return redirect(url_for('cuentas_a_pagar_index', mensaje='Cuenta a pagar eliminada correctamente'))
+    except Exception as e:
+        return redirect(url_for('cuentas_a_pagar_index', error=f'Error al eliminar cuenta a pagar: {str(e)}'))
+
+
+@app.route("/financiero/cuentas-a-pagar/exportar-csv", methods=["GET"], endpoint="cuentas_a_pagar_exportar_csv")
+@auth.login_required
+@auth.permission_required('/financiero/cuentas-a-pagar')
+def cuentas_a_pagar_exportar_csv():
+    """Exportar cuentas a pagar a CSV"""
+    try:
+        # Aplicar los mismos filtros que en el index
+        filtros = {}
+        fecha_desde = request.args.get('fecha_desde', '')
+        fecha_hasta = request.args.get('fecha_hasta', '')
+        proveedor_filtro = request.args.get('proveedor', '')
+        estado_filtro = request.args.get('estado', '')
+        banco_filtro = request.args.get('banco_id', '')
+        
+        if fecha_desde:
+            filtros['fecha_desde'] = fecha_desde
+        if fecha_hasta:
+            filtros['fecha_hasta'] = fecha_hasta
+        if proveedor_filtro:
+            filtros['proveedor'] = proveedor_filtro
+        if estado_filtro:
+            filtros['estado'] = estado_filtro
+        if banco_filtro:
+            filtros['banco_id'] = banco_filtro
+        
+        csv_content = financiero.exportar_cuentas_a_pagar_csv(filtros if filtros else None)
+        
+        response = make_response(csv_content)
+        response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+        response.headers['Content-Disposition'] = f'attachment; filename=cuentas_a_pagar_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+        return response
+    except Exception as e:
+        return redirect(url_for('cuentas_a_pagar_index', error=f'Error al exportar CSV: {str(e)}'))
+
+
+@app.route("/financiero/cuentas-a-pagar/previsualizar-csv", methods=["POST"], endpoint="cuentas_a_pagar_previsualizar_csv")
+@auth.login_required
+@auth.permission_required('/financiero/cuentas-a-pagar')
+def cuentas_a_pagar_previsualizar_csv():
+    """Previsualizar cuentas a pagar desde CSV sin guardarlas"""
+    try:
+        if 'archivo_csv' not in request.files:
+            return jsonify({'error': 'No se seleccionó ningún archivo'}), 400
+        
+        archivo = request.files['archivo_csv']
+        if archivo.filename == '':
+            return jsonify({'error': 'No se seleccionó ningún archivo'}), 400
+        
+        if not archivo.filename.endswith('.csv'):
+            return jsonify({'error': 'El archivo debe ser CSV'}), 400
+        
+        csv_content = archivo.read().decode('utf-8')
+        datos_previsualizacion, errores = financiero.previsualizar_cuentas_a_pagar_csv(csv_content)
+        
+        # Guardar el contenido CSV en sesión para importarlo después
+        session['csv_content_para_importar'] = csv_content
+        
+        return jsonify({
+            'datos': datos_previsualizacion,
+            'errores': errores,
+            'total_filas': len(datos_previsualizacion),
+            'filas_validas': sum(1 for d in datos_previsualizacion if d['valida']),
+            'filas_invalidas': sum(1 for d in datos_previsualizacion if not d['valida'])
+        })
+    except Exception as e:
+        return jsonify({'error': f'Error al previsualizar CSV: {str(e)}'}), 500
+
+
+@app.route("/financiero/cuentas-a-pagar/importar-csv", methods=["POST"], endpoint="cuentas_a_pagar_importar_csv")
+@auth.login_required
+@auth.permission_required('/financiero/cuentas-a-pagar')
+def cuentas_a_pagar_importar_csv():
+    """Importar cuentas a pagar desde CSV (después de previsualización)"""
+    try:
+        # Obtener el contenido CSV de la sesión
+        csv_content = session.get('csv_content_para_importar')
+        if not csv_content:
+            return redirect(url_for('cuentas_a_pagar_index', error='No hay datos para importar. Por favor, previsualice el archivo primero.'))
+        
+        cuentas_importadas, errores = financiero.importar_cuentas_a_pagar_csv(csv_content)
+        
+        # Limpiar la sesión
+        session.pop('csv_content_para_importar', None)
+        
+        mensaje = f'Se importaron {len(cuentas_importadas)} cuenta(s) correctamente'
+        if errores:
+            mensaje += f'. Errores: {len(errores)}'
+            # Guardar errores en sesión para mostrarlos
+            session['errores_importacion'] = errores
+        
+        return redirect(url_for('cuentas_a_pagar_index', mensaje=mensaje))
+    except Exception as e:
+        return redirect(url_for('cuentas_a_pagar_index', error=f'Error al importar CSV: {str(e)}'))
+
 
 if __name__ == "__main__":
     # App unificada

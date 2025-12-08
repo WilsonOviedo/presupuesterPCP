@@ -9,13 +9,13 @@
   <form method="post" action="{% if cliente %}{{ url_for('clientes_editar', id=cliente.id) }}{% else %}{{ url_for('clientes_nuevo') }}{% endif %}" style="max-width:600px;">
     <div style="display:grid; gap:15px;">
       <div>
-        <label style="display:block; margin-bottom:5px; font-weight:600;">Nombre: *</label>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Razón Social: *</label>
         <input type="text" name="nombre" value="{{ cliente.nombre if cliente else '' }}" 
                required style="width:100%; padding:8px;">
       </div>
 
       <div>
-        <label style="display:block; margin-bottom:5px; font-weight:600;">Razón Social:</label>
+        <label style="display:block; margin-bottom:5px; font-weight:600;">Nombre Fantasía:</label>
         <input type="text" name="razon_social" value="{{ cliente.razon_social if cliente else '' }}" 
                style="width:100%; padding:8px;">
       </div>

@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Editar' if banco else 'Nuevo' }} Banco{% endblock %}
+{% block content %}
+  <div style="max-width: 600px; margin: 0 auto;">
+    <div style="margin-bottom: 20px;">
+      <a class="button button-secondary" href="{{ url_for('saldos_iniciales_index') }}">← Volver</a>
+    </div>
+
+    <h2>{{ 'Editar' if banco else 'Nuevo' }} Banco</h2>
+
+    <form method="POST" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; font-weight: 600; margin-bottom: 5px;">Nombre del Banco *:</label>
+        <input type="text" name="nombre" value="{{ banco.nombre if banco else '' }}" 
+               required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; text-transform: uppercase;"
+               oninput="this.value = this.value.toUpperCase()">
+        <small style="color: #666;">Ej: BANCO NACIONAL, BANCO ITAU (se convertirá a mayúsculas automáticamente)</small>
+      </div>
+
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; font-weight: 600; margin-bottom: 5px;">Saldo Inicial:</label>
+        <input type="number" name="saldo_inicial" step="0.01" 
+               value="{{ banco.saldo_inicial if banco else '0' }}" 
+               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        <small style="color: #666;">Saldo inicial del banco (opcional, por defecto 0)</small>
+      </div>
+
+      {% if banco %}
+      <div style="margin-bottom: 15px;">
+        <label style="display: flex; align-items: center; gap: 8px;">
+          <input type="checkbox" name="activo" {{ 'checked' if banco.activo else '' }}>
+          <span>Activo</span>
+        </label>
+      </div>
+      {% endif %}
+
+      <div style="margin-top: 20px; display: flex; gap: 10px;">
+        <button type="submit" class="button" style="background: #00BCD4;">💾 Guardar</button>
+        <a href="{{ url_for('saldos_iniciales_index') }}" class="button button-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}
+

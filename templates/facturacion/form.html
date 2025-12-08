@@ -1,0 +1,825 @@
+{% extends 'base.html' %}
+{% block title %}Facturación{% endblock %}
+{% block head %}
+  <style>
+    .form-container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .form-section {
+      background: #f9f9f9;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .form-section h3 {
+      margin-top: 0;
+      color: #333;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 15px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+    .form-group label {
+      font-weight: 600;
+      margin-bottom: 5px;
+      color: #555;
+    }
+    .form-group input,
+    .form-group select {
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .switch-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    .switch-container label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .switch-container input[type="checkbox"] {
+      width: 40px;
+      height: 20px;
+      cursor: pointer;
+    }
+    .items-container {
+      margin-top: 20px;
+    }
+    .item-row {
+      display: grid;
+      grid-template-columns: 80px 1fr 120px 100px 80px auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+    .item-row input,
+    .item-row select {
+      padding: 6px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .remove-btn {
+      padding: 6px 12px;
+      background: #f44336;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .remove-btn:hover {
+      background: #d32f2f;
+    }
+    .add-item-btn {
+      padding: 10px 20px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    .add-item-btn:hover {
+      background: #45a049;
+    }
+    .actions {
+      margin-top: 20px;
+      display: flex;
+      gap: 10px;
+    }
+    .error-box {
+      background: #ffebee;
+      color: #c62828;
+      padding: 15px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+      border: 1px solid #ef5350;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0,0,0,0.5);
+    }
+    .modal-content {
+      background-color: #fefefe;
+      margin: 5% auto;
+      padding: 20px;
+      border: 1px solid #888;
+      border-radius: 8px;
+      width: 90%;
+      max-width: 600px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #ddd;
+    }
+    .modal-header h3 {
+      margin: 0;
+    }
+    .close {
+      color: #aaa;
+      font-size: 28px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .close:hover,
+    .close:focus {
+      color: #000;
+    }
+    .modal-form-group {
+      margin-bottom: 15px;
+    }
+    .modal-form-group label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 5px;
+      color: #555;
+    }
+    .modal-form-group input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 20px;
+    }
+    .sugerencia-item:hover {
+      background: #f5f5f5 !important;
+    }
+  </style>
+{% endblock %}
+{% block content %}
+  <div class="form-container">
+    <div style="margin-bottom: 20px;">
+      <a class="button button-secondary" href="{{ url_for('menu') }}">← Volver</a>
+    </div>
+
+    <h2>Facturación</h2>
+
+    {% if error %}
+      <div class="error-box">
+        <strong>Error:</strong> {{ error }}
+      </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('facturacion_generar') }}" id="facturaForm">
+      <div class="form-section">
+        <h3>Información General</h3>
+        
+        <div class="switch-container">
+          <label>
+            <input type="checkbox" id="moneda" name="moneda" value="1">
+            <span>Moneda: <strong id="monedaLabel">Gs</strong> / USD</span>
+          </label>
+        </div>
+
+        <div class="switch-container">
+          <label>
+            <input type="checkbox" id="tipoVenta" name="tipoVenta" value="1">
+            <span>Tipo de venta: <strong id="tipoVentaLabel">Contado</strong> / Crédito</span>
+          </label>
+        </div>
+
+        <div class="form-group" id="plazoContainer" style="display: none;">
+          <label for="plazo_dias">Plazo de crédito (días) *:</label>
+          <input type="number" id="plazo_dias" name="plazo_dias" min="1" 
+                 placeholder="Ej: 30, 60, 90"
+                 value="{{ request.form.get('plazo_dias', '') or '' }}"
+                 style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+          <small style="display: block; margin-top: 5px; color: #666;">Obligatorio para ventas a crédito</small>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="fecha">Fecha:</label>
+            <input type="date" id="fecha" name="fecha" required 
+                   value="{{ request.form.get('fecha', '') or '' }}">
+          </div>
+
+          <div class="form-group">
+            <label for="cliente">Cliente:</label>
+            <div style="position: relative;">
+              <input type="text" id="cliente" name="cliente" required
+                     value="{{ request.form.get('cliente', '') or '' }}"
+                     list="clientes-list"
+                     placeholder="Escribe el nombre del cliente o selecciona de la lista"
+                     autocomplete="off"
+                     style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+              <datalist id="clientes-list">
+                <option value="__NUEVO_CLIENTE__" data-tipo="nuevo" style="background: #e8f5e9; font-weight: bold; color: #2e7d32;">➕ Registrar nuevo cliente</option>
+                {% for cliente in clientes %}
+                  <option value="{{ cliente.nombre }}" 
+                          data-ruc="{{ cliente.ruc or '' }}"
+                          data-direccion="{{ cliente.direccion or '' }}"
+                          data-tipo="cliente">
+                    {{ cliente.nombre }}{% if cliente.ruc %} - {{ cliente.ruc }}{% endif %}
+                  </option>
+                {% endfor %}
+              </datalist>
+              <div id="sugerenciasCliente" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-top: none; border-radius: 0 0 4px 4px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"></div>
+            </div>
+            <small style="display: block; margin-top: 5px; color: #666;">Escribe para buscar o selecciona de la lista. Usa "➕ Registrar nuevo cliente" para agregar uno nuevo.</small>
+          </div>
+
+          <div class="form-group">
+            <label for="ruc">RUC:</label>
+            <input type="text" id="ruc" name="ruc"
+                   value="{{ request.form.get('ruc', '') or '' }}"
+                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+          </div>
+
+          <div class="form-group">
+            <label for="direccion">Dirección:</label>
+            <input type="text" id="direccion" name="direccion"
+                   value="{{ request.form.get('direccion', '') or '' }}"
+                   style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+          </div>
+
+          <div class="form-group">
+            <label for="remision">Nota de remisión:</label>
+            <input type="text" id="remision" name="remision"
+                   value="{{ request.form.get('remision', '') or '' }}">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <h3>Items</h3>
+        <div class="items-container" id="itemsContainer">
+          <!-- Los items se agregarán dinámicamente aquí -->
+        </div>
+        <button type="button" class="add-item-btn" id="addItemBtn">➕ Agregar Item</button>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="button" style="background: #2196F3; padding: 12px 24px;">
+          📄 Generar Factura
+        </button>
+        <a href="{{ url_for('menu') }}" class="button button-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+
+  <!-- Modal para agregar nuevo cliente -->
+  <div id="modalCliente" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Agregar Nuevo Cliente</h3>
+        <span class="close" id="closeModal">&times;</span>
+      </div>
+      <form id="formNuevoCliente">
+        <div class="modal-form-group">
+          <label for="cliente_nombre">Nombre *:</label>
+          <input type="text" id="cliente_nombre" name="nombre" required>
+        </div>
+        <div class="modal-form-group">
+          <label for="cliente_razon_social">Razón Social:</label>
+          <input type="text" id="cliente_razon_social" name="razon_social">
+        </div>
+        <div class="modal-form-group">
+          <label for="cliente_ruc">RUC:</label>
+          <input type="text" id="cliente_ruc" name="ruc">
+        </div>
+        <div class="modal-form-group">
+          <label for="cliente_direccion">Dirección:</label>
+          <input type="text" id="cliente_direccion" name="direccion">
+        </div>
+        <div class="modal-form-group">
+          <label for="cliente_telefono">Teléfono:</label>
+          <input type="text" id="cliente_telefono" name="telefono">
+        </div>
+        <div class="modal-form-group">
+          <label for="cliente_email">Email:</label>
+          <input type="email" id="cliente_email" name="email">
+        </div>
+        <div class="modal-actions">
+          <button type="submit" class="button" style="background: #4CAF50;">Guardar Cliente</button>
+          <button type="button" class="button button-secondary" id="cancelarCliente">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}
+{% block scripts %}
+  <script>
+    (function() {
+      let itemCount = 0;
+      const itemsContainer = document.getElementById('itemsContainer');
+      const addItemBtn = document.getElementById('addItemBtn');
+      const form = document.getElementById('facturaForm');
+      const monedaCheckbox = document.getElementById('moneda');
+      const tipoVentaCheckbox = document.getElementById('tipoVenta');
+      const monedaLabel = document.getElementById('monedaLabel');
+      const tipoVentaLabel = document.getElementById('tipoVentaLabel');
+
+      // Inicializar fecha con fecha actual
+      const fechaInput = document.getElementById('fecha');
+      if (!fechaInput.value) {
+        const today = new Date().toISOString().split('T')[0];
+        fechaInput.value = today;
+      }
+
+      // Actualizar labels de switches
+      monedaCheckbox.addEventListener('change', function() {
+        monedaLabel.textContent = this.checked ? 'USD' : 'Gs';
+      });
+
+      const plazoContainer = document.getElementById('plazoContainer');
+      const plazoDias = document.getElementById('plazo_dias');
+
+      tipoVentaCheckbox.addEventListener('change', function() {
+        const esCredito = this.checked;
+        tipoVentaLabel.textContent = esCredito ? 'Crédito' : 'Contado';
+        
+        // Mostrar/ocultar campo de plazo
+        if (plazoContainer) {
+          plazoContainer.style.display = esCredito ? 'block' : 'none';
+        }
+        
+        // Hacer obligatorio el plazo si es crédito
+        if (plazoDias) {
+          plazoDias.required = esCredito;
+          if (!esCredito) {
+            plazoDias.value = '';
+          }
+        }
+      });
+
+      // Modal para agregar nuevo cliente
+      const modalCliente = document.getElementById('modalCliente');
+      const closeModal = document.getElementById('closeModal');
+      const cancelarCliente = document.getElementById('cancelarCliente');
+      const formNuevoCliente = document.getElementById('formNuevoCliente');
+
+      // Cerrar modal
+      if (closeModal) {
+        closeModal.addEventListener('click', function() {
+          modalCliente.style.display = 'none';
+          formNuevoCliente.reset();
+        });
+      }
+
+      if (cancelarCliente) {
+        cancelarCliente.addEventListener('click', function() {
+          modalCliente.style.display = 'none';
+          formNuevoCliente.reset();
+        });
+      }
+
+      // Cerrar modal al hacer clic fuera
+      window.addEventListener('click', function(event) {
+        if (event.target === modalCliente) {
+          modalCliente.style.display = 'none';
+          formNuevoCliente.reset();
+        }
+      });
+
+      // Enviar formulario de nuevo cliente
+      if (formNuevoCliente) {
+        formNuevoCliente.addEventListener('submit', function(e) {
+          e.preventDefault();
+          
+          const formData = new FormData(formNuevoCliente);
+          const data = {};
+          formData.forEach((value, key) => {
+            data[key] = value.trim();
+          });
+
+          fetch('/api/facturacion/crear-cliente', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+          })
+          .then(response => response.json())
+          .then(result => {
+            if (result.error) {
+              alert('Error: ' + result.error);
+              } else {
+                // Agregar nuevo cliente al datalist
+                const datalist = document.getElementById('clientes-list');
+                if (datalist) {
+                  const option = document.createElement('option');
+                  option.value = result.cliente.nombre;
+                  option.setAttribute('data-ruc', result.cliente.ruc || '');
+                  option.setAttribute('data-direccion', result.cliente.direccion || '');
+                  option.setAttribute('data-tipo', 'cliente');
+                  option.textContent = result.cliente.nombre + (result.cliente.ruc ? ' - ' + result.cliente.ruc : '');
+                  // Insertar después de la opción de nuevo cliente
+                  const nuevoClienteOption = datalist.querySelector('option[value="__NUEVO_CLIENTE__"]');
+                  if (nuevoClienteOption && nuevoClienteOption.nextSibling) {
+                    datalist.insertBefore(option, nuevoClienteOption.nextSibling);
+                  } else {
+                    datalist.appendChild(option);
+                  }
+                }
+                
+                // Establecer el nombre del cliente en el input
+                const clienteInput = document.getElementById('cliente');
+                if (clienteInput) {
+                  clienteInput.value = result.cliente.nombre;
+                }
+                
+                // Autocompletar RUC y dirección
+                const rucInput = document.getElementById('ruc');
+                const direccionInput = document.getElementById('direccion');
+                if (rucInput) rucInput.value = result.cliente.ruc || '';
+                if (direccionInput) direccionInput.value = result.cliente.direccion || '';
+              
+              // Cerrar modal y limpiar formulario
+              modalCliente.style.display = 'none';
+              formNuevoCliente.reset();
+            }
+          })
+          .catch(error => {
+            console.error('Error:', error);
+            alert('Error al crear cliente: ' + error.message);
+          });
+        });
+      }
+
+      // Autocompletar datos del cliente
+      const clienteInput = document.getElementById('cliente');
+      const rucInput = document.getElementById('ruc');
+      const direccionInput = document.getElementById('direccion');
+      const sugerenciasCliente = document.getElementById('sugerenciasCliente');
+      let clienteTimeout = null;
+      let clienteSeleccionado = null;
+
+      function autocompletarDatosCliente(ruc, direccion) {
+        if (ruc) rucInput.value = ruc;
+        if (direccion) direccionInput.value = direccion;
+      }
+
+      function mostrarSugerencias(texto) {
+        if (!texto || texto.trim() === '') {
+          sugerenciasCliente.style.display = 'none';
+          return;
+        }
+
+        const datalist = document.getElementById('clientes-list');
+        const options = datalist.querySelectorAll('option');
+        const textoUpper = texto.toUpperCase();
+        const sugerencias = [];
+
+        // Agregar opción de nuevo cliente si el texto coincide
+        if ('REGISTRAR NUEVO CLIENTE'.includes(textoUpper) || 'NUEVO CLIENTE'.includes(textoUpper) || textoUpper.length === 0) {
+          sugerencias.push({
+            value: '__NUEVO_CLIENTE__',
+            texto: '➕ Registrar nuevo cliente',
+            tipo: 'nuevo',
+            ruc: '',
+            direccion: ''
+          });
+        }
+
+        // Buscar clientes que coincidan
+        options.forEach(option => {
+          const tipo = option.getAttribute('data-tipo');
+          if (tipo === 'cliente') {
+            const nombre = option.value.toUpperCase();
+            if (nombre.includes(textoUpper)) {
+              sugerencias.push({
+                value: option.value,
+                texto: option.textContent || option.value,
+                tipo: 'cliente',
+                ruc: option.getAttribute('data-ruc') || '',
+                direccion: option.getAttribute('data-direccion') || ''
+              });
+            }
+          }
+        });
+
+        // Mostrar sugerencias
+        if (sugerencias.length > 0) {
+          sugerenciasCliente.innerHTML = '';
+          sugerencias.forEach((sug) => {
+            const div = document.createElement('div');
+            div.className = 'sugerencia-item';
+            div.style.cssText = 'padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #eee; ' +
+              (sug.tipo === 'nuevo' ? 'background: #e8f5e9; font-weight: bold; color: #2e7d32;' : '');
+            div.textContent = sug.texto;
+            div.dataset.value = sug.value;
+            div.dataset.ruc = sug.ruc;
+            div.dataset.direccion = sug.direccion;
+            div.dataset.tipo = sug.tipo;
+            
+            div.addEventListener('click', function() {
+              if (sug.tipo === 'nuevo') {
+                clienteInput.value = '';
+                modalCliente.style.display = 'block';
+                document.getElementById('cliente_nombre').focus();
+              } else {
+                clienteInput.value = sug.value;
+                autocompletarDatosCliente(sug.ruc, sug.direccion);
+                clienteSeleccionado = sug;
+              }
+              sugerenciasCliente.style.display = 'none';
+            });
+
+            div.addEventListener('mouseenter', function() {
+              this.style.background = '#f5f5f5';
+            });
+            div.addEventListener('mouseleave', function() {
+              this.style.background = sug.tipo === 'nuevo' ? '#e8f5e9' : 'white';
+            });
+
+            sugerenciasCliente.appendChild(div);
+          });
+          sugerenciasCliente.style.display = 'block';
+        } else {
+          sugerenciasCliente.style.display = 'none';
+        }
+      }
+
+      // Manejar input del cliente con autocompletado
+      if (clienteInput) {
+        clienteInput.addEventListener('input', function() {
+          const nombre = this.value.trim();
+          
+          // Limpiar timeout anterior
+          if (clienteTimeout) {
+            clearTimeout(clienteTimeout);
+          }
+
+          // Mostrar sugerencias mientras escribe
+          mostrarSugerencias(nombre);
+
+          // Si el campo está vacío, limpiar RUC y dirección
+          if (!nombre) {
+            rucInput.value = '';
+            direccionInput.value = '';
+            clienteSeleccionado = null;
+            return;
+          }
+
+          // Esperar 500ms después de que el usuario deje de escribir para buscar por API
+          clienteTimeout = setTimeout(function() {
+            // Si ya hay un cliente seleccionado de las sugerencias, no buscar por API
+            if (clienteSeleccionado && clienteSeleccionado.value === nombre) {
+              return;
+            }
+
+            // Buscar en el datalist primero
+            const datalist = document.getElementById('clientes-list');
+            if (datalist) {
+              const options = datalist.querySelectorAll('option');
+              for (let option of options) {
+                if (option.value.toUpperCase() === nombre.toUpperCase() && option.getAttribute('data-tipo') === 'cliente') {
+                  const ruc = option.getAttribute('data-ruc') || '';
+                  const direccion = option.getAttribute('data-direccion') || '';
+                  autocompletarDatosCliente(ruc, direccion);
+                  clienteSeleccionado = {
+                    value: option.value,
+                    ruc: ruc,
+                    direccion: direccion
+                  };
+                  return;
+                }
+              }
+            }
+
+            // Si no se encuentra en el datalist, buscar por API
+            fetch(`/api/facturacion/buscar-cliente?nombre=${encodeURIComponent(nombre)}`)
+              .then(response => {
+                if (response.ok) {
+                  return response.json();
+                }
+                return null;
+              })
+              .then(data => {
+                if (data && !data.error) {
+                  autocompletarDatosCliente(data.ruc, data.direccion);
+                  clienteSeleccionado = {
+                    value: data.nombre,
+                    ruc: data.ruc,
+                    direccion: data.direccion
+                  };
+                }
+              })
+              .catch(error => {
+                console.log('Error al buscar cliente:', error);
+              });
+          }, 500);
+        });
+
+        // Ocultar sugerencias al hacer clic fuera
+        document.addEventListener('click', function(e) {
+          if (e.target !== clienteInput && !sugerenciasCliente.contains(e.target)) {
+            sugerenciasCliente.style.display = 'none';
+          }
+        });
+
+        // Manejar teclas en el input
+        clienteInput.addEventListener('keydown', function(e) {
+          if (e.key === 'Escape') {
+            sugerenciasCliente.style.display = 'none';
+          }
+        });
+      }
+
+      // Funciones para formatear números con separadores de miles
+      function formatearNumero(numero) {
+        if (!numero) return '';
+        // Eliminar todo lo que no sea número o punto decimal
+        const numeroLimpio = numero.toString().replace(/[^\d.]/g, '');
+        if (!numeroLimpio) return '';
+        
+        // Separar parte entera y decimal
+        const partes = numeroLimpio.split('.');
+        const parteEntera = partes[0];
+        const parteDecimal = partes[1];
+        
+        // Formatear parte entera con separadores de miles
+        const parteEnteraFormateada = parteEntera.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        
+        // Reconstruir número
+        if (parteDecimal !== undefined) {
+          return parteEnteraFormateada + '.' + parteDecimal;
+        }
+        return parteEnteraFormateada;
+      }
+
+      function limpiarFormatoNumero(numero) {
+        if (!numero) return '';
+        // Eliminar todos los separadores de miles (puntos) y dejar solo números y punto decimal
+        return numero.toString().replace(/\./g, '').replace(/[^\d.]/g, '');
+      }
+
+      function addItemRow(cantidad = '', descripcion = '', precioUnitario = '', impuesto = '10') {
+        const row = document.createElement('div');
+        row.className = 'item-row';
+        row.dataset.itemIndex = itemCount;
+
+        // Limpiar formato del precio si viene formateado
+        const precioLimpio = limpiarFormatoNumero(precioUnitario);
+        const precioFormateado = precioLimpio ? formatearNumero(precioLimpio) : '';
+
+        row.innerHTML = `
+          <input type="number" name="item_cantidad_${itemCount}" 
+                 placeholder="Cant." value="${cantidad}" step="0.01" min="0" required>
+          <input type="text" name="item_descripcion_${itemCount}" 
+                 placeholder="Descripción" value="${descripcion}" required>
+          <input type="text" name="item_precio_${itemCount}" 
+                 placeholder="Precio Unit." value="${precioFormateado}" 
+                 class="precio-input" required>
+          <select name="item_impuesto_${itemCount}">
+            <option value="exc" ${impuesto === 'exc' ? 'selected' : ''}>Exenta</option>
+            <option value="5" ${impuesto === '5' ? 'selected' : ''}>5%</option>
+            <option value="10" ${impuesto === '10' ? 'selected' : ''}>10%</option>
+          </select>
+          <button type="button" class="remove-btn" onclick="removeItem(this)">✕</button>
+        `;
+
+        itemsContainer.appendChild(row);
+        
+        // Agregar event listener para formatear precio mientras se escribe
+        const precioInput = row.querySelector('input[name^="item_precio"]');
+        if (precioInput) {
+          precioInput.addEventListener('input', function(e) {
+            const valor = e.target.value;
+            const cursorPos = e.target.selectionStart;
+            
+            // Limpiar formato anterior
+            const valorLimpio = limpiarFormatoNumero(valor);
+            
+            // Formatear
+            const valorFormateado = formatearNumero(valorLimpio);
+            
+            // Actualizar valor
+            e.target.value = valorFormateado;
+            
+            // Restaurar posición del cursor (aproximada)
+            const diferencia = valorFormateado.length - valor.length;
+            const nuevaPos = Math.max(0, cursorPos + diferencia);
+            e.target.setSelectionRange(nuevaPos, nuevaPos);
+          });
+
+          precioInput.addEventListener('blur', function(e) {
+            // Asegurar formato correcto al perder el foco
+            const valorLimpio = limpiarFormatoNumero(e.target.value);
+            e.target.value = formatearNumero(valorLimpio);
+          });
+        }
+
+        itemCount++;
+
+        // Auto-focus en el campo de cantidad
+        const cantidadInput = row.querySelector('input[name^="item_cantidad"]');
+        if (cantidadInput) {
+          setTimeout(() => cantidadInput.focus(), 50);
+        }
+      }
+
+      window.removeItem = function(btn) {
+        const row = btn.closest('.item-row');
+        if (row) {
+          row.remove();
+        }
+      };
+
+      // Agregar primer item al cargar
+      addItemRow();
+
+      // Agregar item al hacer clic
+      addItemBtn.addEventListener('click', () => {
+        addItemRow();
+      });
+
+      // Manejar Enter en campos de precio para agregar nuevo item
+      itemsContainer.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          const precioInput = e.target;
+          if (precioInput.name && precioInput.name.startsWith('item_precio_')) {
+            e.preventDefault();
+            const row = precioInput.closest('.item-row');
+            const cantidadInput = row.querySelector('input[name^="item_cantidad"]');
+            const descripcionInput = row.querySelector('input[name^="item_descripcion"]');
+            
+            // Validar que ambos campos tengan valor
+            if (cantidadInput.value.trim() && descripcionInput.value.trim() && precioInput.value.trim()) {
+              addItemRow();
+            }
+          }
+        }
+      });
+
+      // Validar formulario antes de enviar (esto se ejecuta después de limpiar formato)
+      form.addEventListener('submit', function(e) {
+        // Primero limpiar formato de precios
+        const precioInputs = form.querySelectorAll('input[name^="item_precio"]');
+        precioInputs.forEach(input => {
+          const valorLimpio = limpiarFormatoNumero(input.value);
+          input.value = valorLimpio;
+        });
+
+        // Validar si es crédito
+        if (tipoVentaCheckbox.checked) {
+          if (!plazoDias || !plazoDias.value.trim()) {
+            e.preventDefault();
+            alert('El plazo de crédito es obligatorio para ventas a crédito.');
+            if (plazoDias) {
+              plazoDias.focus();
+            }
+            return false;
+          }
+        }
+
+        // Luego validar items
+        const items = itemsContainer.querySelectorAll('.item-row');
+        let hasValidItem = false;
+
+        items.forEach(row => {
+          const cantidad = row.querySelector('input[name^="item_cantidad"]').value.trim();
+          const descripcion = row.querySelector('input[name^="item_descripcion"]').value.trim();
+          const precio = row.querySelector('input[name^="item_precio"]').value.trim();
+          
+          if (cantidad && descripcion && precio) {
+            hasValidItem = true;
+          }
+        });
+
+        if (!hasValidItem) {
+          e.preventDefault();
+          alert('Por favor, ingresa al menos un item completo (cantidad, descripción y precio).');
+          return false;
+        }
+      });
+    })();
+  </script>
+{% endblock %}
+

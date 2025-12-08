@@ -847,7 +847,7 @@ def generar_numero_presupuesto():
 
 def crear_lista_material(cliente_id, numero_lista, titulo=None, descripcion=None,
                          estado='borrador', fecha_lista=None, validez_dias=30,
-                         iva_porcentaje=21.0, notas=None):
+                         iva_porcentaje=10.0, notas=None):
     """Crea una nueva lista de materiales"""
     conn, cur = conectar()
     try:
@@ -993,7 +993,7 @@ def obtener_lista_material_por_id(lista_material_id):
             tiempo_total += float(item.get('tiempo_ejecucion_horas', 0) or 0)
         
         # Calcular totales de la lista
-        iva_porcentaje = float(lista.get('iva_porcentaje', 21.0) or 21.0)
+        iva_porcentaje = float(lista.get('iva_porcentaje', 10.0) or 10.0)
         iva_monto = subtotal_total * iva_porcentaje / 100
         total = subtotal_total + iva_monto
         

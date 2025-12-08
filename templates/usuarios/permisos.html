@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}Permisos de Usuario{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('usuarios_index') }}">← Volver</a>
+  </div>
+  <h2>Permisos de Usuario: {{ usuario.username }}</h2>
+
+  {% if usuario.es_admin %}
+  <div style="background:#fff3cd; color:#856404; padding:15px; border-radius:6px; margin-bottom:20px; border:1px solid #ffeaa7;">
+    <strong>⚠️ Usuario Administrador:</strong> Este usuario tiene acceso a todas las rutas. No es necesario asignar permisos específicos.
+  </div>
+  {% endif %}
+
+  {% if error %}
+  <div style="background:#fee; color:#c33; padding:12px; border-radius:6px; margin-bottom:20px; border:1px solid #fcc;">
+    {{ error }}
+  </div>
+  {% endif %}
+
+  {% if mensaje %}
+  <div style="background:#d4edda; color:#155724; padding:12px; border-radius:6px; margin-bottom:20px; border:1px solid #c3e6cb;">
+    {{ mensaje }}
+  </div>
+  {% endif %}
+
+  <form method="POST" style="max-width:800px;">
+    <div class="card">
+      <h3>Permisos Disponibles</h3>
+      <p style="color:#666; margin-bottom:20px;">Selecciona las rutas a las que este usuario tendrá acceso:</p>
+      
+      <div style="max-height:500px; overflow-y:auto; border:1px solid #ddd; border-radius:4px; padding:10px;">
+        {% for permiso in permisos_disponibles %}
+        <div style="margin-bottom:10px; padding:10px; background:#f9f9f9; border-radius:4px;">
+          <label style="display:flex; align-items:start; gap:10px; cursor:pointer;">
+            <input type="checkbox" name="permisos" value="{{ permiso.id }}" 
+                   {{ 'checked' if permiso.id in permisos_usuario_ids else '' }}
+                   {{ 'disabled' if usuario.es_admin else '' }}
+                   style="margin-top:3px;">
+            <div style="flex:1;">
+              <div style="font-weight:600; margin-bottom:3px;">{{ permiso.nombre }}</div>
+              <div style="color:#666; font-size:0.9em; margin-bottom:3px;">{{ permiso.ruta }}</div>
+              {% if permiso.descripcion %}
+              <div style="color:#888; font-size:0.85em;">{{ permiso.descripcion }}</div>
+              {% endif %}
+            </div>
+          </label>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div style="margin-top:20px;">
+        <button type="submit" class="button" {{ 'disabled' if usuario.es_admin else '' }}>Guardar Permisos</button>
+        <a href="{{ url_for('usuarios_index') }}" class="button button-secondary">Cancelar</a>
+      </div>
+    </div>
+  </form>
+{% endblock %}
+

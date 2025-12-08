@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Factura</title>
+    <style>
+        @media print {
+            .print-button, .menu-button {
+                display: none;
+            }
+        }
+        .print-button, .menu-button {
+            position: fixed;
+            top: 20px;
+            z-index: 1000;
+            padding: 12px 24px;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            text-decoration: none;
+            display: inline-block;
+        }
+        .print-button {
+            right: 20px;
+            background: #2196F3;
+        }
+        .print-button:hover {
+            background: #1976D2;
+        }
+        .print-button:active {
+            transform: scale(0.98);
+        }
+        .menu-button {
+            left: 20px;
+            background: #4CAF50;
+        }
+        .menu-button:hover {
+            background: #45a049;
+        }
+        .menu-button:active {
+            transform: scale(0.98);
+        }
+        @page {
+            size: A4;
+            margin: 0;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            font-size: 12px;
+            background: url('img/Scan Factura.jpg') no-repeat fixed;
+            background-size: 210mm 297mm;
+        }
+        #factura {
+            position: relative;
+            width: 210mm;
+            height: 134mm;
+        }
+        /* Estilo para elementos de factura */
+        #fecha {
+            position: absolute;
+            top: 46mm;
+            left: 51mm;
+            font-size: 12px;
+        }
+        #cliente {
+            position: absolute;
+            top: 51mm;
+            left: 51mm;
+            font-size: 12px;
+        }
+        #direccion {
+            position: absolute;
+            top: 56mm;
+            left: 51mm;
+            font-size: 12px;
+        }
+        #checkContado {
+            position: absolute;
+            top: 46mm;
+            left: 177mm;
+            font-size: 12px;
+        }
+        #checkCredito {
+            position: absolute;
+            top: 46mm;
+            left: 191mm;
+            font-size: 12px;
+        }
+        #ruc {
+            position: absolute;
+            top: 51mm;
+            left: 160mm;
+            font-size: 12px;
+        }
+        #notaRemision {
+            position: absolute;
+            top: 56mm;
+            left: 160mm;
+            font-size: 12px;
+        }
+        #checkGs {
+            position: absolute;
+            top: 131.5mm;
+            left: 31mm;
+            font-size: 12px;
+        }
+        #checkUSD {
+            position: absolute;
+            top: 131.5mm;
+            left: 43mm;
+            font-size: 12px;
+        }
+        #letrasTotal {
+            position: absolute;
+            top: 129mm;
+            left: 67mm;
+            font-size: 9px;
+            font-weight: bold;
+            width: 320px;
+            height: 30px;
+            overflow-y: auto;
+        }
+        #iva5Total {
+            position: absolute;
+            top: 137mm;
+            left: 57mm;
+            font-size: 12px;
+        }
+        #iva10Total {
+            position: absolute;
+            top: 137mm;
+            left: 97mm;
+            font-size: 12px;
+        }
+        #ivaTotal {
+            position: absolute;
+            top: 137mm;
+            left: 148mm;
+            font-size: 12px;
+        }
+        #items-container {
+            position: absolute;
+            top: 58mm;
+            left: 2mm;
+            width: 270px;
+        }
+        #items {
+            position: relative;
+            font-size: 8px;
+            width: 100%;
+            height: auto;
+            line-height: 1.2;
+            margin-bottom: 1mm;
+        }
+        #itemCantidad {
+            position: absolute;
+            left: 14mm;
+            width: 15mm;
+        }
+        #itemDescripcion {
+            position: absolute;
+            left: 23mm;
+            width: 70mm;
+            word-wrap: break-word;
+        }
+        #itemPrecioUnit {
+            position: absolute;
+            left: 96mm;
+            width: 20mm;
+            text-align: right;
+        }
+        #itemExcentas {
+            position: absolute;
+            left: 119mm;
+            width: 20mm;
+            text-align: right;
+        }
+        #itemIVA5 {
+            position: absolute;
+            left: 145mm;
+            width: 20mm;
+            text-align: right;
+        }
+        #itemIVA10 {
+            position: absolute;
+            left: 171mm;
+            width: 20mm;
+            text-align: right;
+        }
+        #subTotalExcentas {
+            position: absolute;
+            left: 1mm;
+        }
+        #total {
+            position: absolute;
+            top: 129mm;
+            left: 167mm;
+            font-size: 15px;
+        }
+        #ivaExcentaSubTotal {
+            position: absolute;
+            top: 122mm;
+            left: 122mm;
+            font-size: 15px;
+        }
+        #iva5SubTotal {
+            position: absolute;
+            top: 122mm;
+            left: 147mm;
+            font-size: 15px;
+        }
+        #iva10SubTotal {
+            position: absolute;
+            top: 122mm;
+            left: 174mm;
+            font-size: 15px;
+        }
+        #facturaRepetida {
+            margin-top: 6mm;
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="menu-button">🏠 Menú Principal</a>
+    <button class="print-button" onclick="window.print()">🖨️ Imprimir Factura</button>
+    <div id="factura">
+        <div id="cliente">{{ factura.cliente or '' }}</div>
+        <div id="fecha">{{ factura.fecha_formateada or '' }}</div>
+        <div id="ruc">{{ factura.ruc or '' }}</div>
+        <div id="direccion">{{ factura.direccion or '' }}</div>
+        <div id="notaRemision">{{ factura.nota_remision or '' }}</div>
+        <div id="checkContado">{{ 'X' if factura.tipo_venta == 'Contado' else '' }}</div>
+        <div id="checkCredito">{{ 'X' if factura.tipo_venta == 'Crédito' else '' }}</div>
+        <div id="checkGs">{{ 'X' if factura.moneda == 'Gs' else '' }}</div>
+        <div id="checkUSD">{{ 'X' if factura.moneda == 'USD' else '' }}</div>
+        
+        <div id="items-container">
+            {% for item in items %}
+            <div id="items" style="top: {{ loop.index0 * 4 }}mm;">
+                <div id="itemCantidad">{{ item.cantidad or '' }}</div>
+                <div id="itemDescripcion">{{ item.descripcion or '' }}</div>
+                <div id="itemPrecioUnit">{{ "{:,.0f}".format(item.precio_unitario) if item.precio_unitario else '' }}</div>
+                <div id="itemExcentas">{{ "{:,.0f}".format(item.cantidad * item.precio_unitario) if item.impuesto == 'exc' and item.precio_unitario else '' }}</div>
+                <div id="itemIVA5">{{ "{:,.0f}".format(item.cantidad * item.precio_unitario) if item.impuesto == '5' and item.precio_unitario else '' }}</div>
+                <div id="itemIVA10">{{ "{:,.0f}".format(item.cantidad * item.precio_unitario) if item.impuesto == '10' and item.precio_unitario else '' }}</div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div id="ivaExcentaSubTotal">{{ "{:,.0f}".format(totales.excentas) }}</div>
+        <div id="iva5SubTotal">{{ "{:,.0f}".format(totales.iva5) }}</div>
+        <div id="iva10SubTotal">{{ "{:,.0f}".format(totales.iva10) }}</div>
+        <div id="ivaTotal">{{ "{:,.2f}".format(totales.ivaTotal) }}</div>
+        <div id="total">{{ "{:,.0f}".format(totales.total) }}</div>
+        <div id="letrasTotal">{{ totales.enLetras or '' }}</div>
+        <div id="iva5Total">{{ "{:,.2f}".format(totales.iva5Total) }}</div>
+        <div id="iva10Total">{{ "{:,.2f}".format(totales.iva10Total) }}</div>
+    </div>
+
+    <div id="facturaRepetida">
+        <div id="factura">
+            <div id="cliente">{{ factura.cliente or '' }}</div>
+            <div id="fecha">{{ factura.fecha_formateada or '' }}</div>
+            <div id="ruc">{{ factura.ruc or '' }}</div>
+            <div id="direccion">{{ factura.direccion or '' }}</div>
+            <div id="notaRemision">{{ factura.nota_remision or '' }}</div>
+            <div id="checkContado">{{ 'X' if factura.tipo_venta == 'Contado' else '' }}</div>
+            <div id="checkCredito">{{ 'X' if factura.tipo_venta == 'Crédito' else '' }}</div>
+            <div id="checkGs">{{ 'X' if factura.moneda == 'Gs' else '' }}</div>
+            <div id="checkUSD">{{ 'X' if factura.moneda == 'USD' else '' }}</div>
+            
+            <div id="items-container">
+                {% for item in items %}
+                <div id="items" style="top: {{ loop.index0 * 4 }}mm;">
+                    <div id="itemCantidad">{{ item.cantidad or '' }}</div>
+                    <div id="itemDescripcion">{{ item.descripcion or '' }}</div>
+                    <div id="itemPrecioUnit">{{ "{:,.0f}".format(item.precio_unitario) if item.precio_unitario else '' }}</div>
+                    <div id="itemExcentas">{{ "{:,.0f}".format(item.cantidad * item.precio_unitario) if item.impuesto == 'exc' and item.precio_unitario else '' }}</div>
+                    <div id="itemIVA5">{{ "{:,.0f}".format(item.cantidad * item.precio_unitario) if item.impuesto == '5' and item.precio_unitario else '' }}</div>
+                    <div id="itemIVA10">{{ "{:,.0f}".format(item.cantidad * item.precio_unitario) if item.impuesto == '10' and item.precio_unitario else '' }}</div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div id="ivaExcentaSubTotal">{{ "{:,.0f}".format(totales.excentas) }}</div>
+            <div id="iva5SubTotal">{{ "{:,.0f}".format(totales.iva5) }}</div>
+            <div id="iva10SubTotal">{{ "{:,.0f}".format(totales.iva10) }}</div>
+            <div id="ivaTotal">{{ "{:,.2f}".format(totales.ivaTotal) }}</div>
+            <div id="total">{{ "{:,.0f}".format(totales.total) }}</div>
+            <div id="letrasTotal">{{ totales.enLetras or '' }}</div>
+            <div id="iva5Total">{{ "{:,.2f}".format(totales.iva5Total) }}</div>
+            <div id="iva10Total">{{ "{:,.2f}".format(totales.iva10Total) }}</div>
+        </div>
+    </div>
+</body>
+</html>
+

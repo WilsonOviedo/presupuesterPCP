@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Editar' if usuario else 'Nuevo' }} Usuario{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('usuarios_index') }}">← Volver</a>
+  </div>
+  <h2>{{ 'Editar' if usuario else 'Nuevo' }} Usuario</h2>
+
+  {% if error %}
+  <div style="background:#fee; color:#c33; padding:12px; border-radius:6px; margin-bottom:20px; border:1px solid #fcc;">
+    {{ error }}
+  </div>
+  {% endif %}
+
+  <form method="POST" style="max-width:600px;">
+    <div class="card">
+      {% if not usuario %}
+      <div style="background:#e3f2fd; padding:15px; border-radius:6px; margin-bottom:20px; border:1px solid #90caf9;">
+        <strong>ℹ️ Nuevo Usuario:</strong> Solo ingresa el email. El usuario completará su registro (username y contraseña) al iniciar sesión por primera vez.
+      </div>
+      
+      <div style="margin-bottom:15px;">
+        <label for="email" style="display:block; margin-bottom:5px; font-weight:600;">Email: <span style="color:red;">*</span></label>
+        <input type="email" id="email" name="email" 
+               value="{{ usuario.email if usuario else '' }}" 
+               required
+               style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+        <small style="color:#666;">El usuario usará este email para iniciar sesión y completar su registro</small>
+      </div>
+      {% else %}
+      <div style="margin-bottom:15px;">
+        <label for="username" style="display:block; margin-bottom:5px; font-weight:600;">Usuario:</label>
+        <input type="text" id="username" name="username" 
+               value="{{ usuario.username if usuario else '' }}" 
+               readonly
+               style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; background:#f5f5f5;">
+        <small style="color:#666;">No se puede cambiar el nombre de usuario</small>
+      </div>
+
+      <div style="margin-bottom:15px;">
+        <label for="nombre_completo" style="display:block; margin-bottom:5px; font-weight:600;">Nombre Completo:</label>
+        <input type="text" id="nombre_completo" name="nombre_completo" 
+               value="{{ usuario.nombre_completo if usuario else '' }}" 
+               style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+      </div>
+
+      <div style="margin-bottom:15px;">
+        <label for="email" style="display:block; margin-bottom:5px; font-weight:600;">Email:</label>
+        <input type="email" id="email" name="email" 
+               value="{{ usuario.email if usuario else '' }}" 
+               style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+      </div>
+
+      <div style="margin-bottom:15px;">
+        <label for="password" style="display:block; margin-bottom:5px; font-weight:600;">Nueva Contraseña (dejar vacío para no cambiar):</label>
+        <input type="password" id="password" name="password" 
+               style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+      </div>
+      {% endif %}
+
+      <div style="margin-bottom:15px;">
+        <label style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" name="es_admin" value="1" 
+                 {{ 'checked' if usuario and usuario.es_admin else '' }}>
+          <span style="font-weight:600;">Usuario Administrador</span>
+        </label>
+        <small style="color:#666;">Los administradores tienen acceso a todas las rutas</small>
+      </div>
+
+      <div style="margin-bottom:15px;">
+        <label style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" name="activo" value="1" 
+                 {{ 'checked' if not usuario or usuario.activo else '' }}>
+          <span style="font-weight:600;">Usuario Activo</span>
+        </label>
+      </div>
+
+      <div style="margin-top:20px;">
+        <button type="submit" class="button">Guardar</button>
+        <a href="{{ url_for('usuarios_index') }}" class="button button-secondary">Cancelar</a>
+      </div>
+    </div>
+  </form>
+{% endblock %}
+

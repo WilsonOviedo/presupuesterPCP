@@ -1,0 +1,663 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Editar' if cuenta else 'Nueva' }} Cuenta a Recibir{% endblock %}
+{% block head %}
+  <style>
+    .form-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+    .form-header {
+      background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+      color: white;
+      padding: 20px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .form-header-left h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: bold;
+      color: white;
+    }
+    .form-header-left p {
+      margin: 5px 0 0 0;
+      font-size: 14px;
+      color: rgba(255,255,255,0.9);
+    }
+    .form-header-right {
+      text-align: right;
+      font-size: 12px;
+      color: rgba(255,255,255,0.9);
+    }
+    .form-body {
+      padding: 30px;
+    }
+    .form-section {
+      margin-bottom: 25px;
+    }
+    .form-section-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 15px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #e0e0e0;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+      margin-bottom: 15px;
+    }
+    .form-row-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-bottom: 15px;
+    }
+    .form-row-full {
+      grid-column: 1 / -1;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+    .form-group label {
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #555;
+      font-size: 14px;
+    }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      transition: border-color 0.3s;
+    }
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #1976D2;
+      box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.1);
+    }
+    .form-group textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+    .radio-group {
+      display: flex;
+      gap: 30px;
+      align-items: center;
+      padding: 10px 0;
+    }
+    .radio-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .radio-option input[type="radio"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+    .radio-option label {
+      font-weight: 500;
+      cursor: pointer;
+      margin: 0;
+    }
+    .form-actions {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid #e0e0e0;
+    }
+    .btn-primary {
+      background: #1976D2;
+      color: white;
+      padding: 12px 40px;
+      border: none;
+      border-radius: 4px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .btn-primary:hover {
+      background: #1565C0;
+    }
+    .btn-secondary {
+      background: #757575;
+      color: white;
+      padding: 12px 40px;
+      border: none;
+      border-radius: 4px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      transition: background 0.3s;
+    }
+    .btn-secondary:hover {
+      background: #616161;
+    }
+    .back-link {
+      margin-bottom: 15px;
+    }
+    .back-link a {
+      color: #1976D2;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .back-link a:hover {
+      text-decoration: underline;
+    }
+  </style>
+{% endblock %}
+{% block content %}
+  <div class="form-container">
+    <div class="form-header">
+      <div class="form-header-left">
+        <h1>CUENTAS A RECIBIR</h1>
+        <p>CONTROL FINANCIERO</p>
+      </div>
+    </div>
+
+    <div class="form-body">
+      <div class="back-link">
+        <a href="{{ url_for('cuentas_a_recibir_index') }}">← Volver a la lista</a>
+      </div>
+
+      <h2 style="margin-top: 0; color: #333;">{{ 'Editar' if cuenta else 'Registro de' }} Cuentas a Recibir</h2>
+
+      <form method="POST" id="cuentaForm">
+        <div class="form-section">
+          <div class="form-section-title">INFORMACIONES DEL DOCUMENTO</div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="fecha_emision">Fecha del documento *:</label>
+              <input type="date" id="fecha_emision" name="fecha_emision" required
+                     value="{{ cuenta.fecha_emision.strftime('%Y-%m-%d') if cuenta and cuenta.fecha_emision else '' }}">
+            </div>
+
+            <div class="form-group">
+              <label for="documento_id">Documento *:</label>
+              <select id="documento_id" name="documento_id" required>
+                <option value="">Seleccione un documento</option>
+                {% for doc in documentos %}
+                  <option value="{{ doc.id }}" {{ 'selected' if cuenta and cuenta.documento_id == doc.id else '' }}>
+                    {{ doc.nombre }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="cuenta">Cuenta *:</label>
+              <select id="cuenta" name="cuenta" required>
+                <option value="">Seleccione una cuenta</option>
+                {% for cat in categorias_ingresos %}
+                  <option value="{{ cat.id }}" data-nombre="{{ cat.nombre }}" {{ 'selected' if cuenta and cuenta.cuenta_id == cat.id else '' }}>
+                    {{ cat.nombre }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="plano_cuenta">Plan de Cuenta *:</label>
+              <select id="plano_cuenta" name="plano_cuenta" disabled required>
+                <option value="">Primero Selecione una cuenta</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="proyecto">Proyecto *:</label>
+              <select id="proyecto" name="proyecto" required>
+                <option value="">Seleccione un proyecto</option>
+                {% for proyecto in proyectos %}
+                  <option value="{{ proyecto.id }}" {{ 'selected' if cuenta and cuenta.proyecto_id == proyecto.id else '' }}>
+                    {{ proyecto.nombre }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="cliente">Cliente *:</label>
+              <input type="text" id="cliente" name="cliente" list="clientes-list" required
+                     value="{{ cuenta.cliente if cuenta else '' }}"
+                     placeholder="Ingrese el nombre del cliente"
+                     style="text-transform: uppercase;"
+                     oninput="this.value = this.value.toUpperCase()">
+              <datalist id="clientes-list">
+                {% for cliente in clientes %}
+                  <option value="{{ cliente }}">
+                {% endfor %}
+              </datalist>
+            </div>
+
+            <div class="form-group">
+              <label for="factura">Documento:</label>
+              <input type="text" id="factura" name="factura"
+                     value="{{ cuenta.factura if cuenta else '' }}"
+                     placeholder="Número de documento"
+                     style="text-transform: uppercase;"
+                     oninput="this.value = this.value.toUpperCase()">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="radio-group">
+              <div class="radio-option">
+                <input type="radio" id="tipo_fcon" name="tipo" value="FCON" 
+                       {{ 'checked' if not cuenta or cuenta.tipo == 'FCON' else '' }}>
+                <label for="tipo_fcon">Factura Contado (FCON)</label>
+              </div>
+              <div class="radio-option">
+                <input type="radio" id="tipo_fcre" name="tipo" value="FCRE"
+                       {{ 'checked' if cuenta and cuenta.tipo == 'FCRE' else '' }}>
+                <label for="tipo_fcre">Factura Crédito (FCRE)</label>
+              </div>
+              <div class="radio-option">
+                <input type="radio" id="tipo_ncre" name="tipo" value="NCRE"
+                       {{ 'checked' if cuenta and cuenta.tipo == 'NCRE' else '' }}>
+                <label for="tipo_ncre">Nota de Crédito (NCRE)</label>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row form-row-full">
+            <div class="form-group">
+              <label for="descripcion">Descripción *:</label>
+              <textarea id="descripcion" name="descripcion" required
+                        placeholder="Descripción de cuenta a recibir"
+                        style="text-transform: uppercase;"
+                        oninput="this.value = this.value.toUpperCase()">{{ cuenta.descripcion if cuenta else '' }}</textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div class="form-section-title">Valor de la cuota</div>
+          
+          <div class="form-row-3">
+            <div class="form-group">
+              <label for="banco_id">Banco *:</label>
+              <select id="banco_id" name="banco_id" required>
+                <option value="">Seleccione un banco</option>
+                {% for banco in bancos %}
+                  <option value="{{ banco.id }}" {{ 'selected' if cuenta and cuenta.banco_id == banco.id else '' }}>
+                    {{ banco.nombre }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="valor">Valor Total *:</label>
+              <input type="text" id="valor" name="valor" required
+                     data-valor-original="{% if cuenta and cuenta.valor %}{{ cuenta.valor }}{% endif %}"
+                     value=""
+                     placeholder="0,00"
+                     class="valor-input">
+            </div>
+
+            <div class="form-group">
+              <label for="num_cuotas">Número de Parcelas:</label>
+              <input type="number" id="num_cuotas" name="num_cuotas" min="1" 
+                     data-cuotas-original="{% if cuenta and cuenta.cuotas %}{{ cuenta.cuotas }}{% endif %}"
+                     value="1"
+                     onchange="calcularCuotas()">
+              <small style="color: #666; font-size: 12px;">Por defecto: 1 (recurrente)</small>
+            </div>
+          </div>
+
+          <div class="form-row-3">
+            <div class="form-group">
+              <label for="vencimiento">Vencimiento *:</label>
+              <input type="date" id="vencimiento" name="vencimiento" required
+                     value="{{ cuenta.vencimiento.strftime('%Y-%m-%d') if cuenta and cuenta.vencimiento else '' }}"
+                     onchange="calcularVencimientosCuotas()">
+            </div>
+
+            <div class="form-group">
+              <label for="fecha_recibo">Fecha del recibo:</label>
+              <input type="date" id="fecha_recibo" name="fecha_recibo"
+                     value="{{ cuenta.fecha_recibo.strftime('%Y-%m-%d') if cuenta and cuenta.fecha_recibo else '' }}"
+                     onchange="calcularEstado()">
+              <small style="color: #666; font-size: 12px;">Si se ingresa, el estado se calculará automáticamente</small>
+            </div>
+
+            <div class="form-group">
+              <label for="valor_cuota">Valor de la cuota:</label>
+              <input type="text" id="valor_cuota" name="valor_cuota" readonly
+                     data-valor-cuota-original="{% if cuenta and cuenta.valor_cuota %}{{ cuenta.valor_cuota }}{% endif %}"
+                     value=""
+                     placeholder="0,00"
+                     class="valor-input"
+                     style="background: #f5f5f5;">
+              <small style="color: #666; font-size: 12px;">Se calcula automáticamente</small>
+            </div>
+          </div>
+
+          <div class="form-row" id="cuotas-preview" style="display: none;">
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <label>Vista Previa de Cuotas:</label>
+              <div id="cuotas-list" style="background: #f9f9f9; padding: 15px; border-radius: 4px; max-height: 200px; overflow-y: auto;">
+                <!-- Se llenará dinámicamente -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">GUARDAR</button>
+          <a href="{{ url_for('cuentas_a_recibir_index') }}" class="btn-secondary">CANCELAR</a>
+          <a href="{{ url_for('cuentas_a_recibir_index') }}" class="btn-secondary">LIMPAR</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Datos de tipos de ingresos por categoría - construir el objeto
+    const tiposIngresosPorCategoria = {};
+    
+    // Inicializar arrays para cada categoría
+    {% for cat in categorias_ingresos %}
+    tiposIngresosPorCategoria[{{ cat.id }}] = [];
+    {% endfor %}
+    
+    // Obtener todos los tipos como JSON
+    const todosLosTipos = {{ tipos_ingresos|tojson|safe }};
+    
+    // Construir el objeto agrupando por categoria_id
+    todosLosTipos.forEach(function(tipo) {
+      if (tipo) {
+        // El campo que contiene el nombre es 'descripcion', no 'nombre'
+        const catId = tipo.categoria_id;
+        const descripcion = tipo.descripcion;
+        
+        if (catId && descripcion) {
+          if (!tiposIngresosPorCategoria[catId]) {
+            tiposIngresosPorCategoria[catId] = [];
+          }
+          tiposIngresosPorCategoria[catId].push({
+            id: tipo.id,
+            nombre: descripcion
+          });
+        }
+      }
+    });
+
+    console.log('Tipos de ingresos por categoría construido:', tiposIngresosPorCategoria);
+
+    // Función para cargar tipos de ingresos
+    function cargarTiposIngresos(categoriaId) {
+      console.log('cargarTiposIngresos llamado con categoriaId:', categoriaId, 'tipo:', typeof categoriaId);
+      
+      const planoCuentaSelect = document.getElementById('plano_cuenta');
+      if (!planoCuentaSelect) {
+        console.error('No se encontró el elemento plano_cuenta');
+        return;
+      }
+      
+      // Limpiar opciones anteriores
+      planoCuentaSelect.innerHTML = '<option value="">Selecione um plano de conta</option>';
+      
+      if (!categoriaId || categoriaId === '' || categoriaId === null) {
+        console.log('No hay categoriaId válido');
+        planoCuentaSelect.disabled = true;
+        return;
+      }
+      
+      const categoriaIdNum = parseInt(categoriaId);
+      console.log('Buscando tipos para categoría ID:', categoriaIdNum);
+      console.log('Tipos disponibles:', tiposIngresosPorCategoria[categoriaIdNum]);
+      
+      if (tiposIngresosPorCategoria[categoriaIdNum] && tiposIngresosPorCategoria[categoriaIdNum].length > 0) {
+        console.log('Encontrados', tiposIngresosPorCategoria[categoriaIdNum].length, 'tipos');
+        planoCuentaSelect.disabled = false;
+        
+        tiposIngresosPorCategoria[categoriaIdNum].forEach(function(tipo) {
+          const option = document.createElement('option');
+          option.value = tipo.nombre;
+          option.textContent = tipo.nombre;
+          planoCuentaSelect.appendChild(option);
+          console.log('Agregado tipo:', tipo.nombre);
+        });
+        
+        // Si estamos editando, seleccionar el valor guardado
+        {% if cuenta and cuenta.plano_cuenta %}
+        const valorGuardado = "{{ cuenta.plano_cuenta|e|replace('"', '\\"') }}";
+        console.log('Valor guardado:', valorGuardado);
+        if (valorGuardado && valorGuardado !== 'None' && valorGuardado !== '' && valorGuardado !== 'null') {
+          planoCuentaSelect.value = valorGuardado;
+          console.log('Valor seleccionado:', planoCuentaSelect.value);
+        }
+        {% endif %}
+      } else {
+        console.log('No se encontraron tipos para esta categoría');
+        planoCuentaSelect.disabled = true;
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'Nenhum tipo disponível para esta conta';
+        planoCuentaSelect.appendChild(option);
+      }
+    }
+
+    // Esperar a que el DOM esté completamente cargado
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('DOM cargado, inicializando...');
+      
+      const cuentaSelect = document.getElementById('cuenta');
+      if (!cuentaSelect) {
+        console.error('No se encontró el elemento cuenta');
+        return;
+      }
+      
+      console.log('Elemento cuenta encontrado');
+      
+      // Cargar tipos de ingresos cuando se selecciona una categoría
+      cuentaSelect.addEventListener('change', function() {
+        const categoriaId = this.value;
+        console.log('Cambio detectado en cuenta. Categoría seleccionada:', categoriaId);
+        cargarTiposIngresos(categoriaId);
+      });
+
+      // Si estamos editando, cargar los tipos de ingresos de la categoría seleccionada al cargar la página
+      {% if cuenta and cuenta.cuenta_id %}
+      const categoriaId = {{ cuenta.cuenta_id }};
+      console.log('Modo edición. Categoría ID:', categoriaId);
+      cuentaSelect.value = categoriaId;
+      // Esperar un momento para asegurar que el select esté actualizado
+      setTimeout(function() {
+        cargarTiposIngresos(categoriaId);
+      }, 100);
+      {% endif %}
+    });
+
+    // Formatear números con separadores de miles
+    function formatearNumero(numero) {
+      if (!numero) return '';
+      const numeroLimpio = numero.toString().replace(/[^\d.]/g, '');
+      if (!numeroLimpio) return '';
+      const partes = numeroLimpio.split('.');
+      const parteEntera = partes[0];
+      const parteDecimal = partes[1];
+      const parteEnteraFormateada = parteEntera.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      if (parteDecimal !== undefined) {
+        return parteEnteraFormateada + ',' + parteDecimal;
+      }
+      return parteEnteraFormateada;
+    }
+
+    function limpiarFormatoNumero(numero) {
+      if (!numero) return '';
+      return numero.toString().replace(/\./g, '').replace(/[^\d.]/g, '').replace(',', '.');
+    }
+
+    // Aplicar formato a campos de valor
+    document.querySelectorAll('.valor-input').forEach(input => {
+      input.addEventListener('input', function(e) {
+        const valor = e.target.value;
+        const cursorPos = e.target.selectionStart;
+        const valorLimpio = valor.replace(/\./g, '').replace(/[^\d,]/g, '');
+        const valorFormateado = formatearNumero(valorLimpio.replace(',', '.'));
+        e.target.value = valorFormateado;
+        const diferencia = valorFormateado.length - valor.length;
+        const nuevaPos = Math.max(0, cursorPos + diferencia);
+        e.target.setSelectionRange(nuevaPos, nuevaPos);
+      });
+
+      input.addEventListener('blur', function(e) {
+        const valorLimpio = limpiarFormatoNumero(e.target.value);
+        e.target.value = formatearNumero(valorLimpio.replace('.', ','));
+      });
+    });
+
+    // Función para calcular valor de cuota y vencimientos
+    function calcularCuotas() {
+      const numCuotas = parseInt(document.getElementById('num_cuotas').value) || 1;
+      const valorTotalStr = document.getElementById('valor').value;
+      const valorTotal = parseFloat(limpiarFormatoNumero(valorTotalStr)) || 0;
+      
+      if (valorTotal > 0 && numCuotas > 0) {
+        const valorCuota = valorTotal / numCuotas;
+        document.getElementById('valor_cuota').value = formatearNumero(valorCuota.toString());
+        
+        // Mostrar vista previa de cuotas
+        mostrarVistaPreviaCuotas(numCuotas, valorCuota);
+      } else {
+        document.getElementById('valor_cuota').value = '';
+        document.getElementById('cuotas-preview').style.display = 'none';
+      }
+    }
+
+    // Función para calcular vencimientos de cuotas
+    function calcularVencimientosCuotas() {
+      const numCuotas = parseInt(document.getElementById('num_cuotas').value) || 1;
+      if (numCuotas > 1) {
+        calcularCuotas(); // Recalcular para actualizar la vista previa
+      }
+    }
+
+    // Función para mostrar vista previa de cuotas
+    function mostrarVistaPreviaCuotas(numCuotas, valorCuota) {
+      const vencimientoStr = document.getElementById('vencimiento').value;
+      if (!vencimientoStr || numCuotas <= 1) {
+        document.getElementById('cuotas-preview').style.display = 'none';
+        return;
+      }
+
+      const vencimientoBase = new Date(vencimientoStr);
+      const cuotasList = document.getElementById('cuotas-list');
+      cuotasList.innerHTML = '';
+
+      for (let i = 1; i <= numCuotas; i++) {
+        const fechaVencimiento = new Date(vencimientoBase);
+        fechaVencimiento.setDate(fechaVencimiento.getDate() + (i - 1) * 30);
+        
+        const div = document.createElement('div');
+        div.style.cssText = 'padding: 8px; margin-bottom: 5px; background: white; border-left: 3px solid #1976D2; border-radius: 4px;';
+        div.innerHTML = `
+          <strong>Cuota ${i} de ${numCuotas}</strong> - 
+          Valor: ${formatearNumero(valorCuota.toString())} - 
+          Vencimiento: ${fechaVencimiento.toLocaleDateString('es-ES')}
+        `;
+        cuotasList.appendChild(div);
+      }
+
+      document.getElementById('cuotas-preview').style.display = 'block';
+    }
+
+    // Función para calcular estado automáticamente
+    function calcularEstado() {
+      const fechaRecibo = document.getElementById('fecha_recibo').value;
+      const vencimiento = document.getElementById('vencimiento').value;
+      
+      // El estado se calculará en el backend basado en fecha_recibo
+      // Si hay fecha_recibo, será RECIBIDO, si no, ABIERTO
+    }
+
+    // Event listeners para cálculo automático
+    document.addEventListener('DOMContentLoaded', function() {
+      const valorInput = document.getElementById('valor');
+      const numCuotasInput = document.getElementById('num_cuotas');
+      const valorCuotaInput = document.getElementById('valor_cuota');
+      const vencimientoInput = document.getElementById('vencimiento');
+      
+      // Cargar valores originales si estamos en modo edición
+      // Mostrar siempre el valor absoluto en el formulario
+      if (valorInput && valorInput.dataset.valorOriginal) {
+        const valorOriginal = parseFloat(valorInput.dataset.valorOriginal);
+        if (!isNaN(valorOriginal)) {
+          valorInput.value = formatearNumero(Math.abs(valorOriginal).toString());
+        }
+      }
+      
+      if (valorCuotaInput && valorCuotaInput.dataset.valorCuotaOriginal) {
+        const valorCuotaOriginal = parseFloat(valorCuotaInput.dataset.valorCuotaOriginal);
+        if (!isNaN(valorCuotaOriginal)) {
+          valorCuotaInput.value = formatearNumero(Math.abs(valorCuotaOriginal).toString());
+        }
+      }
+      
+      // Extraer número de cuotas del formato "1 de 1" o "2 de 3"
+      if (numCuotasInput && numCuotasInput.dataset.cuotasOriginal) {
+        const cuotasStr = numCuotasInput.dataset.cuotasOriginal;
+        const match = cuotasStr.match(/(\d+)\s+de\s+(\d+)/);
+        if (match) {
+          numCuotasInput.value = match[2]; // El total de cuotas
+        }
+      }
+      
+      if (valorInput) {
+        valorInput.addEventListener('input', calcularCuotas);
+      }
+      
+      if (numCuotasInput) {
+        numCuotasInput.addEventListener('change', calcularCuotas);
+      }
+      
+      if (vencimientoInput) {
+        vencimientoInput.addEventListener('change', calcularVencimientosCuotas);
+      }
+      
+      // Calcular cuotas inicialmente solo si hay valores
+      if (valorInput && valorInput.value) {
+        calcularCuotas();
+      }
+    });
+
+    // Limpiar formato antes de enviar
+    document.getElementById('cuentaForm').addEventListener('submit', function(e) {
+      document.querySelectorAll('.valor-input').forEach(input => {
+        const valorLimpio = limpiarFormatoNumero(input.value);
+        input.value = valorLimpio;
+      });
+      
+      // Calcular cuotas inicialmente
+      calcularCuotas();
+    });
+  </script>
+{% endblock %}

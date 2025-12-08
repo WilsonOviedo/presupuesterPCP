@@ -3,6 +3,15 @@
 {% block content %}
   <a class="button" href="{{ url_for('menu') }}">← Volver</a>
   <h2>Leer facturas (IMAP)</h2>
+  
+  <div style="background-color: #f0f0f0; padding: 10px; margin-bottom: 15px; border-radius: 5px;">
+    <strong>Configuración de Base de Datos:</strong><br>
+    Host: <code>{{ db_host }}</code><br>
+    Puerto: <code>{{ db_port }}</code><br>
+    Base de datos: <code>{{ db_name }}</code><br>
+    Usuario: <code>{{ db_user }}</code>
+  </div>
+  
   <form id="run-form" method="post" action="{{ url_for('leer_facturas_page') }}">
     <button type="submit" id="run-btn">{{ 'Procesando…' if running else 'Ejecutar procesamiento' }}</button>
   </form>

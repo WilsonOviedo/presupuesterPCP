@@ -1,0 +1,460 @@
+{% extends 'base.html' %}
+{% block title %}Cuentas a Pagar{% endblock %}
+{% block head %}
+  <style>
+    body {
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    .container {
+      max-width: 100% !important;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    .filtros-section {
+      background: #f9f9f9;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .filtros-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 15px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+    .form-group label {
+      font-weight: 600;
+      margin-bottom: 5px;
+      color: #555;
+    }
+    .form-group input,
+    .form-group select {
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .cuentas-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .cuentas-table thead {
+      background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%) !important;
+      color: white !important;
+    }
+    .cuentas-table thead th {
+      background: transparent !important;
+      color: white !important;
+    }
+    .cuentas-table th {
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.85em;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .cuentas-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #e8e8e8;
+      font-size: 0.85em;
+    }
+    .cuentas-table tbody tr {
+      transition: background-color 0.2s ease;
+    }
+    .cuentas-table tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
+    .cuentas-table tbody tr:hover {
+      background: #ffebee;
+    }
+    .status-badge {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.8em;
+      font-weight: 600;
+      display: inline-block;
+    }
+    .status-pagado {
+      background: #d4edda;
+      color: #155724;
+    }
+    .status-abierto {
+      background: #fff3cd;
+      color: #856404;
+    }
+    .status-adelantado {
+      background: #d1ecf1;
+      color: #0c5460;
+    }
+    .status-atrasado {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    .status-en-dia {
+      background: #d4edda;
+      color: #155724;
+    }
+    .valor-negativo {
+      color: #2e7d32 !important;
+      font-weight: bold !important;
+    }
+  </style>
+{% endblock %}
+{% block content %}
+  <div style="max-width: 100%; margin: 0; padding: 0;">
+    <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <a class="button button-secondary" href="{{ url_for('financiero_index') }}">← Volver</a>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <a class="button" href="{{ url_for('cuentas_a_pagar_exportar_csv', **request.args) }}" style="background: #4CAF50;">📥 Exportar CSV</a>
+        <button type="button" class="button" onclick="document.getElementById('importarCsvInput').click()" style="background: #FF9800;">📤 Importar CSV</button>
+        <input type="file" id="importarCsvInput" accept=".csv" style="display: none;" onchange="importarCSV(this)">
+        <a class="button" href="{{ url_for('cuenta_a_pagar_nuevo') }}" style="background: #f44336;">➕ Nueva Cuenta a Pagar</a>
+      </div>
+    </div>
+
+    <h2>💸 Cuentas a Pagar</h2>
+
+    {% if error %}
+      <div style="background: #ffebee; color: #c62828; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #ef5350;">
+        <strong>Error:</strong> {{ error }}
+      </div>
+    {% endif %}
+
+    {% if mensaje %}
+      <div style="background: #e8f5e9; color: #2e7d32; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #4caf50;">
+        <strong>Éxito:</strong> {{ mensaje }}
+      </div>
+    {% endif %}
+
+    <div class="filtros-section">
+      <h3 style="margin-top: 0;">Filtros</h3>
+      <form method="GET" action="{{ url_for('cuentas_a_pagar_index') }}">
+        <div class="filtros-row">
+          <div class="form-group">
+            <label for="fecha_desde">Fecha desde:</label>
+            <input type="date" id="fecha_desde" name="fecha_desde" value="{{ fecha_desde }}">
+          </div>
+          <div class="form-group">
+            <label for="fecha_hasta">Fecha hasta:</label>
+            <input type="date" id="fecha_hasta" name="fecha_hasta" value="{{ fecha_hasta }}">
+          </div>
+          <div class="form-group">
+            <label for="proveedor">Proveedor:</label>
+            <input type="text" id="proveedor" name="proveedor" value="{{ proveedor_filtro }}" placeholder="Buscar proveedor...">
+          </div>
+          <div class="form-group">
+            <label for="estado">Estado:</label>
+            <select id="estado" name="estado">
+              <option value="">Todos</option>
+              <option value="PAGADO" {% if estado_filtro == 'PAGADO' %}selected{% endif %}>Pagado</option>
+              <option value="ABIERTO" {% if estado_filtro == 'ABIERTO' %}selected{% endif %}>Abierto</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="banco_id">Banco:</label>
+            <select id="banco_id" name="banco_id">
+              <option value="">Todos</option>
+              {% for banco in bancos %}
+                <option value="{{ banco.id }}" {% if banco_filtro == banco.id %}selected{% endif %}>{{ banco.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div style="margin-top: 15px;">
+          <button type="submit" class="button" style="background: #f44336;">🔍 Buscar</button>
+          <a href="{{ url_for('cuentas_a_pagar_index') }}" class="button button-secondary">Limpiar filtros</a>
+        </div>
+      </form>
+    </div>
+
+    <div style="overflow-x: auto;">
+      <table class="cuentas-table">
+        <thead>
+          <tr>
+            <th>Fecha Emisión</th>
+            <th>Medio de Pago</th>
+            <th>Cuenta</th>
+            <th>Plano de Cuenta</th>
+            <th>Proyecto</th>
+            <th>Tipo</th>
+            <th>Proveedor</th>
+            <th>Documento</th>
+            <th>Descripción</th>
+            <th>Banco</th>
+            <th>Valor</th>
+            <th>Cuotas</th>
+            <th>Valor Cuota</th>
+            <th>Vencimiento</th>
+            <th>Fecha Pago</th>
+            <th>Estado</th>
+            <th>Status Pago</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for cuenta in cuentas %}
+            <tr>
+              <td>{{ cuenta.fecha_emision.strftime('%d/%m/%Y') if cuenta.fecha_emision else '-' }}</td>
+              <td>{{ cuenta.documento_nombre or '-' }}</td>
+              <td>{{ cuenta.cuenta_nombre or '-' }}</td>
+              <td>{{ cuenta.plano_cuenta or '-' }}</td>
+              <td>{{ cuenta.proyecto_nombre or '-' }}</td>
+              <td>{{ cuenta.tipo or '-' }}</td>
+              <td>{{ cuenta.proveedor or '-' }}</td>
+              <td>{{ cuenta.factura or '-' }}</td>
+              <td>{{ cuenta.descripcion or '-' }}</td>
+              <td>{{ cuenta.banco_nombre or '-' }}</td>
+              <td style="text-align: right;" {% if cuenta.valor and cuenta.valor < 0 %}class="valor-negativo"{% endif %}>
+                {% if cuenta.valor and cuenta.valor < 0 %}
+                  ({{ "{:,.2f}".format(abs(cuenta.valor)) }})
+                {% else %}
+                  {{ "{:,.2f}".format(cuenta.valor) if cuenta.valor else '0.00' }}
+                {% endif %}
+              </td>
+              <td>{{ cuenta.cuotas or '-' }}</td>
+              <td style="text-align: right;" {% if cuenta.valor_cuota and cuenta.valor_cuota < 0 %}class="valor-negativo"{% endif %}>
+                {% if cuenta.valor_cuota and cuenta.valor_cuota < 0 %}
+                  ({{ "{:,.2f}".format(abs(cuenta.valor_cuota)) }})
+                {% elif cuenta.valor_cuota %}
+                  {{ "{:,.2f}".format(cuenta.valor_cuota) }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td>{{ cuenta.vencimiento.strftime('%d/%m/%Y') if cuenta.vencimiento else '-' }}</td>
+              <td>{{ cuenta.fecha_pago.strftime('%d/%m/%Y') if cuenta.fecha_pago else '-' }}</td>
+              <td>
+                <span class="status-badge status-{{ cuenta.estado.lower().replace(' ', '-') }}">
+                  {{ cuenta.estado or '-' }}
+                </span>
+              </td>
+              <td>
+                {% if cuenta.status_pago %}
+                  <span class="status-badge status-{{ cuenta.status_pago.lower().replace(' ', '-') }}">
+                    {{ cuenta.status_pago }}
+                  </span>
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td>
+                <a href="{{ url_for('cuenta_a_pagar_editar', id=cuenta.id) }}" 
+                   style="padding: 4px 8px; background: #f44336; color: white; text-decoration: none; border-radius: 4px; font-size: 0.8em;">✏️ Editar</a>
+                <form method="POST" action="{{ url_for('cuenta_a_pagar_eliminar', id=cuenta.id) }}" 
+                      style="display: inline;" onsubmit="return confirm('¿Está seguro de eliminar esta cuenta a pagar?');">
+                  <button type="submit" style="padding: 4px 8px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em;">🗑️</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+          
+          {% if not cuentas %}
+            <tr>
+              <td colspan="18" style="text-align: center; padding: 40px; color: #999;">
+                No hay cuentas a pagar registradas. <a href="{{ url_for('cuenta_a_pagar_nuevo') }}">Crear primera cuenta a pagar</a>
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Modal de Previsualización -->
+  <div id="modalPrevisualizacion" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; overflow-y: auto;">
+    <div style="background: white; margin: 50px auto; max-width: 95%; max-height: 90vh; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0;">📋 Previsualización de Importación CSV</h2>
+        <button onclick="cerrarModal()" style="background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 18px;">✕</button>
+      </div>
+      
+      <div id="resumenPrevisualizacion" style="background: #f9f9f9; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+        <p><strong>Total de filas:</strong> <span id="totalFilas">0</span></p>
+        <p><strong>Filas válidas:</strong> <span id="filasValidas" style="color: green;">0</span></p>
+        <p><strong>Filas con errores:</strong> <span id="filasInvalidas" style="color: red;">0</span></p>
+      </div>
+      
+      <div style="max-height: 60vh; overflow-y: auto; margin-bottom: 20px;">
+        <table class="cuentas-table" style="font-size: 0.75em;">
+          <thead>
+            <tr>
+              <th>Fila</th>
+              <th>Estado</th>
+              <th>Fecha Emisión</th>
+              <th>Medio de Pago</th>
+              <th>Cuenta</th>
+              <th>Proveedor</th>
+              <th>Valor</th>
+              <th>Vencimiento</th>
+              <th>Errores</th>
+            </tr>
+          </thead>
+          <tbody id="tablaPrevisualizacion">
+            <!-- Se llenará dinámicamente -->
+          </tbody>
+        </table>
+      </div>
+      
+      <div id="erroresResumen" style="background: #ffebee; padding: 15px; border-radius: 6px; margin-bottom: 20px; max-height: 200px; overflow-y: auto; display: none;">
+        <h3 style="margin-top: 0; color: #c62828;">Errores encontrados:</h3>
+        <ul id="listaErrores" style="margin: 0; padding-left: 20px;">
+          <!-- Se llenará dinámicamente -->
+        </ul>
+      </div>
+      
+      <div style="display: flex; gap: 10px; justify-content: flex-end;">
+        <button onclick="cerrarModal()" style="background: #757575; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Cancelar</button>
+        <button onclick="confirmarImportacion()" id="btnConfirmar" style="background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold;">✓ Confirmar e Importar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let datosPrevisualizacion = null;
+    
+    function importarCSV(input) {
+      if (input.files && input.files[0]) {
+        const formData = new FormData();
+        formData.append('archivo_csv', input.files[0]);
+        
+        // Mostrar indicador de carga
+        const modal = document.getElementById('modalPrevisualizacion');
+        modal.style.display = 'block';
+        document.getElementById('tablaPrevisualizacion').innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">Cargando y validando datos...</td></tr>';
+        
+        fetch('{{ url_for("cuentas_a_pagar_previsualizar_csv") }}', {
+          method: 'POST',
+          body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.error) {
+            alert('Error: ' + data.error);
+            cerrarModal();
+            return;
+          }
+          
+          datosPrevisualizacion = data;
+          mostrarPrevisualizacion(data);
+        })
+        .catch(error => {
+          alert('Error al previsualizar CSV: ' + error);
+          cerrarModal();
+        });
+      }
+    }
+    
+    function mostrarPrevisualizacion(data) {
+      document.getElementById('totalFilas').textContent = data.total_filas;
+      document.getElementById('filasValidas').textContent = data.filas_validas;
+      document.getElementById('filasInvalidas').textContent = data.filas_invalidas;
+      
+      const tbody = document.getElementById('tablaPrevisualizacion');
+      tbody.innerHTML = '';
+      
+      data.datos.forEach(fila => {
+        const tr = document.createElement('tr');
+        tr.style.backgroundColor = fila.valida ? '#e8f5e9' : '#ffebee';
+        
+        const estadoBadge = fila.valida 
+          ? '<span style="background: #4CAF50; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8em;">✓ Válida</span>'
+          : '<span style="background: #f44336; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8em;">✗ Error</span>';
+        
+        tr.innerHTML = `
+          <td>${fila.fila}</td>
+          <td>${estadoBadge}</td>
+          <td>${fila.datos.fecha_emision || '-'}</td>
+          <td>${fila.datos.documento || '-'}</td>
+          <td>${fila.datos.cuenta || '-'}</td>
+          <td>${fila.datos.proveedor || '-'}</td>
+          <td>${fila.datos.valor || '-'}</td>
+          <td>${fila.datos.vencimiento || '-'}</td>
+          <td style="color: red; font-size: 0.7em;">${fila.errores.join('; ') || '-'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+      
+      // Mostrar errores si hay
+      if (data.errores && data.errores.length > 0) {
+        const erroresDiv = document.getElementById('erroresResumen');
+        erroresDiv.style.display = 'block';
+        const listaErrores = document.getElementById('listaErrores');
+        listaErrores.innerHTML = '';
+        data.errores.forEach(error => {
+          const li = document.createElement('li');
+          li.textContent = error;
+          li.style.marginBottom = '5px';
+          listaErrores.appendChild(li);
+        });
+      } else {
+        document.getElementById('erroresResumen').style.display = 'none';
+      }
+      
+      // Deshabilitar botón de confirmar si no hay filas válidas
+      const btnConfirmar = document.getElementById('btnConfirmar');
+      if (data.filas_validas === 0) {
+        btnConfirmar.disabled = true;
+        btnConfirmar.style.background = '#ccc';
+        btnConfirmar.title = 'No hay filas válidas para importar';
+      } else {
+        btnConfirmar.disabled = false;
+        btnConfirmar.style.background = '#4CAF50';
+        btnConfirmar.title = '';
+      }
+    }
+    
+    function cerrarModal() {
+      document.getElementById('modalPrevisualizacion').style.display = 'none';
+      datosPrevisualizacion = null;
+      // Limpiar el input de archivo
+      document.getElementById('importarCsvInput').value = '';
+    }
+    
+    function confirmarImportacion() {
+      if (!datosPrevisualizacion || datosPrevisualizacion.filas_validas === 0) {
+        alert('No hay datos válidos para importar');
+        return;
+      }
+      
+      if (!confirm(`¿Está seguro de importar ${datosPrevisualizacion.filas_validas} cuenta(s) válida(s)?`)) {
+        return;
+      }
+      
+      // Realizar la importación
+      fetch('{{ url_for("cuentas_a_pagar_importar_csv") }}', {
+        method: 'POST'
+      })
+      .then(response => {
+        if (response.redirected) {
+          window.location.href = response.url;
+        } else {
+          return response.text();
+        }
+      })
+      .catch(error => {
+        alert('Error al importar: ' + error);
+      });
+    }
+    
+    // Cerrar modal al hacer clic fuera de él
+    document.getElementById('modalPrevisualizacion').addEventListener('click', function(e) {
+      if (e.target === this) {
+        cerrarModal();
+      }
+    });
+  </script>
+{% endblock %}
+

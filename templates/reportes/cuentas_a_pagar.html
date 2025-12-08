@@ -1,0 +1,321 @@
+{% extends 'base.html' %}
+{% block title %}Reportes de Cuentas a Pagar{% endblock %}
+{% block head %}
+  <style>
+    .reportes-container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .filtros-section {
+      background: #f9f9f9;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .filtros-section h3 {
+      margin-top: 0;
+      color: #333;
+    }
+    .filtros-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 15px;
+    }
+    .filtros-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+    .form-group label {
+      font-weight: 600;
+      margin-bottom: 5px;
+      color: #555;
+    }
+    .form-group input,
+    .form-group select {
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .reportes-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .reportes-table thead {
+      background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%) !important;
+      color: white !important;
+    }
+    .reportes-table th {
+      background: transparent !important;
+      color: white !important;
+      padding: 14px 12px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.9em;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .reportes-table td {
+      padding: 12px;
+      border-bottom: 1px solid #e8e8e8;
+      font-size: 0.9em;
+    }
+    .reportes-table tbody tr {
+      transition: background-color 0.2s ease;
+    }
+    .reportes-table tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
+    .reportes-table tbody tr:hover {
+      background: #fff0f0;
+      cursor: pointer;
+    }
+    .estado-badge {
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 0.85em;
+      font-weight: 600;
+      display: inline-block;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .estado-pagado {
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      color: white;
+    }
+    .estado-pendiente {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white;
+    }
+    .estado-en_dia {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+      color: white;
+    }
+    .estado-atrasado {
+      background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+      color: #721c24;
+    }
+    .estado-adelantado {
+      background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
+      color: white;
+    }
+    .dias-atraso {
+      font-weight: 600;
+    }
+    .dias-atraso.positivo {
+      color: #dc3545;
+    }
+    .dias-atraso.cero {
+      color: #28a745;
+    }
+    .monto {
+      text-align: right;
+      font-weight: 600;
+    }
+    .no-data {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+    .resumen {
+      background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .resumen-item {
+      text-align: center;
+      background: rgba(255,255,255,0.2);
+      padding: 15px;
+      border-radius: 8px;
+      backdrop-filter: blur(10px);
+    }
+    .resumen-item strong {
+      display: block;
+      font-size: 1.8em;
+      color: white;
+      margin-bottom: 5px;
+      font-weight: 700;
+    }
+    .resumen-item span {
+      color: rgba(255,255,255,0.9);
+      font-size: 0.9em;
+      font-weight: 500;
+    }
+  </style>
+{% endblock %}
+{% block content %}
+  <div class="reportes-container">
+    <div style="margin-bottom: 20px;">
+      <a class="button button-secondary" href="{{ url_for('menu') }}">← Volver</a>
+    </div>
+
+    <h2>Reportes de Cuentas a Pagar</h2>
+
+    <div class="filtros-section">
+      <h3>Filtros</h3>
+      <form method="GET" action="{{ url_for('reportes_cuentas_a_pagar_index') }}">
+        <div class="filtros-row">
+          <div class="form-group">
+            <label for="proveedor">Proveedor:</label>
+            <input type="text" id="proveedor" name="proveedor" 
+                   value="{{ proveedor_seleccionado }}"
+                   placeholder="Nombre del proveedor"
+                   list="proveedores-list">
+            <datalist id="proveedores-list">
+              {% for proveedor in proveedores %}
+                <option value="{{ proveedor.proveedor }}">
+              {% endfor %}
+            </datalist>
+          </div>
+
+          <div class="form-group">
+            <label for="fecha_desde">Fecha desde:</label>
+            <input type="date" id="fecha_desde" name="fecha_desde" 
+                   value="{{ fecha_desde }}">
+          </div>
+
+          <div class="form-group">
+            <label for="fecha_hasta">Fecha hasta:</label>
+            <input type="date" id="fecha_hasta" name="fecha_hasta" 
+                   value="{{ fecha_hasta }}">
+          </div>
+
+          <div class="form-group">
+            <label for="estado">Estado de pago:</label>
+            <select id="estado" name="estado">
+              <option value="">Todos</option>
+              <option value="Pagado" {% if estado_seleccionado == 'Pagado' %}selected{% endif %}>Pagado</option>
+              <option value="Pendiente" {% if estado_seleccionado == 'Pendiente' %}selected{% endif %}>Pendiente</option>
+              <option value="En día" {% if estado_seleccionado == 'En día' %}selected{% endif %}>En día</option>
+              <option value="Atrasado" {% if estado_seleccionado == 'Atrasado' %}selected{% endif %}>Atrasado</option>
+              <option value="Adelantado" {% if estado_seleccionado == 'Adelantado' %}selected{% endif %}>Adelantado</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="filtros-actions">
+          <button type="submit" class="button">🔍 Filtrar</button>
+          <a href="{{ url_for('reportes_cuentas_a_pagar_index') }}" class="button button-secondary">🔄 Limpiar</a>
+        </div>
+      </form>
+    </div>
+
+    {% if reportes %}
+      {% set total_cuentas = reportes|length %}
+      {% set total_monto = reportes|sum(attribute='monto') %}
+      {% set cuentas_pagadas = reportes|selectattr('estado_pago', 'equalto', 'Pagado')|list|length %}
+      {% set cuentas_atrasadas = reportes|selectattr('estado_pago', 'equalto', 'Atrasado')|list|length %}
+      
+      <div class="resumen">
+        <div class="resumen-item">
+          <strong>{{ total_cuentas }}</strong>
+          <span>Total Cuentas</span>
+        </div>
+        <div class="resumen-item">
+          <strong>{{ "{:,.0f}".format(total_monto) }}</strong>
+          <span>Monto Total (Gs)</span>
+        </div>
+        <div class="resumen-item">
+          <strong>{{ cuentas_pagadas }}</strong>
+          <span>Pagadas</span>
+        </div>
+        <div class="resumen-item">
+          <strong>{{ cuentas_atrasadas }}</strong>
+          <span>Atrasadas</span>
+        </div>
+      </div>
+
+      <div style="overflow-x: auto;">
+        <table class="reportes-table">
+          <thead>
+            <tr>
+              <th>Tipo</th>
+              <th>Nro. Documento</th>
+              <th>Proveedor</th>
+              <th>Fecha Emisión</th>
+              <th>Fecha Vencimiento</th>
+              <th>Fecha Pago</th>
+              <th>Monto</th>
+              <th>Días Atraso</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for reporte in reportes %}
+              <tr>
+                <td><strong>{{ reporte.tipo_venta or '-' }}</strong></td>
+                <td><strong>{{ reporte.numero_factura }}</strong></td>
+                <td>{{ reporte.proveedor }}</td>
+                <td>
+                  {% if reporte.fecha_emision %}
+                    {% if reporte.fecha_emision is string %}
+                      {{ reporte.fecha_emision }}
+                    {% else %}
+                      {{ reporte.fecha_emision.strftime('%d/%m/%Y') }}
+                    {% endif %}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td>
+                  {% if reporte.fecha_vencimiento %}
+                    {% if reporte.fecha_vencimiento is string %}
+                      {{ reporte.fecha_vencimiento }}
+                    {% else %}
+                      {{ reporte.fecha_vencimiento.strftime('%d/%m/%Y') }}
+                    {% endif %}
+                  {% else %}
+                    <span style="color: #999;">-</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if reporte.fecha_pago %}
+                    {% if reporte.fecha_pago is string %}
+                      {{ reporte.fecha_pago }}
+                    {% else %}
+                      {{ reporte.fecha_pago.strftime('%d/%m/%Y') }}
+                    {% endif %}
+                  {% else %}
+                    <span style="color: #999;">-</span>
+                  {% endif %}
+                </td>
+                <td class="monto">
+                  {{ reporte.moneda }} {{ "{:,.0f}".format(reporte.monto) }}
+                </td>
+                <td>
+                  <span class="dias-atraso {% if reporte.dias_atraso > 0 %}positivo{% elif reporte.dias_atraso == 0 %}cero{% endif %}">
+                    {{ reporte.dias_atraso }}
+                  </span>
+                </td>
+                <td>
+                  <span class="estado-badge estado-{{ reporte.estado_pago.lower().replace(' ', '_') }}">
+                    {{ reporte.estado_pago }}
+                  </span>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="no-data">
+        <p>No se encontraron cuentas a pagar con los filtros seleccionados.</p>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}
+

@@ -24,7 +24,10 @@
   .badge {display:inline-block;padding:2px 8px;border-radius:20px;font-size:0.75em;background:#4caf50;color:#fff;margin-left:8px;}
   table.resumen {width:100%;border-collapse:collapse;}
   table.resumen th, table.resumen td {border:1px solid #e0e0e0;padding:6px;text-align:left;font-size:0.9em;}
-  table.resumen th {background:#f7f7f7;}
+  table.resumen th {
+    background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%) !important;
+    color: white !important;
+  }
   .empty-state {padding:20px;text-align:center;background:#fafafa;border:1px dashed #d0d0d0;border-radius:8px;color:#666;}
   .step-label {display:flex;flex-direction:column;align-items:center;width:100%;}
   @media (max-width: 768px) {
@@ -112,7 +115,7 @@
       </div>
       <div>
         <label>I.V.A. (%)</label>
-        <input type="number" step="0.01" name="iva_porcentaje" value="21" style="width:100%;padding:8px;">
+        <input type="number" step="0.01" name="iva_porcentaje" value="10" style="width:100%;padding:8px;">
       </div>
       <div>
         <label>Validez (días)</label>

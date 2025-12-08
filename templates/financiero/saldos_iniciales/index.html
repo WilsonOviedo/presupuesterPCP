@@ -1,0 +1,211 @@
+{% extends 'base.html' %}
+{% block title %}Saldos Iniciales{% endblock %}
+{% block head %}
+  <style>
+    .bancos-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .bancos-table thead {
+      background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%) !important;
+      color: white !important;
+    }
+    .bancos-table th {
+      background: transparent !important;
+      color: white !important;
+    }
+    .bancos-table th {
+      padding: 14px 12px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.9em;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .bancos-table td {
+      padding: 12px;
+      border-bottom: 1px solid #e8e8e8;
+      font-size: 0.9em;
+    }
+    .bancos-table tbody tr {
+      transition: background-color 0.2s ease;
+    }
+    .bancos-table tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
+    .bancos-table tbody tr:hover {
+      background: #e0f7fa;
+      cursor: pointer;
+    }
+    .actions-cell {
+      display: flex;
+      gap: 8px;
+    }
+    .actions-cell a {
+      padding: 6px 12px;
+      background: #00BCD4;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-size: 0.85em;
+      font-weight: 600;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .actions-cell a:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    }
+    .actions-cell form {
+      display: inline;
+    }
+    .actions-cell button {
+      padding: 6px 12px;
+      background: #f44336;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85em;
+      font-weight: 600;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .actions-cell button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    }
+  </style>
+{% endblock %}
+{% block content %}
+  <div style="max-width: 1200px; margin: 0 auto;">
+    <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <a class="button button-secondary" href="{{ url_for('financiero_index') }}">← Volver</a>
+      </div>
+      <div>
+        <a class="button" href="{{ url_for('banco_nuevo') }}" style="background: #00BCD4;">➕ Nuevo Banco</a>
+      </div>
+    </div>
+
+    <h2>🏦 Saldos Iniciales</h2>
+
+    <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;">
+      <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #333;">Fecha de los Saldos Iniciales:</label>
+      <input type="date" id="fecha_saldos_iniciales" name="fecha_saldos_iniciales" 
+             value="{{ fecha_saldo_inicial.strftime('%Y-%m-%d') if fecha_saldo_inicial else '' }}"
+             style="width: 100%; max-width: 300px; padding: 10px; border: 2px solid #00BCD4; border-radius: 6px; font-size: 14px;">
+      <small style="display: block; margin-top: 8px; color: #666;">Fecha global para todos los saldos iniciales</small>
+    </div>
+
+    {% if error %}
+      <div style="background: #ffebee; color: #c62828; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #ef5350;">
+        <strong>Error:</strong> {{ error }}
+      </div>
+    {% endif %}
+
+    {% if mensaje %}
+      <div style="background: #e8f5e9; color: #2e7d32; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #4caf50;">
+        <strong>Éxito:</strong> {{ mensaje }}
+      </div>
+    {% endif %}
+
+    <div style="overflow-x: auto;">
+      <table class="bancos-table">
+        <thead>
+          <tr>
+            <th>Nombre del Banco</th>
+            <th style="text-align: right;">Saldo Inicial</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for banco in bancos %}
+            <tr>
+              <td><strong>{{ banco.nombre }}</strong></td>
+              <td style="text-align: right;"><strong>{{ "{:,.2f}".format(banco.saldo_inicial) if banco.saldo_inicial else '0.00' }}</strong></td>
+              <td>
+                <span style="padding: 4px 8px; border-radius: 4px; font-size: 0.85em; 
+                  {% if banco.activo %}background:#d4edda; color:#155724;{% else %}background:#f8d7da; color:#721c24;{% endif %}">
+                  {{ 'Activo' if banco.activo else 'Inactivo' }}
+                </span>
+              </td>
+              <td class="actions-cell">
+                <a href="{{ url_for('banco_editar', id=banco.id) }}">✏️ Editar</a>
+                <form method="POST" action="{{ url_for('banco_eliminar', id=banco.id) }}" 
+                      onsubmit="return confirm('¿Está seguro de eliminar este banco?');">
+                  <button type="submit">🗑️ Eliminar</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+          
+          {% if not bancos %}
+            <tr>
+              <td colspan="4" style="text-align: center; padding: 40px; color: #999;">
+                No hay bancos registrados. <a href="{{ url_for('banco_nuevo') }}">Crear primer banco</a>
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}
+{% block scripts %}
+  <script>
+    const fechaInput = document.getElementById('fecha_saldos_iniciales');
+    let fechaOriginal = fechaInput.value;
+    
+    fechaInput.addEventListener('change', function() {
+      const nuevaFecha = this.value;
+      
+      // Si la fecha cambió, mostrar confirmación
+      if (nuevaFecha !== fechaOriginal) {
+        const confirmar = confirm(
+          '⚠️ ADVERTENCIA: Está a punto de modificar la fecha de los saldos iniciales.\n\n' +
+          'Esta es una operación importante que afecta todos los saldos iniciales.\n\n' +
+          '¿Está seguro de que desea continuar?'
+        );
+        
+        if (confirmar) {
+          // Guardar la fecha
+          fetch('/api/financiero/actualizar-fecha-saldo-inicial', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              fecha: nuevaFecha
+            })
+          })
+          .then(response => response.json())
+          .then(result => {
+            if (result.success) {
+              alert('✅ ' + result.message);
+              fechaOriginal = nuevaFecha; // Actualizar fecha original
+            } else {
+              alert('❌ Error: ' + result.message);
+              // Revertir al valor original
+              fechaInput.value = fechaOriginal;
+            }
+          })
+          .catch(error => {
+            console.error('Error:', error);
+            alert('❌ Error al guardar la fecha: ' + error.message);
+            // Revertir al valor original
+            fechaInput.value = fechaOriginal;
+          });
+        } else {
+          // Revertir al valor original si el usuario cancela
+          fechaInput.value = fechaOriginal;
+        }
+      }
+    });
+  </script>
+{% endblock %}

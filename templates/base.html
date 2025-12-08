@@ -10,6 +10,12 @@
     .navbar a { color:white; text-decoration:none; font-weight:500; padding:6px 10px; border-radius:4px; }
     .navbar a:hover { background:rgba(255,255,255,0.18); }
     .navbar .spacer { flex:1; }
+    .dropdown { position: relative; display: inline-block; }
+    .dropdown-toggle { cursor: pointer; }
+    .dropdown-menu { display: none; position: absolute; top: 100%; left: 0; background: white; min-width: 220px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); border-radius: 6px; margin-top: 5px; padding: 8px 0; z-index: 1000; }
+    .dropdown:hover .dropdown-menu { display: block; }
+    .dropdown-menu a { display: block; padding: 10px 16px; color: #333; text-decoration: none; font-weight: 500; }
+    .dropdown-menu a:hover { background: #f0f0f0; color: #0d47a1; }
     .container { max-width: 1200px; width: 100%; margin: 20px auto; padding: 0 20px 40px; }
     .card { border: 1px solid #ddd; padding: 16px; border-radius: 8px; margin: 12px 0; background:white; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
     a.button, button.button { display: inline-block; padding: 8px 14px; background: #1976d2; color: #fff; text-decoration: none; border-radius: 6px; border: none; cursor: pointer; }
@@ -26,19 +32,59 @@
 </head>
 <body>
   <nav class="navbar">
-    <a class="brand" href="{{ url_for('menu') }}">Scrapper Facturas</a>
+    <a class="brand" href="{{ url_for('menu') }}">ApoloSys</a>
     <a href="{{ url_for('menu') }}">Inicio</a>
     <a href="{{ url_for('precios_index') }}">Buscar Precios</a>
-    <a href="{{ url_for('presupuestos_index') }}">Presupuestos</a>
-    <a href="{{ url_for('items_index') }}">Items Mano de Obra</a>
-    <a href="{{ url_for('prefijos_codigos_index') }}">Prefijos Códigos</a>
-    <a href="{{ url_for('materiales_index') }}">Materiales</a>
-    <a href="{{ url_for('marcas_materiales_index') }}">Marcas</a>
-    <a href="{{ url_for('proveedores_index') }}">Proveedores</a>
-    <a href="{{ url_for('materiales_genericos_index') }}">Materiales Genéricos</a>
-    <a href="{{ url_for('templates_index') }}">Templates</a>
-    <a href="{{ url_for('clientes_index') }}">Clientes</a>
+    <div class="dropdown">
+      <a href="#" class="dropdown-toggle">💰 Ventas</a>
+      <div class="dropdown-menu">
+        <a href="{{ url_for('presupuestos_index') }}">📊 Presupuestos</a>
+        <a href="{{ url_for('facturacion_index') }}">🧾 Facturación</a>
+        <a href="{{ url_for('clientes_index') }}">👥 Clientes</a>
+      </div>
+    </div>
+    <div class="dropdown">
+      <a href="#" class="dropdown-toggle">📦 Inventarios</a>
+      <div class="dropdown-menu">
+        <a href="{{ url_for('prefijos_codigos_index') }}">🔢 Prefijos Códigos</a>
+        <a href="{{ url_for('items_index') }}">👷 Items Mano de Obra</a>
+        <a href="{{ url_for('marcas_materiales_index') }}">🏷️ Marcas</a>
+        <a href="{{ url_for('materiales_genericos_index') }}">📋 Materiales Genéricos</a>
+        <a href="{{ url_for('templates_index') }}">📄 Templates</a>
+        <a href="{{ url_for('proveedores_index') }}">🏢 Proveedores</a>
+      </div>
+    </div>
+    <div class="dropdown">
+      <a href="#" class="dropdown-toggle">💰 Financiero</a>
+      <div class="dropdown-menu">
+        <a href="{{ url_for('financiero_index') }}">📊 Menú Financiero</a>
+        <a href="{{ url_for('tipos_ingresos_index') }}">💵 Tipos de Ingresos</a>
+        <a href="{{ url_for('tipos_gastos_index') }}">💸 Tipos de Gastos</a>
+        <a href="{{ url_for('proyectos_index') }}">📁 Proyectos</a>
+        <a href="{{ url_for('tipos_documentos_index') }}">📄 Tipos de Documentos</a>
+        <a href="{{ url_for('saldos_iniciales_index') }}">🏦 Saldos Iniciales</a>
+        <a href="{{ url_for('cuentas_a_recibir_index') }}">💰 Cuentas a Recibir</a>
+        <a href="{{ url_for('cuentas_a_pagar_index') }}">💸 Cuentas a Pagar</a>
+      </div>
+    </div>
+    <div class="dropdown">
+      <a href="#" class="dropdown-toggle">📊 Reportes</a>
+      <div class="dropdown-menu">
+        <a href="{{ url_for('reportes_clientes_index') }}">👥 Reporte de Clientes</a>
+        <a href="{{ url_for('reportes_cuentas_a_recibir_index') }}">💰 Reporte de Cuentas a Recibir</a>
+        <a href="{{ url_for('reportes_cuentas_a_pagar_index') }}">💸 Reporte de Cuentas a Pagar</a>
+      </div>
+    </div>
     <div class="spacer"></div>
+    {% if session.user_id %}
+    <span style="color:rgba(255,255,255,0.9);">{{ session.username }}</span>
+    {% if session.es_admin %}
+    <span style="padding:4px 8px; background:rgba(255,152,0,0.8); border-radius:4px; font-size:0.85em;">Admin</span>
+    {% endif %}
+    <a href="{{ url_for('logout') }}">Salir</a>
+    {% else %}
+    <a href="{{ url_for('login') }}">Iniciar Sesión</a>
+    {% endif %}
   </nav>
   <div class="container">
     {% block content %}{% endblock %}

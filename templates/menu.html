@@ -1,42 +1,218 @@
 {% extends 'base.html' %}
 {% block title %}Menú{% endblock %}
+{% block head %}
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.12.1/css/all.css" crossorigin="anonymous">
+  <style>
+    .menu-container {
+      max-width: 1400px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+    .menu-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 30px;
+      margin-top: 30px;
+    }
+    .menu-box {
+      background: white;
+      border-radius: 16px;
+      padding: 30px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .menu-box::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 5px;
+      background: var(--box-color);
+    }
+    .menu-box:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+    }
+    .menu-box.verde { --box-color: #4CAF50; }
+    .menu-box.azul { --box-color: #2196F3; }
+    .menu-box.violeta { --box-color: #9C27B0; }
+    .menu-box.naranja { --box-color: #FF9800; }
+    .menu-box.amarillo { --box-color: #FFC107; }
+    .menu-box.rojo { --box-color: #F44336; }
+    .menu-box.gris { --box-color: #607D8B; }
+    .menu-box-icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+      color: var(--box-color);
+    }
+    .menu-box-content h3 {
+      margin: 0 0 12px 0;
+      font-size: 24px;
+      font-weight: 600;
+      color: #333;
+    }
+    .menu-box-content p {
+      margin: 0 0 24px 0;
+      color: #666;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .menu-box-content button {
+      background: var(--box-color);
+      color: white;
+      border: none;
+      padding: 12px 32px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.3s ease, transform 0.2s ease;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .menu-box-content button:hover {
+      background: var(--box-color);
+      filter: brightness(0.9);
+      transform: scale(1.05);
+    }
+    .menu-box-content a {
+      text-decoration: none;
+    }
+    .menu-box-content button:active {
+      transform: scale(0.98);
+    }
+    @media (max-width: 768px) {
+      .menu-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+{% endblock %}
 {% block content %}
-  <h2>Menú principal</h2>
+  <div class="menu-container">
+    <h2 style="text-align: center; margin-bottom: 10px; font-size: 32px; color: #333;">Menú Principal</h2>
+    <p style="text-align: center; color: #666; margin-bottom: 30px;">Selecciona una opción para comenzar</p>
 
-  <div class="card">
-    <h3>Buscar precios</h3>
-    <p>Consultar precios guardados en la base de datos.</p>
-    <a class="button" href="{{ url_for('precios_index') }}">Abrir búsqueda</a>
-  </div>
+    <div class="menu-grid">
+      <div class="menu-box azul">
+        <div class="menu-box-icon">
+          <i class="fas fa-search"></i>
+        </div>
+        <div class="menu-box-content">
+          <h3>Buscar Precios</h3>
+          <p>Consultar precios guardados en la base de datos.</p>
+          <a href="{{ url_for('precios_index') }}">
+            <button>Acceder</button>
+          </a>
+        </div>
+      </div>
 
-  <div class="card">
-    <h3>Leer facturas</h3>
-    <p>Procesar facturas XML desde el correo IMAP y cargar precios.</p>
-    <a class="button" href="{{ url_for('leer_facturas_page') }}">Abrir lector</a>
-  </div>
+      <div class="menu-box verde">
+        <div class="menu-box-icon">
+          <i class="fas fa-file-invoice"></i>
+        </div>
+        <div class="menu-box-content">
+          <h3>Leer Facturas</h3>
+          <p>Procesar facturas XML desde el correo IMAP y cargar precios.</p>
+          <a href="{{ url_for('leer_facturas_page') }}">
+            <button>Acceder</button>
+          </a>
+        </div>
+      </div>
 
-  <div class="card">
-    <h3>Calculadora de precio</h3>
-    <p>Ingresa precio y margen para calcular el precio de venta.</p>
-    <a class="button" href="{{ url_for('calculadora') }}">Abrir calculadora</a>
-  </div>
+      <div class="menu-box naranja">
+        <div class="menu-box-icon">
+          <i class="fas fa-calculator"></i>
+        </div>
+        <div class="menu-box-content">
+          <h3>Calculadora de Precio</h3>
+          <p>Ingresa precio y margen para calcular el precio de venta.</p>
+          <a href="{{ url_for('calculadora') }}">
+            <button>Acceder</button>
+          </a>
+        </div>
+      </div>
 
-  <div class="card">
-    <h3>Historial de precios</h3>
-    <p>Selecciona un producto para ver un gráfico de su evolución de precio.</p>
-    <a class="button" href="{{ url_for('historial') }}">Abrir historial</a>
-  </div>
+      <div class="menu-box amarillo">
+        <div class="menu-box-icon">
+          <i class="fas fa-chart-line"></i>
+        </div>
+        <div class="menu-box-content">
+          <h3>Historial de Precios</h3>
+          <p>Selecciona un producto para ver un gráfico de su evolución de precio.</p>
+          <a href="{{ url_for('historial') }}">
+            <button>Acceder</button>
+          </a>
+        </div>
+      </div>
 
-  <div class="card">
-    <h3>Cargar presupuesto desde imagen</h3>
-    <p>Sube una imagen de presupuesto y el sistema extraerá automáticamente los productos y precios usando OCR.</p>
-    <a class="button" href="{{ url_for('precios_cargar_presupuesto') }}">Cargar presupuesto</a>
-  </div>
+      <div class="menu-box rojo">
+        <div class="menu-box-icon">
+          <i class="fas fa-list-alt"></i>
+        </div>
+        <div class="menu-box-content">
+          <h3>Listas de Materiales</h3>
+          <p>Generar listas de materiales y servicios por proyecto, asignar precios y preparar presupuestos finales.</p>
+          <a href="{{ url_for('listas_materiales_index') }}">
+            <button>Acceder</button>
+          </a>
+        </div>
+      </div>
 
-  <div class="card">
-    <h3>Listas de materiales</h3>
-    <p>Generar listas de materiales y servicios por proyecto, asignar precios y preparar presupuestos finales.</p>
-    <a class="button" href="{{ url_for('listas_materiales_index') }}">Abrir listas</a>
+      <div class="menu-box violeta">
+        <div class="menu-box-icon">
+          <i class="fas fa-file-pdf"></i>
+        </div>
+        <div class="menu-box-content">
+          <h3>Facturación</h3>
+          <p>Crear y generar facturas en formato PDF para impresión.</p>
+          <a href="{{ url_for('facturacion_index') }}">
+            <button>Acceder</button>
+          </a>
+        </div>
+      </div>
+
+      <div class="menu-box gris">
+        <div class="menu-box-icon">
+          <i class="fas fa-chart-bar"></i>
+        </div>
+        <div class="menu-box-content">
+          <h3>Reportes de Clientes</h3>
+          <p>Ver reportes de facturas por cliente, estados de pago y días de atraso.</p>
+          <a href="{{ url_for('reportes_clientes_index') }}">
+            <button>Acceder</button>
+          </a>
+        </div>
+      </div>
+
+      {% if usuario and usuario.es_admin %}
+      <div class="menu-box naranja">
+        <div class="menu-box-icon">
+          <i class="fas fa-users-cog"></i>
+        </div>
+        <div class="menu-box-content">
+          <h3>Gestión de Usuarios</h3>
+          <p>Gestionar usuarios, permisos y acceso al sistema (solo administradores).</p>
+          <a href="{{ url_for('usuarios_index') }}">
+            <button>Acceder</button>
+          </a>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if error %}
+    <div style="background:#fee; color:#c33; padding:15px; border-radius:8px; margin-top:30px; border:1px solid #fcc; text-align:center;">
+      <strong>Error:</strong> {{ error }}
+    </div>
+    {% endif %}
   </div>
 {% endblock %}
 

@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+{% block title %}Tipos de Documentos{% endblock %}
+{% block head %}
+  <style>
+    .tipos-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .tipos-table thead {
+      background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%) !important;
+      color: white !important;
+    }
+    .tipos-table th {
+      background: transparent !important;
+      color: white !important;
+      padding: 14px 12px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.9em;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .tipos-table td {
+      padding: 12px;
+      border-bottom: 1px solid #e8e8e8;
+      font-size: 0.9em;
+    }
+    .tipos-table tbody tr {
+      transition: background-color 0.2s ease;
+    }
+    .tipos-table tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
+    .tipos-table tbody tr:hover {
+      background: #f3e5f5;
+      cursor: pointer;
+    }
+    .actions-cell {
+      display: flex;
+      gap: 8px;
+    }
+    .actions-cell a {
+      padding: 6px 12px;
+      background: #9C27B0;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-size: 0.85em;
+      font-weight: 600;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .actions-cell a:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    }
+    .actions-cell form {
+      display: inline;
+    }
+    .actions-cell button {
+      padding: 6px 12px;
+      background: #f44336;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85em;
+      font-weight: 600;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .actions-cell button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    }
+  </style>
+{% endblock %}
+{% block content %}
+  <div style="max-width: 1200px; margin: 0 auto;">
+    <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <a class="button button-secondary" href="{{ url_for('financiero_index') }}">← Volver</a>
+      </div>
+      <div>
+        <a class="button" href="{{ url_for('tipo_documento_nuevo') }}" style="background: #9C27B0;">➕ Nuevo Tipo de Documento</a>
+      </div>
+    </div>
+
+    <h2>📄 Tipos de Documentos</h2>
+
+    {% if error %}
+      <div style="background: #ffebee; color: #c62828; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #ef5350;">
+        <strong>Error:</strong> {{ error }}
+      </div>
+    {% endif %}
+
+    {% if mensaje %}
+      <div style="background: #e8f5e9; color: #2e7d32; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #4caf50;">
+        <strong>Éxito:</strong> {{ mensaje }}
+      </div>
+    {% endif %}
+
+    <div style="overflow-x: auto;">
+      <table class="tipos-table">
+        <thead>
+          <tr>
+            <th>Código</th>
+            <th>Tipo de Documento</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tipo in tipos %}
+            <tr>
+              <td><strong>{{ tipo.codigo }}</strong></td>
+              <td>{{ tipo.nombre }}</td>
+              <td>
+                <span style="padding: 4px 8px; border-radius: 4px; font-size: 0.85em; 
+                  {% if tipo.activo %}background:#d4edda; color:#155724;{% else %}background:#f8d7da; color:#721c24;{% endif %}">
+                  {{ 'Activo' if tipo.activo else 'Inactivo' }}
+                </span>
+              </td>
+              <td class="actions-cell">
+                <a href="{{ url_for('tipo_documento_editar', id=tipo.id) }}">✏️ Editar</a>
+                <form method="POST" action="{{ url_for('tipo_documento_eliminar', id=tipo.id) }}" 
+                      onsubmit="return confirm('¿Está seguro de eliminar este tipo de documento?');">
+                  <button type="submit">🗑️ Eliminar</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+          
+          {% if not tipos %}
+            <tr>
+              <td colspan="4" style="text-align: center; padding: 40px; color: #999;">
+                No hay tipos de documentos registrados. <a href="{{ url_for('tipo_documento_nuevo') }}">Crear primer tipo de documento</a>
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}
+

@@ -38,10 +38,10 @@
       </tr>
       {% for item in items %}
         <tr>
-          <td>{{ item.codigo or '-' }}</td>
-          <td>{{ item.descripcion }}</td>
-          <td>{{ item.tipo }}</td>
-          <td>{{ item.unidad }}</td>
+          <td>{{ item.codigo if item.codigo else '' }}</td>
+          <td>{{ item.descripcion if item.descripcion else '' }}</td>
+          <td>{{ item.tipo if item.tipo else '' }}</td>
+          <td>{{ item.unidad if item.unidad else '' }}</td>
           <td style="text-align:right;"><strong>Gs. {{ "{:,.2f}".format(item.precio_base) if item.precio_base else '0.00' }}</strong></td>
           <td>
             <span style="padding:4px 8px; border-radius:4px; font-size:0.85em; 
@@ -53,7 +53,7 @@
             <a href="{{ url_for('items_editar', id=item.id) }}" class="button" style="padding:4px 8px; font-size:0.85em;">Editar</a>
           </td>
         </tr>
-        {% if item.notas %}
+        {% if item.notas and item.notas.strip() %}
         <tr>
           <td colspan="7" style="padding-left:30px; font-style:italic; color:#666; font-size:0.9em;">Nota: {{ item.notas }}</td>
         </tr>

@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Editar' if proyecto else 'Nuevo' }} Proyecto{% endblock %}
+{% block content %}
+  <div style="max-width: 600px; margin: 0 auto;">
+    <div style="margin-bottom: 20px;">
+      <a class="button button-secondary" href="{{ url_for('proyectos_index') }}">← Volver</a>
+    </div>
+
+    <h2>{{ 'Editar' if proyecto else 'Nuevo' }} Proyecto</h2>
+
+    <form method="POST" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+      {% if proyecto %}
+      <div style="margin-bottom: 15px; padding: 10px; background: #f5f5f5; border-radius: 4px;">
+        <label style="display: block; font-weight: 600; margin-bottom: 5px;">Código:</label>
+        <input type="text" value="{{ proyecto.codigo }}" 
+               disabled style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: #e0e0e0;">
+        <small style="color: #666;">El código se genera automáticamente y no se puede modificar</small>
+      </div>
+      {% else %}
+      <div style="margin-bottom: 15px; padding: 10px; background: #fff3e0; border-radius: 4px;">
+        <small style="color: #e65100;">ℹ️ El código se generará automáticamente (ej: 1, 2, 3...)</small>
+      </div>
+      {% endif %}
+
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; font-weight: 600; margin-bottom: 5px;">Nombre *:</label>
+        <input type="text" name="nombre" value="{{ proyecto.nombre if proyecto else '' }}" 
+               required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; text-transform: uppercase;"
+               oninput="this.value = this.value.toUpperCase()">
+        <small style="color: #666;">Ej: CONSOLIDADO, PCP, KF S.A (se convertirá a mayúsculas automáticamente)</small>
+      </div>
+
+      {% if proyecto %}
+      <div style="margin-bottom: 15px;">
+        <label style="display: flex; align-items: center; gap: 8px;">
+          <input type="checkbox" name="activo" {{ 'checked' if proyecto.activo else '' }}>
+          <span>Activo</span>
+        </label>
+      </div>
+      {% endif %}
+
+      <div style="margin-top: 20px; display: flex; gap: 10px;">
+        <button type="submit" class="button" style="background: #FF9800;">💾 Guardar</button>
+        <a href="{{ url_for('proyectos_index') }}" class="button button-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}
+

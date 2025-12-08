@@ -1,5 +1,23 @@
 {% extends 'base.html' %}
 {% block title %}Presupuestos{% endblock %}
+{% block head %}
+  <style>
+    table thead {
+      background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%) !important;
+      color: white !important;
+    }
+    table th {
+      background: transparent !important;
+      color: white !important;
+      padding: 14px 12px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.9em;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+  </style>
+{% endblock %}
 {% block content %}
   <div class="actions" style="margin-bottom:10px;">
     <a class="button button-secondary" href="{{ url_for('menu') }}">← Volver</a>
@@ -40,19 +58,22 @@
 
   {% if presupuestos %}
     <table>
-      <tr>
-        <th>Número</th>
-        <th>Título</th>
-        <th>Cliente</th>
-        <th>Razón social</th>
-        <th>Fecha</th>
-        <th>Items</th>
-        <th>Subtotal</th>
-        <th>IVA</th>
-        <th>Total</th>
-        <th>Estado</th>
-        <th>Acciones</th>
-      </tr>
+      <thead>
+        <tr>
+          <th>Número</th>
+          <th>Título</th>
+          <th>Cliente</th>
+          <th>Razón social</th>
+          <th>Fecha</th>
+          <th>Items</th>
+          <th>Subtotal</th>
+          <th>IVA</th>
+          <th>Total</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
       {% for p in presupuestos %}
         <tr>
           <td><strong>{{ p.numero_presupuesto }}</strong></td>
@@ -80,6 +101,7 @@
           </td>
         </tr>
       {% endfor %}
+      </tbody>
     </table>
   {% else %}
     <p>No hay presupuestos.</p>
