@@ -361,7 +361,7 @@ def obtener_clientes_con_facturas():
         conn.close()
 
 
-def obtener_reportes_cuentas_a_pagar(proveedor_nombre=None, fecha_desde=None, fecha_hasta=None, estado_pago_filtro=None):
+def obtener_reportes_cuentas_a_pagar(proveedor_nombre=None, fecha_desde=None, fecha_hasta=None, estado_pago_filtro=None, tipo_filtro=None):
     """Obtiene reportes de cuentas a pagar de un proveedor o todos los proveedores"""
     conn, cur = conectar()
     try:
@@ -382,6 +382,10 @@ def obtener_reportes_cuentas_a_pagar(proveedor_nombre=None, fecha_desde=None, fe
         if fecha_hasta:
             where_clauses.append("cap.fecha_emision <= %s")
             params.append(fecha_hasta)
+        
+        if tipo_filtro:
+            where_clauses.append("cap.tipo = %s")
+            params.append(tipo_filtro)
         
         where_sql = ""
         if where_clauses:
@@ -529,7 +533,7 @@ def obtener_proveedores_con_cuentas():
         conn.close()
 
 
-def obtener_reportes_cuentas_a_recibir(cliente_nombre=None, fecha_desde=None, fecha_hasta=None, estado_pago_filtro=None):
+def obtener_reportes_cuentas_a_recibir(cliente_nombre=None, fecha_desde=None, fecha_hasta=None, estado_pago_filtro=None, tipo_filtro=None):
     """Obtiene reportes de cuentas a recibir de un cliente o todos los clientes"""
     conn, cur = conectar()
     try:
@@ -550,6 +554,10 @@ def obtener_reportes_cuentas_a_recibir(cliente_nombre=None, fecha_desde=None, fe
         if fecha_hasta:
             where_clauses.append("car.fecha_emision <= %s")
             params.append(fecha_hasta)
+        
+        if tipo_filtro:
+            where_clauses.append("car.tipo = %s")
+            params.append(tipo_filtro)
         
         if estado_pago_filtro:
             if estado_pago_filtro == 'pagado':

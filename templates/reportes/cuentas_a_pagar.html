@@ -170,6 +170,16 @@
       <form method="GET" action="{{ url_for('reportes_cuentas_a_pagar_index') }}">
         <div class="filtros-row">
           <div class="form-group">
+            <label for="tipo">Tipo:</label>
+            <select id="tipo" name="tipo">
+              <option value="">Todos</option>
+              <option value="FCON" {% if tipo_seleccionado == 'FCON' %}selected{% endif %}>Factura Contado (FCON)</option>
+              <option value="FCRE" {% if tipo_seleccionado == 'FCRE' %}selected{% endif %}>Factura Crédito (FCRE)</option>
+              <option value="NCRE" {% if tipo_seleccionado == 'NCRE' %}selected{% endif %}>Nota de Crédito (NCRE)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
             <label for="proveedor">Proveedor:</label>
             <input type="text" id="proveedor" name="proveedor" 
                    value="{{ proveedor_seleccionado }}"

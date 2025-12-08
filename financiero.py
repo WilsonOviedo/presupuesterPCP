@@ -1866,7 +1866,7 @@ def exportar_cuentas_a_recibir_csv(filtros=None):
     for cuenta in cuentas:
         writer.writerow([
             cuenta.get('id', ''),
-            cuenta.get('fecha_emision').strftime('%Y-%m-%d') if cuenta.get('fecha_emision') else '',
+            cuenta.get('fecha_emision').strftime('%d-%m-%Y') if cuenta.get('fecha_emision') else '',
             cuenta.get('documento_nombre', ''),
             cuenta.get('cuenta_nombre', ''),
             cuenta.get('plano_cuenta', ''),
@@ -1879,8 +1879,8 @@ def exportar_cuentas_a_recibir_csv(filtros=None):
             str(cuenta.get('valor', 0)) if cuenta.get('valor') else '0',
             cuenta.get('cuotas', ''),
             str(cuenta.get('valor_cuota', 0)) if cuenta.get('valor_cuota') else '',
-            cuenta.get('vencimiento').strftime('%Y-%m-%d') if cuenta.get('vencimiento') else '',
-            cuenta.get('fecha_recibo').strftime('%Y-%m-%d') if cuenta.get('fecha_recibo') else '',
+            cuenta.get('vencimiento').strftime('%d-%m-%Y') if cuenta.get('vencimiento') else '',
+            cuenta.get('fecha_recibo').strftime('%d-%m-%Y') if cuenta.get('fecha_recibo') else '',
             cuenta.get('estado', ''),
             cuenta.get('status_recibo', '')
         ])
@@ -1911,7 +1911,7 @@ def exportar_cuentas_a_pagar_csv(filtros=None):
     for cuenta in cuentas:
         writer.writerow([
             cuenta.get('id', ''),
-            cuenta.get('fecha_emision').strftime('%Y-%m-%d') if cuenta.get('fecha_emision') else '',
+            cuenta.get('fecha_emision').strftime('%d-%m-%Y') if cuenta.get('fecha_emision') else '',
             cuenta.get('documento_nombre', ''),
             cuenta.get('cuenta_nombre', ''),
             cuenta.get('plano_cuenta', ''),
@@ -1924,8 +1924,8 @@ def exportar_cuentas_a_pagar_csv(filtros=None):
             str(cuenta.get('valor', 0)) if cuenta.get('valor') else '0',
             cuenta.get('cuotas', ''),
             str(cuenta.get('valor_cuota', 0)) if cuenta.get('valor_cuota') else '',
-            cuenta.get('vencimiento').strftime('%Y-%m-%d') if cuenta.get('vencimiento') else '',
-            cuenta.get('fecha_pago').strftime('%Y-%m-%d') if cuenta.get('fecha_pago') else '',
+            cuenta.get('vencimiento').strftime('%d-%m-%Y') if cuenta.get('vencimiento') else '',
+            cuenta.get('fecha_pago').strftime('%d-%m-%Y') if cuenta.get('fecha_pago') else '',
             cuenta.get('estado', ''),
             cuenta.get('status_pago', '')
         ])
@@ -1958,7 +1958,7 @@ def importar_cuentas_a_recibir_csv(csv_content):
                 errores.append(f"Fila {idx}: Fecha Emisión es obligatoria")
                 continue
             
-            fecha_emision = datetime.strptime(row['Fecha Emisión'], '%Y-%m-%d').date()
+            fecha_emision = datetime.strptime(row['Fecha Emisión'], '%d-%m-%Y').date()
             
             # Obtener IDs de relaciones
             documento_id = None
@@ -1994,28 +1994,28 @@ def importar_cuentas_a_recibir_csv(csv_content):
             
             vencimiento = None
             if row.get('Vencimiento'):
-                vencimiento = datetime.strptime(row['Vencimiento'], '%Y-%m-%d').date()
+                vencimiento = datetime.strptime(row['Vencimiento'], '%d-%m-%Y').date()
             
             fecha_recibo = None
             if row.get('Fecha Recibo'):
-                fecha_recibo = datetime.strptime(row['Fecha Recibo'], '%Y-%m-%d').date()
+                fecha_recibo = datetime.strptime(row['Fecha Recibo'], '%d-%m-%Y').date()
             
             cuenta_id_creado = crear_cuenta_a_recibir(
                 fecha_emision=fecha_emision,
                 documento_id=documento_id,
                 cuenta_id=cuenta_id,
-                plano_cuenta=row.get('Plano de Cuenta', '').strip() or None,
-                tipo=row.get('Tipo', 'RECURRENTE').strip() or 'RECURRENTE',
-                cliente=row.get('Cliente', '').strip() or None,
-                factura=row.get('Factura', '').strip() or None,
-                descripcion=row.get('Descripción', '').strip() or None,
+                plano_cuenta=_to_upper(row.get('Plano de Cuenta', '').strip() or None),
+                tipo=_to_upper(row.get('Tipo', 'RECURRENTE').strip() or 'RECURRENTE'),
+                cliente=_to_upper(row.get('Cliente', '').strip() or None),
+                factura=_to_upper(row.get('Factura', '').strip() or None),
+                descripcion=_to_upper(row.get('Descripción', '').strip() or None),
                 banco_id=banco_id,
                 valor=valor,
-                cuotas=row.get('Cuotas', '').strip() or None,
+                cuotas=_to_upper(row.get('Cuotas', '').strip() or None),
                 valor_cuota=valor_cuota,
                 vencimiento=vencimiento,
                 fecha_recibo=fecha_recibo,
-                estado=row.get('Estado', 'ABIERTO').strip() or 'ABIERTO',
+                estado=_to_upper(row.get('Estado', 'ABIERTO').strip() or 'ABIERTO'),
                 proyecto_id=proyecto_id
             )
             
@@ -2051,7 +2051,7 @@ def importar_cuentas_a_pagar_csv(csv_content):
                 errores.append(f"Fila {idx}: Fecha Emisión es obligatoria")
                 continue
             
-            fecha_emision = datetime.strptime(row['Fecha Emisión'], '%Y-%m-%d').date()
+            fecha_emision = datetime.strptime(row['Fecha Emisión'], '%d-%m-%Y').date()
             
             # Obtener IDs de relaciones
             documento_id = None
@@ -2087,28 +2087,28 @@ def importar_cuentas_a_pagar_csv(csv_content):
             
             vencimiento = None
             if row.get('Vencimiento'):
-                vencimiento = datetime.strptime(row['Vencimiento'], '%Y-%m-%d').date()
+                vencimiento = datetime.strptime(row['Vencimiento'], '%d-%m-%Y').date()
             
             fecha_pago = None
             if row.get('Fecha Pago'):
-                fecha_pago = datetime.strptime(row['Fecha Pago'], '%Y-%m-%d').date()
+                fecha_pago = datetime.strptime(row['Fecha Pago'], '%d-%m-%Y').date()
             
             cuenta_id_creado = crear_cuenta_a_pagar(
                 fecha_emision=fecha_emision,
                 documento_id=documento_id,
                 cuenta_id=cuenta_id,
-                plano_cuenta=row.get('Plano de Cuenta', '').strip() or None,
-                tipo=row.get('Tipo', 'RECURRENTE').strip() or 'RECURRENTE',
-                proveedor=row.get('Proveedor', '').strip() or None,
-                factura=row.get('Factura', '').strip() or None,
-                descripcion=row.get('Descripción', '').strip() or None,
+                plano_cuenta=_to_upper(row.get('Plano de Cuenta', '').strip() or None),
+                tipo=_to_upper(row.get('Tipo', 'RECURRENTE').strip() or 'RECURRENTE'),
+                proveedor=_to_upper(row.get('Proveedor', '').strip() or None),
+                factura=_to_upper(row.get('Factura', '').strip() or None),
+                descripcion=_to_upper(row.get('Descripción', '').strip() or None),
                 banco_id=banco_id,
                 valor=valor,
-                cuotas=row.get('Cuotas', '').strip() or None,
+                cuotas=_to_upper(row.get('Cuotas', '').strip() or None),
                 valor_cuota=valor_cuota,
                 vencimiento=vencimiento,
                 fecha_pago=fecha_pago,
-                estado=row.get('Estado', 'ABIERTO').strip() or 'ABIERTO',
+                estado=_to_upper(row.get('Estado', 'ABIERTO').strip() or 'ABIERTO'),
                 proyecto_id=proyecto_id
             )
             
@@ -2153,7 +2153,7 @@ def previsualizar_cuentas_a_pagar_csv(csv_content):
             fecha_emision = None
             if row.get('Fecha Emisión'):
                 try:
-                    fecha_emision = datetime.strptime(row['Fecha Emisión'], '%Y-%m-%d').date()
+                    fecha_emision = datetime.strptime(row['Fecha Emisión'], '%d-%m-%Y').date()
                 except ValueError:
                     fila_data['valida'] = False
                     fila_data['errores'].append(f'Fecha Emisión inválida: {row.get("Fecha Emisión")}')
@@ -2221,7 +2221,7 @@ def previsualizar_cuentas_a_pagar_csv(csv_content):
             vencimiento = None
             if row.get('Vencimiento'):
                 try:
-                    vencimiento = datetime.strptime(row['Vencimiento'], '%Y-%m-%d').date()
+                    vencimiento = datetime.strptime(row['Vencimiento'], '%d-%m-%Y').date()
                 except ValueError:
                     fila_data['valida'] = False
                     fila_data['errores'].append(f'Vencimiento inválido: {row.get("Vencimiento")}')
@@ -2229,7 +2229,7 @@ def previsualizar_cuentas_a_pagar_csv(csv_content):
             fecha_pago = None
             if row.get('Fecha Pago'):
                 try:
-                    fecha_pago = datetime.strptime(row['Fecha Pago'], '%Y-%m-%d').date()
+                    fecha_pago = datetime.strptime(row['Fecha Pago'], '%d-%m-%Y').date()
                 except ValueError:
                     fila_data['valida'] = False
                     fila_data['errores'].append(f'Fecha Pago inválida: {row.get("Fecha Pago")}')
@@ -2238,19 +2238,19 @@ def previsualizar_cuentas_a_pagar_csv(csv_content):
                 'fecha_emision': row.get('Fecha Emisión', ''),
                 'documento': documento_nombre,
                 'cuenta': cuenta_nombre,
-                'plano_cuenta': row.get('Plano de Cuenta', ''),
+                'plano_cuenta': _to_upper(row.get('Plano de Cuenta', '')),
                 'proyecto': proyecto_nombre,
-                'tipo': row.get('Tipo', 'RECURRENTE'),
-                'proveedor': row.get('Proveedor', ''),
-                'factura': row.get('Factura', ''),
-                'descripcion': row.get('Descripción', ''),
+                'tipo': _to_upper(row.get('Tipo', 'RECURRENTE')),
+                'proveedor': _to_upper(row.get('Proveedor', '')),
+                'factura': _to_upper(row.get('Factura', '')),
+                'descripcion': _to_upper(row.get('Descripción', '')),
                 'banco': banco_nombre,
                 'valor': row.get('Valor', ''),
-                'cuotas': row.get('Cuotas', ''),
+                'cuotas': _to_upper(row.get('Cuotas', '')),
                 'valor_cuota': row.get('Valor Cuota', ''),
                 'vencimiento': row.get('Vencimiento', ''),
                 'fecha_pago': row.get('Fecha Pago', ''),
-                'estado': row.get('Estado', 'ABIERTO')
+                'estado': _to_upper(row.get('Estado', 'ABIERTO'))
             }
             
             if not fila_data['valida']:

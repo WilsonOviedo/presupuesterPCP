@@ -724,20 +724,10 @@ def leer_facturas_page():
         finished = _job_state["finished"]
         salida = _job_state["output"]
     
-    # Obtener información de la base de datos
-    db_host = os.getenv('DB_HOST', 'No configurado')
-    db_port = os.getenv('DB_PORT', 'No configurado')
-    db_name = os.getenv('DB_NAME', 'No configurado')
-    db_user = os.getenv('DB_USER', 'No configurado')
-    
     return render_template('leer_facturas.html', 
                          salida=salida, 
                          running=running, 
-                         finished=finished,
-                         db_host=db_host,
-                         db_port=db_port,
-                         db_name=db_name,
-                         db_user=db_user)
+                         finished=finished)
 
 @app.route("/leer-facturas/status", methods=["GET"])
 def leer_facturas_status():
@@ -3065,6 +3055,7 @@ def reportes_cuentas_a_pagar_index():
     fecha_desde = request.args.get('fecha_desde', '').strip() or None
     fecha_hasta = request.args.get('fecha_hasta', '').strip() or None
     estado_filtro = request.args.get('estado', '').strip() or None
+    tipo_filtro = request.args.get('tipo', '').strip() or None
     
     # Obtener lista de proveedores para el filtro
     proveedores = reportes_clientes.obtener_proveedores_con_cuentas()
@@ -3074,7 +3065,8 @@ def reportes_cuentas_a_pagar_index():
         proveedor_nombre=proveedor_nombre,
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
-        estado_pago_filtro=estado_filtro
+        estado_pago_filtro=estado_filtro,
+        tipo_filtro=tipo_filtro
     )
     
     # Filtrar por estado si se especifica
@@ -3087,7 +3079,8 @@ def reportes_cuentas_a_pagar_index():
                          proveedor_seleccionado=proveedor_nombre or '',
                          fecha_desde=fecha_desde or '',
                          fecha_hasta=fecha_hasta or '',
-                         estado_seleccionado=estado_filtro or '')
+                         estado_seleccionado=estado_filtro or '',
+                         tipo_seleccionado=tipo_filtro or '')
 
 
 @app.route("/reportes/cuentas-a-recibir", methods=["GET"], endpoint="reportes_cuentas_a_recibir_index")
@@ -3099,6 +3092,7 @@ def reportes_cuentas_a_recibir_index():
     fecha_desde = request.args.get('fecha_desde', '').strip() or None
     fecha_hasta = request.args.get('fecha_hasta', '').strip() or None
     estado_filtro = request.args.get('estado', '').strip() or None
+    tipo_filtro = request.args.get('tipo', '').strip() or None
     
     # Obtener lista de clientes para el filtro
     clientes = reportes_clientes.obtener_clientes_con_cuentas_a_recibir()
@@ -3108,7 +3102,8 @@ def reportes_cuentas_a_recibir_index():
         cliente_nombre=cliente_nombre,
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
-        estado_pago_filtro=estado_filtro
+        estado_pago_filtro=estado_filtro,
+        tipo_filtro=tipo_filtro
     )
     
     # Filtrar por estado si se especifica
@@ -3121,7 +3116,8 @@ def reportes_cuentas_a_recibir_index():
                          cliente_seleccionado=cliente_nombre or '',
                          fecha_desde=fecha_desde or '',
                          fecha_hasta=fecha_hasta or '',
-                         estado_seleccionado=estado_filtro or '')
+                         estado_seleccionado=estado_filtro or '',
+                         tipo_seleccionado=tipo_filtro or '')
 
 
 @app.route("/api/facturacion/eliminar-factura/<int:factura_id>", methods=["DELETE"])
