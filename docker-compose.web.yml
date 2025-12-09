@@ -1,0 +1,35 @@
+version: "3.9"
+
+# Docker Compose para construir SOLO la aplicación web
+# Uso: docker-compose -f docker-compose.web.yml up -d
+# ⚠️ Requiere que la base de datos esté disponible externamente o en otro contenedor
+
+services:
+  web:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: scrapper_web
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    environment:
+      # Configurar DB_HOST según tu entorno (postgres si usas docker-compose.db.yml, o IP externa)
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-300}
+    volumes:
+      - ./uploads:/app/uploads
+    # Si usas una base de datos externa, elimina depends_on
+    # depends_on:
+    #   postgres:
+    #     condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+

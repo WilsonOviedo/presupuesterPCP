@@ -1,10 +1,68 @@
-# Guía de Docker para Scrapper Facturas XML
+# Guía de Docker para ApoloSys (Scrapper Facturas XML)
 
 ## Requisitos Previos
 
 - Docker Engine 20.10 o superior
 - Docker Compose 2.0 o superior
 - Archivo `.env` configurado (ver sección de configuración)
+
+## ⚠️ IMPORTANTE: Construcción Modular
+
+Este proyecto ahora incluye archivos Docker Compose modulares para construir cada bloque de forma independiente y evitar sobrescribir datos importantes:
+
+### Archivos Disponibles
+
+1. **`docker-compose.yml`** (MODO SEGURO - por defecto)
+   - Todos los servicios (web + postgres + pgadmin)
+   - **NO inicializa la base de datos automáticamente** para proteger datos existentes
+   - Uso: `docker-compose up -d`
+
+2. **`docker-compose.web.yml`** (Solo aplicación web)
+   - Construye únicamente el servicio web
+   - Requiere base de datos externa o usar junto con `docker-compose.db.yml`
+   - Uso: `docker-compose -f docker-compose.web.yml up -d`
+
+3. **`docker-compose.db.yml`** (Solo base de datos)
+   - Construye únicamente PostgreSQL
+   - **NO inicializa la base de datos** automáticamente
+   - Uso: `docker-compose -f docker-compose.db.yml up -d`
+
+4. **`docker-compose.pgadmin.yml`** (Solo PgAdmin)
+   - Construye únicamente la interfaz de administración
+   - Uso: `docker-compose -f docker-compose.pgadmin.yml up -d`
+
+5. **`docker-compose.full.yml`** (COMPLETO con inicialización)
+   - Todos los servicios con inicialización automática de DB
+   - ⚠️ **SOLO usar en entornos nuevos o cuando quieras reinicializar todo**
+   - Uso: `docker-compose -f docker-compose.full.yml up -d`
+
+### Ejemplos de Uso
+
+#### Construir solo la aplicación web (sin tocar la base de datos)
+```bash
+# Si ya tienes la DB corriendo
+docker-compose -f docker-compose.web.yml build
+docker-compose -f docker-compose.web.yml up -d
+```
+
+#### Construir solo la base de datos
+```bash
+docker-compose -f docker-compose.db.yml up -d
+```
+
+#### Construir web + base de datos por separado
+```bash
+# Primero la base de datos
+docker-compose -f docker-compose.db.yml up -d
+
+# Luego la aplicación web (conectada a la DB)
+docker-compose -f docker-compose.web.yml up -d
+```
+
+#### Construir todo desde cero (solo para entornos nuevos)
+```bash
+docker-compose -f docker-compose.full.yml up -d
+```
 
 ## Configuración
 
@@ -46,18 +104,26 @@ GUNICORN_TIMEOUT=300
 
 ### Construir la imagen
 
+**Modo seguro (recomendado - no inicializa DB automáticamente):**
 ```bash
 docker-compose build
+docker-compose up -d
 ```
 
-O construir solo el servicio web:
-
+**Construir solo el servicio web:**
 ```bash
-docker-compose build web
+docker-compose -f docker-compose.web.yml build
+docker-compose -f docker-compose.web.yml up -d
+```
+
+**Construir solo la base de datos:**
+```bash
+docker-compose -f docker-compose.db.yml up -d
 ```
 
 ### Iniciar los servicios
 
+**Modo seguro (por defecto):**
 ```bash
 docker-compose up -d
 ```
@@ -66,6 +132,25 @@ Esto iniciará:
 - **Web**: Aplicación Flask en `http://localhost:5000`
 - **PostgreSQL**: Base de datos en `localhost:5432`
 - **PgAdmin**: Interfaz de administración en `http://localhost:5050`
+
+⚠️ **Nota**: En modo seguro, la base de datos NO se inicializa automáticamente. Para inicializarla manualmente:
+```bash
+docker-compose exec web python /app/init_db.py
+```
+
+### Inicialización de Base de Datos
+
+**Modo seguro (por defecto):**
+- La base de datos NO se inicializa automáticamente
+- Protege datos existentes de ser sobrescritos
+- Inicialización manual: `docker-compose exec web python /app/init_db.py`
+
+**Modo completo (solo para entornos nuevos):**
+```bash
+docker-compose -f docker-compose.full.yml up -d
+```
+- Inicializa la base de datos automáticamente
+- ⚠️ Solo usar cuando quieras empezar desde cero
 
 ### Ver logs
 
@@ -151,6 +236,8 @@ Si usas OCR local, Tesseract está incluido en la imagen Docker. Si necesitas OC
 
 ### Limpiar todo y empezar de nuevo
 
+⚠️ **ADVERTENCIA**: Esto eliminará TODOS los datos, incluyendo la base de datos.
+
 ```bash
 # Detener y eliminar contenedores, redes y volúmenes
 docker-compose down -v
@@ -158,9 +245,23 @@ docker-compose down -v
 # Eliminar imágenes
 docker-compose rm -f
 
-# Reconstruir desde cero
-docker-compose build --no-cache
-docker-compose up -d
+# Reconstruir desde cero (con inicialización automática)
+docker-compose -f docker-compose.full.yml build --no-cache
+docker-compose -f docker-compose.full.yml up -d
+```
+
+### Reconstruir solo un servicio específico
+
+**Solo la aplicación web (sin afectar la base de datos):**
+```bash
+docker-compose -f docker-compose.web.yml build --no-cache
+docker-compose -f docker-compose.web.yml up -d
+```
+
+**Solo la base de datos:**
+```bash
+docker-compose -f docker-compose.db.yml down
+docker-compose -f docker-compose.db.yml up -d
 ```
 
 ## Desarrollo
@@ -204,4 +305,22 @@ docker-compose exec postgres pg_dump -U scrapper scrapper > backup.sql
 # Restaurar backup
 docker-compose exec -T postgres psql -U scrapper scrapper < backup.sql
 ```
+
+## Resumen de Archivos Docker Compose
+
+| Archivo | Servicios | Inicializa DB | Uso Recomendado |
+|---------|-----------|---------------|-----------------|
+| `docker-compose.yml` | Web + DB + PgAdmin | ❌ No (seguro) | Producción, desarrollo con datos existentes |
+| `docker-compose.web.yml` | Solo Web | ❌ No | Actualizar solo la aplicación |
+| `docker-compose.db.yml` | Solo DB | ❌ No | Actualizar solo la base de datos |
+| `docker-compose.pgadmin.yml` | Solo PgAdmin | ❌ No | Solo interfaz de administración |
+| `docker-compose.full.yml` | Web + DB + PgAdmin | ✅ Sí | Entornos nuevos, pruebas, desarrollo inicial |
+
+## Mejores Prácticas
+
+1. **En producción**: Usa `docker-compose.yml` (modo seguro) para proteger datos
+2. **Para actualizar la app**: Usa `docker-compose.web.yml` para no tocar la DB
+3. **Para desarrollo nuevo**: Usa `docker-compose.full.yml` solo la primera vez
+4. **Siempre haz backup**: Antes de cualquier cambio importante
+5. **Inicialización manual**: Usa `docker-compose exec web python /app/init_db.py` cuando sea necesario
 

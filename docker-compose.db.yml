@@ -1,0 +1,28 @@
+version: "3.9"
+
+# Docker Compose para construir SOLO la base de datos PostgreSQL
+# Uso: docker-compose -f docker-compose.db.yml up -d
+# ⚠️ Este archivo NO inicializa la base de datos automáticamente para evitar sobrescribir datos
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: scrapper_db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-scrapper}
+      POSTGRES_USER: ${DB_USER:-scrapper}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-scrapper}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-scrapper} -d ${DB_NAME:-scrapper}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+

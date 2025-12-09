@@ -1,0 +1,25 @@
+version: "3.9"
+
+# Docker Compose para construir SOLO PgAdmin
+# Uso: docker-compose -f docker-compose.pgadmin.yml up -d
+# ⚠️ Requiere que la base de datos esté disponible en DB_HOST
+
+services:
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: scrapper_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
+    ports:
+      - "5050:80"
+    # Si usas docker-compose.db.yml, puedes conectar ambos servicios
+    # depends_on:
+    #   - postgres
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    restart: unless-stopped
+
+volumes:
+  pgadmin_data:
+

@@ -1,1 +1,34 @@
 .env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Archivos temporales
+*.tmp
+*.bak
+*.swp
+*~
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Logs
+*.log
+
+# Imágenes de prueba
+image*.png
+test*.png
+
+# Scripts de migración temporales (ya ejecutados)
+migrar_*.py
+actualizar_*.py
+crear_*.py
+eliminar_duplicados_*.py

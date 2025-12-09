@@ -80,7 +80,7 @@
     <a class="button button-secondary" href="{{ url_for('listas_materiales_ver', id=lista.id) }}">← Volver a la lista</a>
   </div>
   <h2>Asignar precios: {{ lista.titulo or lista.numero_lista }}</h2>
-  <p style="color:#555;">Los materiales con la misma descripción y marca se agrupan en la tabla. Cada fila permite registrar hasta 5 proveedores y elegir un precio final.</p>
+  <p style="color:#555;">Los materiales con la misma descripción y marca se agrupan en la tabla. Cada fila permite registrar hasta 3 proveedores y elegir un precio final. Puede buscar precios automáticamente o ingresar el modelo manualmente.</p>
 
   {% if grupos_precios %}
     <table class="tabla-precios">
@@ -107,13 +107,13 @@
                   {% endfor %}
                 </div>
               {% endif %}
-              <form method="post" action="{{ url_for('listas_seleccionar_precio_criterio', item_id=grupo.representante_id) }}" style="margin-top:8px; display:flex; gap:6px; align-items:center;">
+              <form method="post" action="{{ url_for('listas_seleccionar_precio_criterio', item_id=grupo.representante_id) }}" class="criterio-form" style="margin-top:8px; display:flex; gap:6px; align-items:center;" data-item-id="{{ grupo.representante_id }}">
                 <input type="hidden" name="lista_id" value="{{ lista.id }}">
                 <select name="criterio" style="padding:4px;">
                   <option value="menor">Precio más bajo</option>
                   <option value="mayor">Precio más alto</option>
                 </select>
-                <button type="submit" class="button button-secondary" style="padding:4px 10px;">Auto seleccionar</button>
+                <button type="button" class="button button-secondary criterio-guardar-btn" style="padding:4px 10px;">Guardar</button>
               </form>
             </td>
             {% for slot in grupo.slots %}
@@ -121,21 +121,39 @@
                 <form method="post"
                       action="{{ url_for('listas_guardar_precio_slot', item_id=grupo.representante_id) }}"
                       class="slot-form"
-                      data-item-id="{{ grupo.representante_id }}">
+                      data-item-id="{{ grupo.representante_id }}"
+                      data-slot-index="{{ loop.index0 }}">
                   <input type="hidden" name="lista_id" value="{{ lista.id }}">
                   <input type="hidden" name="slot" value="{{ loop.index0 }}">
                   <input type="hidden" name="precio_id" value="{{ slot.id if slot else '' }}">
+                  
+                  <label>Modelo (Manual)</label>
+                  <input type="text" name="modelo" class="modelo-input" 
+                         value="{% if slot and slot.notas %}{% set modelo_match = slot.notas.split('MODELO:') %}{% if modelo_match|length > 1 %}{{ modelo_match[1].split('|')[0].strip() }}{% endif %}{% endif %}" 
+                         placeholder="Ingrese modelo manualmente">
+                  
+                  <label>Buscar Producto</label>
+                  <div style="position:relative;">
+                    <input type="text" class="buscar-producto-input" 
+                           value="{% if slot and slot.notas %}{% set producto_match = slot.notas.split('PRODUCTO:') %}{% if producto_match|length > 1 %}{{ producto_match[1].split('|')[0].strip() }}{% else %}{% set producto_match2 = slot.notas.split('producto:') %}{% if producto_match2|length > 1 %}{{ producto_match2[1].split('|')[0].strip() }}{% endif %}{% endif %}{% endif %}"
+                           placeholder="Escriba para buscar automáticamente..." 
+                           style="width:100%; padding:4px; font-size:0.85em; margin-bottom:6px;">
+                    <div class="resultados-busqueda" style="display:none; position:absolute; top:100%; left:0; right:0; background:white; border:1px solid #ccc; border-radius:4px; max-height:200px; overflow-y:auto; z-index:1000; box-shadow:0 2px 8px rgba(0,0,0,0.15); margin-top:2px;">
+                      <!-- Los resultados se insertarán aquí dinámicamente -->
+                    </div>
+                  </div>
+                  
                   <label>Proveedor</label>
-                  <select name="proveedor_id" {% if not slot %}required{% endif %}>
-                    <option value="">Seleccionar...</option>
-                    {% for proveedor in proveedores %}
-                      <option value="{{ proveedor.id }}" {% if slot and slot.proveedor_id == proveedor.id %}selected{% endif %}>
-                        {{ proveedor.nombre }}
-                      </option>
-                    {% endfor %}
-                  </select>
+                  <input type="text" name="proveedor_nombre" class="proveedor-input" 
+                         value="{% if slot and slot.proveedor_nombre %}{{ slot.proveedor_nombre }}{% endif %}" 
+                         placeholder="Ingrese nombre del proveedor"
+                         {% if not slot %}required{% endif %}>
+                  <input type="hidden" name="proveedor_id" class="proveedor-id-hidden" 
+                         value="{% if slot and slot.proveedor_id %}{{ slot.proveedor_id }}{% endif %}">
                   <label>Precio</label>
-                  <input type="text" name="precio" value="{{ "{:,.2f}".format(slot.precio) if slot else '' }}" {% if not slot %}required{% endif %}>
+                  <input type="text" name="precio" class="precio-input" 
+                         value="{{ "{:,.2f}".format(slot.precio) if slot else '' }}" 
+                         {% if not slot %}required{% endif %}>
                   <label>Moneda</label>
                   <input type="text" name="moneda" value="{{ slot.moneda if slot else 'PYG' }}">
                   <label>Notas</label>
@@ -172,16 +190,35 @@
       const formatter = new Intl.NumberFormat('es-PY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       function normalizarPrecio(valor) {
         if (!valor) return '';
-        return valor
-          .toString()
-          .replace(/\s/g, '')
-          .replace(/\./g, '')
-          .replace(',', '.');
+        // Convertir a string y limpiar espacios
+        let valorStr = valor.toString().trim().replace(/\s/g, '');
+        
+        // Si tiene punto y coma, es formato español (3.650.000,00)
+        // Si solo tiene coma, es formato español sin miles (3,67)
+        // Si solo tiene punto, es formato inglés (3650000.00)
+        
+        // Detectar si es formato español (tiene coma como separador decimal)
+        if (valorStr.includes(',')) {
+          // Formato español: eliminar puntos (separadores de miles) y reemplazar coma por punto
+          valorStr = valorStr.replace(/\./g, '').replace(',', '.');
+        }
+        // Si no tiene coma, asumir que ya está en formato numérico o inglés
+        // No hacer nada más, solo parsear
+        
+        return valorStr;
       }
       function formatearInput(input) {
-        const valor = parseFloat(normalizarPrecio(input.value));
-        if (!isNaN(valor)) {
+        const valorNormalizado = normalizarPrecio(input.value);
+        const valor = parseFloat(valorNormalizado);
+        if (!isNaN(valor) && valor >= 0) {
           input.value = formatter.format(valor);
+        } else if (input.value && !isNaN(parseFloat(input.value.replace(/[^\d.,]/g, '')))) {
+          // Si el valor original es válido pero la normalización falló, intentar de nuevo
+          const valorOriginal = input.value.replace(/[^\d.,]/g, '');
+          const valorFinal = parseFloat(normalizarPrecio(valorOriginal));
+          if (!isNaN(valorFinal) && valorFinal >= 0) {
+            input.value = formatter.format(valorFinal);
+          }
         }
       }
       function actualizarAsignado(itemId, data) {
@@ -196,48 +233,388 @@
       }
       document.querySelectorAll('.slot-form').forEach(function(form) {
         const priceInput = form.querySelector('input[name="precio"]');
-        const providerSelect = form.querySelector('select[name="proveedor_id"]');
+        const providerInput = form.querySelector('input[name="proveedor_nombre"]');
+        const providerIdHidden = form.querySelector('input[name="proveedor_id"]');
         const currencyInput = form.querySelector('input[name="moneda"]');
         const notesInput = form.querySelector('input[name="notas"]');
+        const modeloInput = form.querySelector('input[name="modelo"]');
+        const buscarProductoInput = form.querySelector('.buscar-producto-input');
+        const resultadosContainer = buscarProductoInput ? buscarProductoInput.parentElement.querySelector('.resultados-busqueda') : null;
         const itemId = form.getAttribute('data-item-id');
+        
+        // Prevenir el submit tradicional del formulario para evitar recarga de página
+        form.addEventListener('submit', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          enviar();
+          return false;
+        });
+        
+        // Variable para controlar el timeout de búsqueda
+        let buscarTimeout = null;
+        let buscando = false;
+        
         if (priceInput) {
-          formatearInput(priceInput);
+          // Formatear el precio inicial si tiene valor
+          if (priceInput.value) {
+            // El precio viene del servidor en formato inglés (3,650,000.00)
+            // Necesitamos convertirlo al formato español para el formatter
+            const valorOriginal = priceInput.value.replace(/,/g, '');
+            const valorNumero = parseFloat(valorOriginal);
+            if (!isNaN(valorNumero) && valorNumero >= 0) {
+              priceInput.value = formatter.format(valorNumero);
+            }
+          }
           priceInput.addEventListener('blur', function() {
             formatearInput(priceInput);
           });
         }
+        
+        // Funcionalidad de búsqueda automática mientras escribe
+        if (buscarProductoInput) {
+          buscarProductoInput.addEventListener('input', function() {
+            const producto = buscarProductoInput.value.trim();
+            
+            // Limpiar timeout anterior
+            if (buscarTimeout) {
+              clearTimeout(buscarTimeout);
+            }
+            
+            // Si el campo está vacío, no buscar
+            if (!producto || producto.length < 2) {
+              return;
+            }
+            
+            // Esperar 500ms después de que el usuario deje de escribir
+            buscarTimeout = setTimeout(function() {
+              if (buscando) return; // Evitar múltiples búsquedas simultáneas
+              
+              buscando = true;
+              buscarProductoInput.style.backgroundColor = '#fff9e6'; // Indicador visual
+              
+              fetch('/api/listas-materiales/buscar-precio', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ producto: producto })
+              })
+              .then(resp => resp.json())
+              .then(data => {
+                buscando = false;
+                buscarProductoInput.style.backgroundColor = ''; // Restaurar color
+                
+                if (data.success && data.precios && Array.isArray(data.precios) && data.precios.length > 0) {
+                  // Mostrar todos los resultados en el dropdown
+                  if (resultadosContainer) {
+                    mostrarResultados(data.precios);
+                  }
+                } else {
+                  // No hay resultados
+                  if (resultadosContainer) {
+                    resultadosContainer.innerHTML = '<div style="padding:8px; color:#666; font-size:0.85em;">No se encontraron resultados</div>';
+                    resultadosContainer.style.display = 'block';
+                  }
+                }
+              })
+              .catch(error => {
+                buscando = false;
+                buscarProductoInput.style.backgroundColor = ''; // Restaurar color
+                if (resultadosContainer) {
+                  resultadosContainer.style.display = 'none';
+                }
+              });
+            }, 500); // Esperar 500ms después de que el usuario deje de escribir
+          });
+          
+          // Ocultar dropdown al hacer clic fuera (con delay para permitir que el click en el resultado se procese)
+          let clickTimeout = null;
+          document.addEventListener('click', function(e) {
+            if (resultadosContainer && resultadosContainer.style.display === 'block') {
+              const isClickInside = buscarProductoInput.contains(e.target) || resultadosContainer.contains(e.target);
+              if (!isClickInside) {
+                if (clickTimeout) clearTimeout(clickTimeout);
+                clickTimeout = setTimeout(function() {
+                  resultadosContainer.style.display = 'none';
+                }, 200);
+              }
+            }
+          });
+        }
+        
+        // Función para mostrar resultados en el dropdown
+        function mostrarResultados(precios) {
+          if (!resultadosContainer) return;
+          
+          resultadosContainer.innerHTML = '';
+          
+          precios.forEach(function(precio, index) {
+            const item = document.createElement('div');
+            item.className = 'resultado-item';
+            item.style.cssText = 'padding:8px; cursor:pointer; border-bottom:1px solid #eee; font-size:0.85em;';
+            item.style.transition = 'background-color 0.2s';
+            
+            item.innerHTML = `
+              <div style="font-weight:bold; color:#333;">${precio.producto || 'Sin nombre'}</div>
+              <div style="color:#666; font-size:0.9em;">
+                ${precio.proveedor_nombre || 'Sin proveedor'} - 
+                ${formatter.format(precio.precio || 0)} ${precio.fecha ? ' (' + precio.fecha + ')' : ''}
+              </div>
+            `;
+            
+            // Efecto hover
+            item.addEventListener('mouseenter', function() {
+              item.style.backgroundColor = '#f0f0f0';
+            });
+            item.addEventListener('mouseleave', function() {
+              item.style.backgroundColor = '';
+            });
+            
+            // Al hacer clic, llenar los campos
+            item.addEventListener('click', function(e) {
+              e.preventDefault();
+              e.stopPropagation();
+              
+              // Llenar los campos inmediatamente
+              llenarCampos(precio);
+              
+              // Ocultar dropdown (NO limpiar el campo - debe mantener el nombre del producto)
+              setTimeout(function() {
+                resultadosContainer.style.display = 'none';
+              }, 100);
+            });
+            
+            resultadosContainer.appendChild(item);
+          });
+          
+          resultadosContainer.style.display = 'block';
+        }
+        
+        // Función para llenar los campos con el precio seleccionado
+        function llenarCampos(precio) {
+          // Llenar proveedor directamente con el nombre
+          if (precio.proveedor_nombre) {
+            providerInput.value = precio.proveedor_nombre.trim();
+            // Si hay ID, guardarlo en el campo hidden
+            if (precio.proveedor_id) {
+              providerIdHidden.value = precio.proveedor_id.toString();
+            } else {
+              providerIdHidden.value = '';
+            }
+            // Disparar evento change
+            providerInput.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          
+          // Llenar precio - asegurar que se formatee correctamente
+          if (precio.precio && precio.precio > 0) {
+            // Asegurar que el precio sea un número
+            const precioNumero = typeof precio.precio === 'string' ? parseFloat(normalizarPrecio(precio.precio)) : parseFloat(precio.precio);
+            if (!isNaN(precioNumero) && precioNumero > 0) {
+              const precioFormateado = formatter.format(precioNumero);
+              priceInput.value = precioFormateado;
+              // NO disparar evento change automáticamente para evitar guardar antes de tiempo
+            }
+          }
+          
+          // Llenar el campo "Buscar Producto" con el nombre del producto
+          if (precio.producto && buscarProductoInput) {
+            buscarProductoInput.value = precio.producto.trim();
+          }
+          
+          // NO llenar el modelo - debe ser manual
+          
+          // Guardar automáticamente si hay proveedor y precio
+          setTimeout(function() {
+            if (providerInput.value && priceInput.value) {
+              enviar();
+            }
+          }, 200);
+        }
+        
         function enviar() {
-          if (!providerSelect.value || !priceInput.value) {
+          if (!providerInput.value || !priceInput.value) {
+            console.log('Validación fallida:', {
+              proveedor: providerInput.value,
+              precio: priceInput.value
+            });
             return;
           }
+          
           const formData = new FormData(form);
-          formData.set('precio', normalizarPrecio(priceInput.value));
+          
+          // Asegurar que proveedor_nombre se envíe correctamente
+          if (providerInput.value) {
+            formData.set('proveedor_nombre', providerInput.value.trim());
+          }
+          
+          // Asegurar que proveedor_id se envíe si existe
+          if (providerIdHidden && providerIdHidden.value) {
+            formData.set('proveedor_id', providerIdHidden.value);
+          }
+          
+          // Normalizar y establecer el precio
+          const precioNormalizado = normalizarPrecio(priceInput.value);
+          const precioNumero = parseFloat(precioNormalizado);
+          if (!precioNormalizado || isNaN(precioNumero) || precioNumero < 0) {
+            alert('El precio debe ser un número válido mayor o igual a 0');
+            return;
+          }
+          // Enviar el precio como número sin formato para evitar problemas de precisión
+          formData.set('precio', precioNumero.toString());
+          
+          // Agregar el producto del campo "Buscar Producto" a las notas
+          const productoValue = buscarProductoInput ? buscarProductoInput.value.trim() : '';
+          const modeloValue = modeloInput ? modeloInput.value.trim() : '';
+          
+          // Asegurar que el modelo se envíe también en el campo modelo
+          if (modeloValue && modeloInput) {
+            formData.set('modelo', modeloValue);
+          }
+          
+          // Construir las notas con MODELO y PRODUCTO
+          let nuevasNotas = '';
+          if (modeloValue) {
+            nuevasNotas = `MODELO: ${modeloValue}`;
+          }
+          if (productoValue) {
+            if (nuevasNotas) {
+              nuevasNotas += ` | PRODUCTO: ${productoValue}`;
+            } else {
+              nuevasNotas = `PRODUCTO: ${productoValue}`;
+            }
+          }
+          
+          // Si hay otras notas en el campo notas, agregarlas
+          const notasActuales = notesInput ? notesInput.value.trim() : '';
+          if (notasActuales && !notasActuales.includes('MODELO:') && !notasActuales.includes('PRODUCTO:')) {
+            if (nuevasNotas) {
+              nuevasNotas += ` | ${notasActuales}`;
+            } else {
+              nuevasNotas = notasActuales;
+            }
+          }
+          
+          if (nuevasNotas) {
+            formData.set('notas', nuevasNotas);
+          }
+          
+          // Debug: mostrar qué se está enviando
+          console.log('Enviando datos:', {
+            proveedor_nombre: formData.get('proveedor_nombre'),
+            proveedor_id: formData.get('proveedor_id'),
+            precio: formData.get('precio'),
+            notas: formData.get('notas'),
+            lista_id: formData.get('lista_id'),
+            precio_id: formData.get('precio_id')
+          });
+          
           fetch(form.action, {
             method: 'POST',
             body: formData,
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
           })
-          .then(resp => resp.json())
+          .then(resp => {
+            if (!resp.ok) {
+              return resp.json().then(data => {
+                console.error('Error del servidor:', data);
+                throw new Error(data.error || 'Error al guardar el precio');
+              }).catch(err => {
+                console.error('Error al parsear respuesta:', err);
+                throw new Error('Error al guardar el precio');
+              });
+            }
+            return resp.json();
+          })
           .then(data => {
             if (data.success) {
               if (data.precio_final) {
                 actualizarAsignado(itemId, data.precio_final);
               }
+              // Actualizar el precio_id en el formulario para que se pueda actualizar en el futuro
+              if (data.precio_id) {
+                const precioIdInput = form.querySelector('input[name="precio_id"]');
+                if (precioIdInput) {
+                  precioIdInput.value = data.precio_id;
+                }
+              }
+              // NO actualizar los campos del formulario con data.precio_final
+              // porque eso sobrescribiría los valores que el usuario ingresó
+              // Los valores ya están en los campos y se mantienen ahí
+              // Solo actualizar el precio_id para futuras actualizaciones
             } else {
               alert(data.error || 'No se pudo guardar el precio');
             }
           })
-          .catch(() => {
-            alert('Error al guardar el precio');
+          .catch(error => {
+            console.error('Error completo:', error);
+            alert(error.message || 'Error al guardar el precio');
           });
         }
-        [providerSelect, currencyInput, notesInput].forEach(function(ctrl) {
+        [providerInput, currencyInput, notesInput, modeloInput].forEach(function(ctrl) {
           if (ctrl) {
             ctrl.addEventListener('change', enviar);
           }
         });
         if (priceInput) {
           priceInput.addEventListener('change', enviar);
+        }
+      });
+      
+      // Manejar formularios de criterio (precio más bajo/alto) - evitar recarga
+      document.querySelectorAll('.criterio-form').forEach(function(form) {
+        const guardarBtn = form.querySelector('.criterio-guardar-btn');
+        const itemId = form.getAttribute('data-item-id');
+        
+        // Prevenir submit tradicional
+        form.addEventListener('submit', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (guardarBtn) {
+            guardarBtn.click();
+          }
+          return false;
+        });
+        
+        if (guardarBtn) {
+          guardarBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const formData = new FormData(form);
+            
+            fetch(form.action, {
+              method: 'POST',
+              body: formData,
+              headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(resp => {
+              if (!resp.ok) {
+                throw new Error('Error al guardar criterio');
+              }
+              return resp.json();
+            })
+            .then(data => {
+              if (data && data.success) {
+                // Actualizar la celda de precio asignado sin recargar la página
+                const celda = document.querySelector(`tr[data-item-id="${itemId}"] .precio-asignado`);
+                if (celda) {
+                  if (data.precio_final) {
+                    celda.innerHTML = '<strong>' + data.precio_final.proveedor_nombre + '</strong><br>' +
+                      data.precio_final.moneda + ' ' + formatter.format(data.precio_final.precio);
+                  } else {
+                    celda.innerHTML = '<span class="text-muted">Sin asignar</span>';
+                  }
+                }
+              } else {
+                alert(data.error || 'Error al guardar criterio');
+              }
+            })
+            .catch(error => {
+              console.error('Error:', error);
+              alert('Error al guardar criterio: ' + error.message);
+            });
+          });
         }
       });
     })();

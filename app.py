@@ -2273,7 +2273,7 @@ def materiales_genericos_importar_csv():
         return redirect(url_for('materiales_genericos_index') + f'?error=Error al procesar el archivo: {str(e)}')
 
 # ==================== ASIGNACIÓN DE PRECIOS POR LISTA ====================
-MAX_PROVEEDORES = 5
+MAX_PROVEEDORES = 3
 
 def _obtener_items_lista(lista):
     items = []
@@ -2380,41 +2380,96 @@ def listas_guardar_precio_slot(item_id):
     """Crear o actualizar una cotización en una de las columnas de proveedores"""
     lista_id = request.form.get("lista_id")
     precio_id = request.form.get("precio_id") or None
-    proveedor_id = request.form.get("proveedor_id")
+    proveedor_nombre = _to_upper(request.form.get("proveedor_nombre")) if request.form.get("proveedor_nombre") else None
+    proveedor_id_form = request.form.get("proveedor_id") or None
     precio_valor = request.form.get("precio")
     moneda = request.form.get("moneda") or "PYG"
-    notas = _to_upper(request.form.get("notas")) if request.form.get("notas") else None
+    modelo = _to_upper(request.form.get("modelo")) if request.form.get("modelo") else None
+    notas = request.form.get("notas") or ""  # No convertir a mayúsculas todavía, para preservar el formato
+    # Si las notas ya tienen MODELO y PRODUCTO (vienen del frontend), usarlas tal cual
+    # Si no, construir las notas desde el modelo
+    if notas and ("MODELO:" in notas or "PRODUCTO:" in notas):
+        # Las notas ya vienen formateadas desde el frontend, solo convertir a mayúsculas
+        notas = _to_upper(notas)
+    elif modelo:
+        # Si no hay notas formateadas pero hay modelo, crear las notas solo con el modelo
+        notas = f"MODELO: {_to_upper(modelo)}"
+    else:
+        notas = _to_upper(notas) if notas else None
     es_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     
     if not lista_id:
+        if es_ajax:
+            return jsonify({'success': False, 'error': 'Lista ID es requerido'}), 400
         return "Lista ID es requerido", 400
     try:
         lista_id = int(lista_id)
     except ValueError:
+        if es_ajax:
+            return jsonify({'success': False, 'error': 'Lista ID inválido'}), 400
         return "Lista ID inválido", 400
     
+    # Buscar proveedor por nombre o usar ID si está disponible
+    proveedor_id = None
+    if proveedor_id_form:
+        try:
+            proveedor_id = int(proveedor_id_form)
+        except ValueError:
+            pass
+    
+    # Si no hay ID, buscar por nombre
+    if not proveedor_id and proveedor_nombre:
+        proveedores = presupuestos.obtener_proveedores(activo=True)
+        for prov in proveedores:
+            if prov['nombre'].upper().strip() == proveedor_nombre.strip():
+                proveedor_id = prov['id']
+                break
+        
+        # Si no se encontró, crear el proveedor automáticamente
+        if not proveedor_id:
+            try:
+                proveedor_id = presupuestos.crear_proveedor(
+                    nombre=proveedor_nombre.strip(),
+                    activo=True
+                )
+            except Exception as e:
+                # Si hay un error al crear (por ejemplo, duplicado), intentar buscar de nuevo
+                proveedores = presupuestos.obtener_proveedores(activo=True)
+                for prov in proveedores:
+                    if prov['nombre'].upper().strip() == proveedor_nombre.strip():
+                        proveedor_id = prov['id']
+                        break
+                if not proveedor_id:
+                    error_msg = f"Error al crear o encontrar proveedor: {str(e)}"
+                    if es_ajax:
+                        return jsonify({'success': False, 'error': error_msg}), 400
+                    return error_msg, 400
+    
     if not proveedor_id:
-        return "Proveedor es requerido", 400
-    try:
-        proveedor_id = int(proveedor_id)
-    except ValueError:
-        return "Proveedor inválido", 400
+        error_msg = "Proveedor es requerido. Ingrese un nombre de proveedor válido."
+        if es_ajax:
+            return jsonify({'success': False, 'error': error_msg}), 400
+        return error_msg, 400
     
     try:
         precio_float = float(precio_valor)
     except (TypeError, ValueError):
+        if es_ajax:
+            return jsonify({'success': False, 'error': 'Precio inválido'}), 400
         return "Precio inválido", 400
     
     try:
         if precio_id:
             precio_id_int = int(precio_id)
-            presupuestos.actualizar_precio_item(
+            resultado = presupuestos.actualizar_precio_item(
                 precio_id=precio_id_int,
                 proveedor_id=proveedor_id,
                 precio=precio_float,
                 moneda=moneda,
                 notas=notas
             )
+            if not resultado:
+                raise ValueError("No se pudo actualizar el precio")
         else:
             precio_id_int = presupuestos.agregar_precio_item(
                 lista_material_item_id=item_id,
@@ -2424,13 +2479,29 @@ def listas_guardar_precio_slot(item_id):
                 notas=notas,
                 seleccionado=False
             )
+            if not precio_id_int:
+                raise ValueError("No se pudo crear el precio")
     except ValueError as e:
         if es_ajax:
             return jsonify({'success': False, 'error': str(e)}), 400
         return str(e), 400
+    except Exception as e:
+        # Capturar cualquier otro error (base de datos, etc.)
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"ERROR al guardar precio: {str(e)}")
+        print(error_trace)
+        error_msg = f"Error al guardar el precio: {str(e)}"
+        if es_ajax:
+            return jsonify({'success': False, 'error': error_msg}), 500
+        return error_msg, 500
     
-    presupuestos.seleccionar_precio_item(precio_id_int)
-    precio_final = presupuestos.obtener_precio_por_id(precio_id_int)
+    try:
+        presupuestos.seleccionar_precio_item(precio_id_int)
+        precio_final = presupuestos.obtener_precio_por_id(precio_id_int)
+    except Exception as e:
+        # Si falla la selección, continuar de todas formas
+        precio_final = None
     
     if es_ajax:
         if precio_final:
@@ -2468,8 +2539,94 @@ def listas_eliminar_precio(precio_id):
 def listas_seleccionar_precio_criterio(item_id):
     lista_id = request.form.get("lista_id")
     criterio = request.form.get("criterio") or "menor"
-    presupuestos.seleccionar_precio_por_criterio(item_id, criterio)
-    return redirect(url_for('listas_materiales_precios', id=lista_id))
+    es_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    
+    try:
+        presupuestos.seleccionar_precio_por_criterio(item_id, criterio)
+        
+        # Obtener el precio final seleccionado
+        precios = presupuestos.obtener_precios_por_item(item_id)
+        precio_seleccionado = None
+        for precio in precios:
+            if precio.get('seleccionado'):
+                precio_seleccionado = precio
+                break
+        
+        if es_ajax:
+            if precio_seleccionado:
+                return jsonify({
+                    'success': True,
+                    'precio_final': {
+                        'proveedor_nombre': precio_seleccionado.get('proveedor_nombre'),
+                        'moneda': precio_seleccionado.get('moneda') or 'PYG',
+                        'precio': float(precio_seleccionado.get('precio') or 0)
+                    }
+                })
+            else:
+                return jsonify({'success': True, 'precio_final': None})
+        
+        return redirect(url_for('listas_materiales_precios', id=lista_id))
+    except Exception as e:
+        if es_ajax:
+            return jsonify({'success': False, 'error': str(e)}), 500
+        return redirect(url_for('listas_materiales_precios', id=lista_id) + f'?error={str(e)}')
+
+
+@app.route("/api/listas-materiales/buscar-precio", methods=["POST"])
+def api_buscar_precio():
+    """API para buscar precio por producto y devolver proveedor y costo"""
+    try:
+        data = request.get_json()
+        producto = data.get('producto', '').strip()
+        
+        if not producto:
+            return jsonify({'success': False, 'error': 'Producto es requerido'}), 400
+        
+        # Buscar en la tabla de precios
+        conn, cur = precios.conectar()
+        try:
+            resultados = precios.buscar_precios_db(
+                cur, 
+                producto=producto, 
+                limite=10, 
+                filtro="actual"
+            )
+            
+            if not resultados:
+                return jsonify({
+                    'success': False, 
+                    'message': 'No se encontraron precios para este producto'
+                }), 404
+            
+            # Obtener lista de proveedores para mapear nombres a IDs
+            proveedores = presupuestos.obtener_proveedores(activo=True)
+            proveedores_map = {p['nombre'].upper(): p['id'] for p in proveedores}
+            
+            # Procesar todos los resultados
+            precios_lista = []
+            for resultado in resultados:
+                proveedor_nombre = resultado.get('proveedor', '').strip().upper()
+                proveedor_id = None
+                if proveedor_nombre in proveedores_map:
+                    proveedor_id = proveedores_map[proveedor_nombre]
+                
+                precios_lista.append({
+                    'proveedor_id': proveedor_id,
+                    'proveedor_nombre': resultado.get('proveedor', ''),
+                    'precio': float(resultado.get('precio', 0)),
+                    'producto': resultado.get('producto', ''),
+                    'fecha': resultado.get('fecha', '').strftime('%Y-%m-%d') if resultado.get('fecha') else ''
+                })
+            
+            return jsonify({
+                'success': True,
+                'precios': precios_lista
+            })
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # ==================== RUTAS DE TEMPLATES DE PRESUPUESTOS ====================
 

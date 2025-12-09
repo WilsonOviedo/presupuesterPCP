@@ -584,33 +584,133 @@ def obtener_precio_por_id(precio_id):
         conn.close()
 
 
-def _validar_max_proveedores(lista_material_item_id, cur):
-    cur.execute(
-        "SELECT COUNT(*) FROM lista_materiales_precios WHERE lista_material_item_id = %s",
-        (lista_material_item_id,)
-    )
+def _validar_max_proveedores(lista_material_item_id, cur, precio_id_excluir=None):
+    """Valida que no se exceda el máximo de proveedores por item.
+    
+    Args:
+        lista_material_item_id: ID del item de la lista
+        cur: Cursor de la base de datos
+        precio_id_excluir: ID del precio a excluir del conteo (útil cuando se actualiza)
+    """
+    if precio_id_excluir:
+        cur.execute(
+            "SELECT COUNT(*) FROM lista_materiales_precios WHERE lista_material_item_id = %s AND id != %s",
+            (lista_material_item_id, precio_id_excluir)
+        )
+    else:
+        cur.execute(
+            "SELECT COUNT(*) FROM lista_materiales_precios WHERE lista_material_item_id = %s",
+            (lista_material_item_id,)
+        )
     count = cur.fetchone()[0]
-    if count >= 5:
-        raise ValueError("Solo se permiten hasta 5 proveedores por item")
+    if count >= 3:
+        raise ValueError("Solo se permiten hasta 3 proveedores por item")
 
 
 def agregar_precio_item(lista_material_item_id, proveedor_id, precio,
                         moneda='PYG', fecha_cotizacion=None, notas=None, seleccionado=False):
     conn, cur = conectar()
     try:
-        _validar_max_proveedores(lista_material_item_id, cur)
+        # Verificar si ya existe un precio para este item y proveedor
         cur.execute(
-            """INSERT INTO lista_materiales_precios
-               (lista_material_item_id, proveedor_id, precio, moneda, fecha_cotizacion, notas, seleccionado)
-               VALUES (%s, %s, %s, %s, %s, %s, %s)
-               RETURNING id""",
-            (lista_material_item_id, proveedor_id, precio, moneda, fecha_cotizacion, notas, seleccionado)
+            "SELECT id FROM lista_materiales_precios WHERE lista_material_item_id = %s AND proveedor_id = %s",
+            (lista_material_item_id, proveedor_id)
         )
-        precio_id = cur.fetchone()['id']
-        if seleccionado:
-            _marcar_precio_seleccionado(cur, precio_id, lista_material_item_id)
-        conn.commit()
-        return precio_id
+        precio_existente = cur.fetchone()
+        
+        if precio_existente:
+            # Si ya existe, actualizarlo en lugar de crear uno nuevo
+            precio_id = precio_existente['id']
+            updates = []
+            params = []
+            updates.append("proveedor_id = %s")
+            params.append(proveedor_id)
+            updates.append("precio = %s")
+            params.append(precio)
+            if moneda is not None:
+                updates.append("moneda = %s")
+                params.append(moneda)
+            if fecha_cotizacion is not None:
+                updates.append("fecha_cotizacion = %s")
+                params.append(fecha_cotizacion)
+            if notas is not None:
+                updates.append("notas = %s")
+                params.append(notas)
+            if seleccionado is not None:
+                updates.append("seleccionado = %s")
+                params.append(seleccionado)
+            updates.append("actualizado_en = CURRENT_TIMESTAMP")
+            params.append(precio_id)
+            cur.execute(
+                f"UPDATE lista_materiales_precios SET {', '.join(updates)} WHERE id = %s",
+                tuple(params)
+            )
+            if seleccionado:
+                _marcar_precio_seleccionado(cur, precio_id, lista_material_item_id)
+            conn.commit()
+            return precio_id
+        else:
+            # Si no existe, crear uno nuevo
+            _validar_max_proveedores(lista_material_item_id, cur)
+            try:
+                cur.execute(
+                    """INSERT INTO lista_materiales_precios
+                       (lista_material_item_id, proveedor_id, precio, moneda, fecha_cotizacion, notas, seleccionado)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s)
+                       RETURNING id""",
+                    (lista_material_item_id, proveedor_id, precio, moneda, fecha_cotizacion, notas, seleccionado)
+                )
+                precio_id = cur.fetchone()['id']
+                if seleccionado:
+                    _marcar_precio_seleccionado(cur, precio_id, lista_material_item_id)
+                conn.commit()
+                return precio_id
+            except Exception as insert_error:
+                # Si hay un error de constraint de unicidad, intentar actualizar el existente
+                if "unique constraint" in str(insert_error).lower() or "duplicate key" in str(insert_error).lower():
+                    conn.rollback()
+                    # Buscar el precio existente nuevamente
+                    cur.execute(
+                        "SELECT id FROM lista_materiales_precios WHERE lista_material_item_id = %s AND proveedor_id = %s",
+                        (lista_material_item_id, proveedor_id)
+                    )
+                    precio_existente = cur.fetchone()
+                    if precio_existente:
+                        precio_id = precio_existente['id']
+                        # Actualizar el precio existente
+                        updates = []
+                        params = []
+                        updates.append("proveedor_id = %s")
+                        params.append(proveedor_id)
+                        updates.append("precio = %s")
+                        params.append(precio)
+                        if moneda is not None:
+                            updates.append("moneda = %s")
+                            params.append(moneda)
+                        if fecha_cotizacion is not None:
+                            updates.append("fecha_cotizacion = %s")
+                            params.append(fecha_cotizacion)
+                        if notas is not None:
+                            updates.append("notas = %s")
+                            params.append(notas)
+                        if seleccionado is not None:
+                            updates.append("seleccionado = %s")
+                            params.append(seleccionado)
+                        updates.append("actualizado_en = CURRENT_TIMESTAMP")
+                        params.append(precio_id)
+                        cur.execute(
+                            f"UPDATE lista_materiales_precios SET {', '.join(updates)} WHERE id = %s",
+                            tuple(params)
+                        )
+                        if seleccionado:
+                            _marcar_precio_seleccionado(cur, precio_id, lista_material_item_id)
+                        conn.commit()
+                        return precio_id
+                # Si no es un error de constraint, re-lanzar el error
+                raise
+    except Exception as e:
+        conn.rollback()
+        raise
     finally:
         cur.close()
         conn.close()
@@ -641,6 +741,62 @@ def actualizar_precio_item(precio_id, proveedor_id=None, precio=None, moneda=Non
                            fecha_cotizacion=None, notas=None, seleccionado=None):
     conn, cur = conectar()
     try:
+        # Obtener el precio actual para verificar el item_id y proveedor_id actual
+        cur.execute(
+            "SELECT lista_material_item_id, proveedor_id FROM lista_materiales_precios WHERE id = %s",
+            (precio_id,)
+        )
+        precio_actual = cur.fetchone()
+        if not precio_actual:
+            raise ValueError(f"Precio con id {precio_id} no encontrado")
+        
+        lista_material_item_id = precio_actual['lista_material_item_id']
+        proveedor_id_actual = precio_actual['proveedor_id']
+        
+        # Si se está cambiando el proveedor, verificar si ya existe un precio con ese proveedor
+        if proveedor_id is not None and proveedor_id != proveedor_id_actual:
+            cur.execute(
+                "SELECT id FROM lista_materiales_precios WHERE lista_material_item_id = %s AND proveedor_id = %s AND id != %s",
+                (lista_material_item_id, proveedor_id, precio_id)
+            )
+            precio_existente = cur.fetchone()
+            
+            if precio_existente:
+                # Si ya existe un precio con ese proveedor, actualizar ese en lugar del actual
+                precio_id_existente = precio_existente['id']
+                updates = []
+                params = []
+                updates.append("proveedor_id = %s")
+                params.append(proveedor_id)
+                if precio is not None:
+                    updates.append("precio = %s")
+                    params.append(precio)
+                if moneda is not None:
+                    updates.append("moneda = %s")
+                    params.append(moneda)
+                if fecha_cotizacion is not None:
+                    updates.append("fecha_cotizacion = %s")
+                    params.append(fecha_cotizacion)
+                if notas is not None:
+                    updates.append("notas = %s")
+                    params.append(notas)
+                if seleccionado is not None:
+                    updates.append("seleccionado = %s")
+                    params.append(seleccionado)
+                updates.append("actualizado_en = CURRENT_TIMESTAMP")
+                params.append(precio_id_existente)
+                cur.execute(
+                    f"UPDATE lista_materiales_precios SET {', '.join(updates)} WHERE id = %s",
+                    tuple(params)
+                )
+                # Eliminar el precio que se estaba actualizando (ya que ahora está duplicado)
+                cur.execute("DELETE FROM lista_materiales_precios WHERE id = %s", (precio_id,))
+                if seleccionado:
+                    _marcar_precio_seleccionado(cur, precio_id_existente, lista_material_item_id)
+                conn.commit()
+                return True
+        
+        # Si no hay conflicto, actualizar normalmente
         updates = []
         params = []
         if proveedor_id is not None:
@@ -665,14 +821,65 @@ def actualizar_precio_item(precio_id, proveedor_id=None, precio=None, moneda=Non
             return False
         updates.append("actualizado_en = CURRENT_TIMESTAMP")
         params.append(precio_id)
-        cur.execute(
-            f"UPDATE lista_materiales_precios SET {', '.join(updates)} WHERE id = %s",
-            tuple(params)
-        )
-        if seleccionado:
-            _marcar_precio_seleccionado(cur, precio_id)
-        conn.commit()
-        return cur.rowcount > 0
+        try:
+            cur.execute(
+                f"UPDATE lista_materiales_precios SET {', '.join(updates)} WHERE id = %s",
+                tuple(params)
+            )
+            if seleccionado:
+                _marcar_precio_seleccionado(cur, precio_id, lista_material_item_id)
+            conn.commit()
+            return cur.rowcount > 0
+        except Exception as update_error:
+            # Si hay un error de constraint de unicidad, intentar la lógica de merge
+            if "unique constraint" in str(update_error).lower() or "duplicate key" in str(update_error).lower():
+                conn.rollback()
+                # Buscar el precio existente
+                if proveedor_id is not None:
+                    cur.execute(
+                        "SELECT id FROM lista_materiales_precios WHERE lista_material_item_id = %s AND proveedor_id = %s AND id != %s",
+                        (lista_material_item_id, proveedor_id, precio_id)
+                    )
+                    precio_existente = cur.fetchone()
+                    if precio_existente:
+                        precio_id_existente = precio_existente['id']
+                        # Actualizar el precio existente con todos los datos nuevos
+                        updates = []
+                        params = []
+                        updates.append("proveedor_id = %s")
+                        params.append(proveedor_id)
+                        if precio is not None:
+                            updates.append("precio = %s")
+                            params.append(precio)
+                        if moneda is not None:
+                            updates.append("moneda = %s")
+                            params.append(moneda)
+                        if fecha_cotizacion is not None:
+                            updates.append("fecha_cotizacion = %s")
+                            params.append(fecha_cotizacion)
+                        if notas is not None:
+                            updates.append("notas = %s")
+                            params.append(notas)
+                        if seleccionado is not None:
+                            updates.append("seleccionado = %s")
+                            params.append(seleccionado)
+                        updates.append("actualizado_en = CURRENT_TIMESTAMP")
+                        params.append(precio_id_existente)
+                        cur.execute(
+                            f"UPDATE lista_materiales_precios SET {', '.join(updates)} WHERE id = %s",
+                            tuple(params)
+                        )
+                        # Eliminar el precio duplicado
+                        cur.execute("DELETE FROM lista_materiales_precios WHERE id = %s", (precio_id,))
+                        if seleccionado:
+                            _marcar_precio_seleccionado(cur, precio_id_existente, lista_material_item_id)
+                        conn.commit()
+                        return True
+            # Si no es un error de constraint, re-lanzar el error
+            raise
+    except Exception as e:
+        conn.rollback()
+        raise
     finally:
         cur.close()
         conn.close()
