@@ -15,10 +15,17 @@ services:
     env_file:
       - .env
     environment:
-      # Configurar DB_HOST según tu entorno (postgres si usas docker-compose.db.yml, o IP externa)
+      # Variables de base de datos (leídas del archivo .env)
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
       DB_HOST: ${DB_HOST:-postgres}
       DB_PORT: ${DB_PORT:-5432}
+      # Configuración de Gunicorn
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-300}
+      # Otras variables del .env (si existen)
+      SKIP_DB_INIT: ${SKIP_DB_INIT:-false}
+      DEBUG_DB_INIT: ${DEBUG_DB_INIT:-false}
     volumes:
       - ./uploads:/app/uploads
     # Si usas una base de datos externa, elimina depends_on
