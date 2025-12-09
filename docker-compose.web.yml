@@ -19,7 +19,7 @@ services:
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-      DB_HOST: ${DB_HOST:-postgres}
+      DB_HOST: ${DB_HOST:-scrapper_db}
       DB_PORT: ${DB_PORT:-5432}
       # Configuración de Gunicorn
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-300}
@@ -28,10 +28,9 @@ services:
       DEBUG_DB_INIT: ${DEBUG_DB_INIT:-false}
     volumes:
       - ./uploads:/app/uploads
-    # Si usas una base de datos externa, elimina depends_on
-    # depends_on:
-    #   postgres:
-    #     condition: service_healthy
+    # Conectarse a la red existente donde están scrapper_db y scrapper_pgadmin
+    networks:
+      - presupuesterpcp_default
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/"]
@@ -39,4 +38,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+networks:
+  presupuesterpcp_default:
+    external: true
 
