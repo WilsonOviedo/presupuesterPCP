@@ -49,7 +49,7 @@
       <div style="margin-bottom: 15px;">
         <label style="display: block; font-weight: 600; margin-bottom: 5px;">Monto *:</label>
         <input type="text" name="monto" id="montoInput"
-               value="{{ "{:,.2f}".format(transferencia.monto) if transferencia and transferencia.monto else '' }}" 
+               value="{% if transferencia and transferencia.monto %}{{ transferencia.monto }}{% endif %}" 
                required 
                placeholder="0,00"
                style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"
@@ -165,8 +165,9 @@
       // Formatear el monto inicial si tiene valor
       const montoInput = document.getElementById('montoInput');
       if (montoInput && montoInput.value) {
-        const valorOriginal = montoInput.value.replace(/,/g, '');
-        const valorNumero = parseFloat(valorOriginal);
+        // El valor ya viene en formato español del template, solo normalizar y reformatear
+        const valorNormalizado = normalizarMonto(montoInput.value);
+        const valorNumero = parseFloat(valorNormalizado);
         if (!isNaN(valorNumero) && valorNumero >= 0) {
           montoInput.value = formatter.format(valorNumero);
         }
@@ -180,8 +181,10 @@
         const valorNormalizado = normalizarMonto(montoInput.value);
         const valor = parseFloat(valorNormalizado);
         if (!isNaN(valor) && valor >= 0) {
-          // Reemplazar el valor formateado por el valor numérico normalizado (con punto como decimal)
-          montoInput.value = valorNormalizado;
+          // Enviar el valor como número puro sin separadores (solo punto decimal si es necesario)
+          // Convertir a string y asegurar que tenga máximo 2 decimales
+          const valorFinal = valor.toFixed(2);
+          montoInput.value = valorFinal;
         }
       }
     });

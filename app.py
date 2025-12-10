@@ -5090,7 +5090,24 @@ def transferencia_nuevo():
                 return redirect(url_for('transferencias_index', error='El monto es obligatorio'))
             
             # Convertir monto (aceptar formato con punto o coma)
-            monto = float(monto_str.replace('.', '').replace(',', '.'))
+            # Si tiene coma, es formato español: eliminar puntos de miles y usar coma como decimal
+            # Si tiene punto pero no coma, puede ser formato inglés (punto decimal) o español (punto de miles)
+            if ',' in monto_str:
+                # Formato español: eliminar puntos (miles) y reemplazar coma por punto
+                monto = float(monto_str.replace('.', '').replace(',', '.'))
+            elif '.' in monto_str:
+                # Tiene punto pero no coma: verificar si es decimal o miles
+                # Si tiene más de un punto o el punto está cerca del final, es separador de miles
+                partes = monto_str.split('.')
+                if len(partes) == 2 and len(partes[1]) <= 2:
+                    # Un solo punto y máximo 2 dígitos después: es punto decimal (formato inglés)
+                    monto = float(monto_str)
+                else:
+                    # Múltiples puntos o muchos dígitos después: son separadores de miles
+                    monto = float(monto_str.replace('.', ''))
+            else:
+                # Solo números, sin separadores
+                monto = float(monto_str)
             
             if monto <= 0:
                 return redirect(url_for('transferencias_index', error='El monto debe ser mayor a 0'))
@@ -5147,7 +5164,24 @@ def transferencia_editar(id):
                 return redirect(url_for('transferencias_index', error='El monto es obligatorio'))
             
             # Convertir monto (aceptar formato con punto o coma)
-            monto = float(monto_str.replace('.', '').replace(',', '.'))
+            # Si tiene coma, es formato español: eliminar puntos de miles y usar coma como decimal
+            # Si tiene punto pero no coma, puede ser formato inglés (punto decimal) o español (punto de miles)
+            if ',' in monto_str:
+                # Formato español: eliminar puntos (miles) y reemplazar coma por punto
+                monto = float(monto_str.replace('.', '').replace(',', '.'))
+            elif '.' in monto_str:
+                # Tiene punto pero no coma: verificar si es decimal o miles
+                # Si tiene más de un punto o el punto está cerca del final, es separador de miles
+                partes = monto_str.split('.')
+                if len(partes) == 2 and len(partes[1]) <= 2:
+                    # Un solo punto y máximo 2 dígitos después: es punto decimal (formato inglés)
+                    monto = float(monto_str)
+                else:
+                    # Múltiples puntos o muchos dígitos después: son separadores de miles
+                    monto = float(monto_str.replace('.', ''))
+            else:
+                # Solo números, sin separadores
+                monto = float(monto_str)
             
             if monto <= 0:
                 return redirect(url_for('transferencias_index', error='El monto debe ser mayor a 0'))
