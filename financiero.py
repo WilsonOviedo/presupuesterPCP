@@ -1295,8 +1295,72 @@ def eliminar_banco(banco_id):
 
 # ==================== FUNCIONES PARA CUENTAS A RECIBIR ====================
 
-def obtener_cuentas_a_recibir(filtros=None):
-    """Obtiene todas las cuentas a recibir con filtros opcionales"""
+def obtener_cuentas_a_recibir(filtros=None, limite=None, offset=None):
+    """Obtiene todas las cuentas a recibir con filtros opcionales y paginación"""
+    conn, cur = conectar()
+    try:
+        where_clauses = []
+        params = []
+        
+        if filtros:
+            if filtros.get('fecha_desde'):
+                where_clauses.append("car.fecha_emision >= %s")
+                params.append(filtros['fecha_desde'])
+            
+            if filtros.get('fecha_hasta'):
+                where_clauses.append("car.fecha_emision <= %s")
+                params.append(filtros['fecha_hasta'])
+            
+            if filtros.get('cliente'):
+                where_clauses.append("UPPER(car.cliente) LIKE UPPER(%s)")
+                params.append(f"%{filtros['cliente']}%")
+            
+            if filtros.get('estado'):
+                where_clauses.append("car.estado = %s")
+                params.append(filtros['estado'])
+            
+            if filtros.get('banco_id'):
+                where_clauses.append("car.banco_id = %s")
+                params.append(filtros['banco_id'])
+        
+        where_sql = ""
+        if where_clauses:
+            where_sql = "WHERE " + " AND ".join(where_clauses)
+        
+        # Agregar LIMIT y OFFSET si se proporcionan
+        limit_sql = ""
+        if limite is not None:
+            limit_sql = f" LIMIT {limite}"
+            if offset is not None:
+                limit_sql += f" OFFSET {offset}"
+        
+        cur.execute(f"""
+            SELECT 
+                car.*,
+                td.nombre AS documento_nombre,
+                b.nombre AS banco_nombre,
+                ci.nombre AS cuenta_nombre,
+                p.nombre AS proyecto_nombre,
+                COALESCE(car.monto_abonado, 0) AS monto_abonado,
+                (COALESCE(car.valor_cuota, car.valor, 0) - COALESCE(car.monto_abonado, 0)) AS saldo
+            FROM cuentas_a_recibir car
+            LEFT JOIN tipos_documentos td ON car.documento_id = td.id
+            LEFT JOIN bancos b ON car.banco_id = b.id
+            LEFT JOIN categorias_ingresos ci ON car.cuenta_id = ci.id
+            LEFT JOIN proyectos p ON car.proyecto_id = p.id
+            {where_sql}
+            ORDER BY car.fecha_emision DESC, car.id DESC
+            {limit_sql}
+        """, params)
+        
+        return cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def contar_cuentas_a_recibir(filtros=None):
+    """Cuenta el total de cuentas a recibir con filtros opcionales"""
     conn, cur = conectar()
     try:
         where_clauses = []
@@ -1328,22 +1392,12 @@ def obtener_cuentas_a_recibir(filtros=None):
             where_sql = "WHERE " + " AND ".join(where_clauses)
         
         cur.execute(f"""
-            SELECT 
-                car.*,
-                td.nombre AS documento_nombre,
-                b.nombre AS banco_nombre,
-                ci.nombre AS cuenta_nombre,
-                p.nombre AS proyecto_nombre
+            SELECT COUNT(*) 
             FROM cuentas_a_recibir car
-            LEFT JOIN tipos_documentos td ON car.documento_id = td.id
-            LEFT JOIN bancos b ON car.banco_id = b.id
-            LEFT JOIN categorias_ingresos ci ON car.cuenta_id = ci.id
-            LEFT JOIN proyectos p ON car.proyecto_id = p.id
             {where_sql}
-            ORDER BY car.fecha_emision DESC, car.id DESC
         """, params)
         
-        return cur.fetchall()
+        return cur.fetchone()[0]
     finally:
         cur.close()
         conn.close()
@@ -1579,10 +1633,143 @@ def eliminar_cuenta_a_recibir(cuenta_id):
         conn.close()
 
 
+def agregar_pago_cuenta_a_recibir(cuenta_id, monto_pago, fecha_pago):
+    """Agrega un pago a una cuenta a recibir (suma al monto_abonado existente y actualiza fecha_recibo)"""
+    conn, cur = conectar()
+    try:
+        # Obtener datos actuales de la cuenta
+        cur.execute("SELECT monto_abonado, vencimiento, valor_cuota, valor FROM cuentas_a_recibir WHERE id = %s", (cuenta_id,))
+        cuenta = cur.fetchone()
+        if not cuenta:
+            raise ValueError("Cuenta a recibir no encontrada")
+        
+        # Convertir monto_abonado_actual a float (puede venir como Decimal de PostgreSQL)
+        monto_abonado_actual = float(cuenta['monto_abonado'] or 0)
+        vencimiento = cuenta['vencimiento']
+        valor_cuota = cuenta['valor_cuota']
+        valor = cuenta['valor']
+        
+        # Convertir monto_pago a float
+        monto_pago_float = float(monto_pago)
+        
+        # Sumar el nuevo pago al monto abonado existente
+        nuevo_monto_abonado = monto_abonado_actual + monto_pago_float
+        
+        # Calcular status_recibo si hay vencimiento
+        status_recibo = None
+        if vencimiento and fecha_pago:
+            status_recibo = calcular_status_recibo(vencimiento, fecha_pago)
+        
+        # Determinar si el estado debe cambiar a RECIBIDO
+        # Calcular el saldo: saldo = (valor_cuota o valor) - monto_abonado
+        # Solo cambiar a RECIBIDO si el saldo <= 0 (no hay saldo pendiente)
+        monto_comparar = valor_cuota if valor_cuota is not None else valor
+        nuevo_estado = None
+        if monto_comparar:
+            monto_comparar_float = float(monto_comparar) if monto_comparar else 0
+            saldo = abs(monto_comparar_float) - nuevo_monto_abonado
+            # Solo cambiar a RECIBIDO si no hay saldo pendiente (saldo <= 0)
+            if saldo <= 0:
+                nuevo_estado = 'RECIBIDO'
+            else:
+                # Si hay saldo pendiente, asegurar que esté en ABIERTO
+                nuevo_estado = 'ABIERTO'
+        
+        # Actualizar monto_abonado, fecha_recibo, status_recibo y posiblemente estado
+        updates = ["monto_abonado = %s", "fecha_recibo = %s", "status_recibo = %s", "actualizado_en = CURRENT_TIMESTAMP"]
+        params = [nuevo_monto_abonado, fecha_pago, status_recibo]
+        
+        if nuevo_estado:
+            updates.append("estado = %s")
+            params.append(nuevo_estado)
+        
+        params.append(cuenta_id)
+        
+        cur.execute(f"""
+            UPDATE cuentas_a_recibir 
+            SET {', '.join(updates)}
+            WHERE id = %s
+        """, params)
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        print(f"Error al agregar pago a cuenta a recibir: {e}")
+        raise
+    finally:
+        cur.close()
+        conn.close()
+
+
 # ==================== FUNCIONES PARA CUENTAS A PAGAR ====================
 
-def obtener_cuentas_a_pagar(filtros=None):
-    """Obtiene todas las cuentas a pagar con filtros opcionales"""
+def obtener_cuentas_a_pagar(filtros=None, limite=None, offset=None):
+    """Obtiene todas las cuentas a pagar con filtros opcionales y paginación"""
+    conn, cur = conectar()
+    try:
+        where_clauses = []
+        params = []
+        
+        if filtros:
+            if filtros.get('fecha_desde'):
+                where_clauses.append("cap.fecha_emision >= %s")
+                params.append(filtros['fecha_desde'])
+            
+            if filtros.get('fecha_hasta'):
+                where_clauses.append("cap.fecha_emision <= %s")
+                params.append(filtros['fecha_hasta'])
+            
+            if filtros.get('proveedor'):
+                where_clauses.append("UPPER(cap.proveedor) LIKE UPPER(%s)")
+                params.append(f"%{filtros['proveedor']}%")
+            
+            if filtros.get('estado'):
+                where_clauses.append("cap.estado = %s")
+                params.append(filtros['estado'])
+            
+            if filtros.get('banco_id'):
+                where_clauses.append("cap.banco_id = %s")
+                params.append(filtros['banco_id'])
+        
+        where_sql = ""
+        if where_clauses:
+            where_sql = "WHERE " + " AND ".join(where_clauses)
+        
+        # Agregar LIMIT y OFFSET si se proporcionan
+        limit_sql = ""
+        if limite is not None:
+            limit_sql = f" LIMIT {limite}"
+            if offset is not None:
+                limit_sql += f" OFFSET {offset}"
+        
+        cur.execute(f"""
+            SELECT 
+                cap.*,
+                td.nombre AS documento_nombre,
+                b.nombre AS banco_nombre,
+                cg.nombre AS cuenta_nombre,
+                p.nombre AS proyecto_nombre,
+                COALESCE(cap.monto_abonado, 0) AS monto_abonado,
+                (COALESCE(cap.valor_cuota, cap.valor, 0) - COALESCE(cap.monto_abonado, 0)) AS saldo
+            FROM cuentas_a_pagar cap
+            LEFT JOIN tipos_documentos td ON cap.documento_id = td.id
+            LEFT JOIN bancos b ON cap.banco_id = b.id
+            LEFT JOIN categorias_gastos cg ON cap.cuenta_id = cg.id
+            LEFT JOIN proyectos p ON cap.proyecto_id = p.id
+            {where_sql}
+            ORDER BY cap.fecha_emision DESC, cap.id DESC
+            {limit_sql}
+        """, params)
+        
+        return cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def contar_cuentas_a_pagar(filtros=None):
+    """Cuenta el total de cuentas a pagar con filtros opcionales"""
     conn, cur = conectar()
     try:
         where_clauses = []
@@ -1614,22 +1801,12 @@ def obtener_cuentas_a_pagar(filtros=None):
             where_sql = "WHERE " + " AND ".join(where_clauses)
         
         cur.execute(f"""
-            SELECT 
-                cap.*,
-                td.nombre AS documento_nombre,
-                b.nombre AS banco_nombre,
-                cg.nombre AS cuenta_nombre,
-                p.nombre AS proyecto_nombre
+            SELECT COUNT(*) 
             FROM cuentas_a_pagar cap
-            LEFT JOIN tipos_documentos td ON cap.documento_id = td.id
-            LEFT JOIN bancos b ON cap.banco_id = b.id
-            LEFT JOIN categorias_gastos cg ON cap.cuenta_id = cg.id
-            LEFT JOIN proyectos p ON cap.proyecto_id = p.id
             {where_sql}
-            ORDER BY cap.fecha_emision DESC, cap.id DESC
         """, params)
         
-        return cur.fetchall()
+        return cur.fetchone()[0]
     finally:
         cur.close()
         conn.close()
@@ -1684,17 +1861,26 @@ def crear_cuenta_a_pagar(fecha_emision, documento_id=None, cuenta_id=None, plano
         if fecha_pago and vencimiento:
             status_pago = calcular_status_recibo(vencimiento, fecha_pago)  # Reutilizamos la misma función
         
+        # Si es FCON (al contado), establecer monto_abonado igual al valor_cuota (o valor si no hay valor_cuota)
+        monto_abonado = None
+        if tipo == 'FCON':
+            # Si hay valor_cuota, usar ese valor; si no, usar el valor total
+            monto_abonado = valor_cuota if valor_cuota is not None else valor
+            # Asegurar que sea positivo (absoluto)
+            if monto_abonado is not None:
+                monto_abonado = abs(monto_abonado)
+        
         cur.execute("""
             INSERT INTO cuentas_a_pagar (
                 fecha_emision, documento_id, cuenta_id, plano_cuenta, tipo, proveedor, factura, descripcion,
                 banco_id, valor, cuotas, valor_cuota, vencimiento, fecha_pago,
-                estado, status_pago, proyecto_id
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                estado, status_pago, proyecto_id, monto_abonado
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             fecha_emision, documento_id, cuenta_id, plano_cuenta, tipo, proveedor, factura, descripcion,
             banco_id, valor, cuotas, valor_cuota, vencimiento, fecha_pago,
-            estado, status_pago, proyecto_id
+            estado, status_pago, proyecto_id, monto_abonado
         ))
         
         cuenta_id = cur.fetchone()['id']
@@ -1836,6 +2022,75 @@ def eliminar_cuenta_a_pagar(cuenta_id):
     except Exception as e:
         conn.rollback()
         print(f"Error al eliminar cuenta a pagar: {e}")
+        raise
+    finally:
+        cur.close()
+        conn.close()
+
+
+def agregar_pago_cuenta_a_pagar(cuenta_id, monto_pago, fecha_pago):
+    """Agrega un pago a una cuenta a pagar (suma al monto_abonado existente y actualiza fecha_pago)"""
+    conn, cur = conectar()
+    try:
+        # Obtener datos actuales de la cuenta
+        cur.execute("SELECT monto_abonado, vencimiento, valor_cuota, valor FROM cuentas_a_pagar WHERE id = %s", (cuenta_id,))
+        cuenta = cur.fetchone()
+        if not cuenta:
+            raise ValueError("Cuenta a pagar no encontrada")
+        
+        # Convertir monto_abonado_actual a float (puede venir como Decimal de PostgreSQL)
+        monto_abonado_actual = float(cuenta['monto_abonado'] or 0)
+        vencimiento = cuenta['vencimiento']
+        valor_cuota = cuenta['valor_cuota']
+        valor = cuenta['valor']
+        
+        # Convertir monto_pago a float
+        monto_pago_float = float(monto_pago)
+        
+        # Sumar el nuevo pago al monto abonado existente
+        nuevo_monto_abonado = monto_abonado_actual + monto_pago_float
+        
+        # Calcular status_pago si hay vencimiento
+        status_pago = None
+        if vencimiento and fecha_pago:
+            status_pago = calcular_status_recibo(vencimiento, fecha_pago)
+        
+        # Determinar si el estado debe cambiar a PAGADO
+        # Calcular el saldo: saldo = (valor_cuota o valor) - monto_abonado
+        # Solo cambiar a PAGADO si el saldo <= 0 (no hay saldo pendiente)
+        monto_comparar = valor_cuota if valor_cuota is not None else valor
+        nuevo_estado = None
+        if monto_comparar:
+            monto_comparar_float = float(monto_comparar) if monto_comparar else 0
+            saldo = abs(monto_comparar_float) - nuevo_monto_abonado
+            # Solo cambiar a PAGADO si no hay saldo pendiente (saldo <= 0)
+            if saldo <= 0:
+                nuevo_estado = 'PAGADO'
+            else:
+                # Si hay saldo pendiente, asegurar que esté en ABIERTO
+                nuevo_estado = 'ABIERTO'
+        
+        # Actualizar monto_abonado, fecha_pago, status_pago y posiblemente estado
+        updates = ["monto_abonado = %s", "fecha_pago = %s", "status_pago = %s", "actualizado_en = CURRENT_TIMESTAMP"]
+        params = [nuevo_monto_abonado, fecha_pago, status_pago]
+        
+        if nuevo_estado:
+            updates.append("estado = %s")
+            params.append(nuevo_estado)
+        
+        params.append(cuenta_id)
+        
+        cur.execute(f"""
+            UPDATE cuentas_a_pagar 
+            SET {', '.join(updates)}
+            WHERE id = %s
+        """, params)
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        print(f"Error al agregar pago a cuenta a pagar: {e}")
         raise
     finally:
         cur.close()

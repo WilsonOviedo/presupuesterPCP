@@ -401,6 +401,7 @@ def obtener_reportes_cuentas_a_pagar(proveedor_nombre=None, fecha_desde=None, fe
                 cap.descripcion,
                 cap.valor,
                 cap.valor_cuota,
+                cap.monto_abonado,
                 cap.cuotas,
                 cap.vencimiento,
                 cap.fecha_pago,
@@ -447,18 +448,37 @@ def obtener_reportes_cuentas_a_pagar(proveedor_nombre=None, fecha_desde=None, fe
             
             # Calcular días de atraso
             dias_atraso = 0
+            estado_pago_detalle = None  # Para indicar si fue adelantado, en día o atrasado cuando está pagado
+            
             if fecha_vencimiento:
                 if fecha_pago:
+                    # Si tiene fecha de pago, calcular días de atraso/adelanto
                     if fecha_pago > fecha_vencimiento:
                         dias_atraso = (fecha_pago - fecha_vencimiento).days
+                        estado_pago_detalle = 'Atrasado'
+                    elif fecha_pago < fecha_vencimiento:
+                        dias_atraso = (fecha_vencimiento - fecha_pago).days
+                        estado_pago_detalle = 'Adelantado'
+                    else:
+                        dias_atraso = 0
+                        estado_pago_detalle = 'En día'
                 else:
+                    # Sin fecha de pago, calcular días de atraso desde hoy
                     hoy = date.today()
                     if hoy > fecha_vencimiento:
                         dias_atraso = (hoy - fecha_vencimiento).days
             
             # Determinar estado de pago
             estado_pago = cuenta['estado'] or 'ABIERTO'
-            if estado_pago == 'PAGADO':
+            
+            # Si tiene fecha de pago, siempre es "Pagado" pero con detalle
+            if fecha_pago:
+                if estado_pago_detalle:
+                    estado_pago = f'Pagado ({estado_pago_detalle})'
+                else:
+                    estado_pago = 'Pagado'
+            elif estado_pago == 'PAGADO':
+                # Si está marcado como PAGADO pero no tiene fecha_pago, solo mostrar "Pagado"
                 estado_pago = 'Pagado'
             elif estado_pago == 'ABIERTO':
                 if fecha_vencimiento:
@@ -472,14 +492,21 @@ def obtener_reportes_cuentas_a_pagar(proveedor_nombre=None, fecha_desde=None, fe
                 else:
                     estado_pago = 'Pendiente'
             
-            # Usar status_pago si está disponible
-            if cuenta['status_pago']:
+            # Usar status_pago si está disponible (solo si no tiene fecha_pago)
+            if cuenta['status_pago'] and not fecha_pago:
                 status_map = {
                     'ADELANTADO': 'Adelantado',
                     'ATRASADO': 'Atrasado',
                     'EN DIA': 'En día'
                 }
                 estado_pago = status_map.get(cuenta['status_pago'], estado_pago)
+            
+            # Calcular saldo: (valor_cuota o valor) - monto_abonado
+            valor_cuota = float(cuenta['valor_cuota']) if cuenta['valor_cuota'] else None
+            valor = float(cuenta['valor']) if cuenta['valor'] else 0
+            monto_abonado = float(cuenta.get('monto_abonado') or 0)
+            monto_comparar = valor_cuota if valor_cuota is not None else valor
+            saldo = abs(monto_comparar) - monto_abonado if monto_comparar else 0
             
             reporte = {
                 'tipo': 'CUENTA_A_PAGAR',
@@ -495,7 +522,7 @@ def obtener_reportes_cuentas_a_pagar(proveedor_nombre=None, fecha_desde=None, fe
                 'fecha_pago': fecha_pago,
                 'estado_pago': estado_pago,
                 'dias_atraso': dias_atraso,
-                'monto': float(cuenta['valor']) if cuenta['valor'] else 0,
+                'monto': saldo,  # Mostrar saldo en lugar del monto total
                 # Campos adicionales
                 'documento_nombre': cuenta.get('documento_nombre'),
                 'banco_nombre': cuenta.get('banco_nombre'),
@@ -581,6 +608,7 @@ def obtener_reportes_cuentas_a_recibir(cliente_nombre=None, fecha_desde=None, fe
                 car.descripcion,
                 car.valor,
                 car.valor_cuota,
+                car.monto_abonado,
                 car.cuotas,
                 car.vencimiento,
                 car.fecha_recibo,
@@ -661,6 +689,13 @@ def obtener_reportes_cuentas_a_recibir(cliente_nombre=None, fecha_desde=None, fe
                 }
                 estado_pago = status_map.get(cuenta['status_recibo'], estado_pago)
             
+            # Calcular saldo: (valor_cuota o valor) - monto_abonado
+            valor_cuota = float(cuenta['valor_cuota']) if cuenta['valor_cuota'] else None
+            valor = float(cuenta['valor']) if cuenta['valor'] else 0
+            monto_abonado = float(cuenta.get('monto_abonado') or 0)
+            monto_comparar = valor_cuota if valor_cuota is not None else valor
+            saldo = abs(monto_comparar) - monto_abonado if monto_comparar else 0
+            
             reporte = {
                 'tipo': 'CUENTA_A_RECIBIR',
                 'id': cuenta['id'],
@@ -675,7 +710,7 @@ def obtener_reportes_cuentas_a_recibir(cliente_nombre=None, fecha_desde=None, fe
                 'fecha_pago': fecha_recibo,
                 'estado_pago': estado_pago,
                 'dias_atraso': dias_atraso,
-                'monto': float(cuenta['valor']) if cuenta['valor'] else 0,
+                'monto': saldo,  # Mostrar saldo en lugar del monto total
                 # Campos adicionales
                 'documento_nombre': cuenta.get('documento_nombre'),
                 'banco_nombre': cuenta.get('banco_nombre'),

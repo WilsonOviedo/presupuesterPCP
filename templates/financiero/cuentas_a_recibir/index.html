@@ -97,6 +97,60 @@
       background: #d1ecf1;
       color: #0c5460;
     }
+    .paginacion {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 20px;
+      padding: 15px;
+      background: #f9f9f9;
+      border-radius: 8px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .paginacion-info {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+    .paginacion-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .paginacion-controls select {
+      padding: 6px 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    .paginacion-buttons {
+      display: flex;
+      gap: 5px;
+    }
+    .paginacion-buttons a,
+    .paginacion-buttons button {
+      padding: 8px 12px;
+      background: #2196F3;
+      color: white;
+      text-decoration: none;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9em;
+      transition: background 0.2s;
+    }
+    .paginacion-buttons a:hover,
+    .paginacion-buttons button:hover {
+      background: #1976D2;
+    }
+    .paginacion-buttons a:disabled,
+    .paginacion-buttons button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
     .status-atrasado {
       background: #f8d7da;
       color: #721c24;
@@ -197,6 +251,8 @@
             <th>Valor</th>
             <th>Cuotas</th>
             <th>Valor Cuota</th>
+            <th>Monto Abonado</th>
+            <th>Saldo</th>
             <th>Vencimiento</th>
             <th>Fecha Recibo</th>
             <th>Estado</th>
@@ -234,6 +290,16 @@
                   -
                 {% endif %}
               </td>
+              <td style="text-align: right;">
+                {{ "{:,.2f}".format(cuenta.monto_abonado or 0) }}
+              </td>
+              <td style="text-align: right;" {% if cuenta.saldo and cuenta.saldo < 0 %}class="valor-negativo"{% endif %}>
+                {% if cuenta.saldo and cuenta.saldo < 0 %}
+                  ({{ "{:,.2f}".format(abs(cuenta.saldo)) }})
+                {% else %}
+                  {{ "{:,.2f}".format(cuenta.saldo or 0) }}
+                {% endif %}
+              </td>
               <td>{{ cuenta.vencimiento.strftime('%d/%m/%Y') if cuenta.vencimiento else '-' }}</td>
               <td>{{ cuenta.fecha_recibo.strftime('%d/%m/%Y') if cuenta.fecha_recibo else '-' }}</td>
               <td>
@@ -251,19 +317,23 @@
                 {% endif %}
               </td>
               <td>
-                <a href="{{ url_for('cuenta_a_recibir_editar', id=cuenta.id) }}" 
-                   style="padding: 4px 8px; background: #009688; color: white; text-decoration: none; border-radius: 4px; font-size: 0.8em;">✏️ Editar</a>
-                <form method="POST" action="{{ url_for('cuenta_a_recibir_eliminar', id=cuenta.id) }}" 
-                      style="display: inline;" onsubmit="return confirm('¿Está seguro de eliminar esta cuenta a recibir?');">
-                  <button type="submit" style="padding: 4px 8px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em;">🗑️</button>
-                </form>
+                <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                  <a href="{{ url_for('cuenta_a_recibir_editar', id=cuenta.id) }}" 
+                     style="padding: 4px 8px; background: #009688; color: white; text-decoration: none; border-radius: 4px; font-size: 0.8em;">✏️ Editar</a>
+                  <button type="button" onclick="abrirModalPago({{ cuenta.id }}, '{{ cuenta.factura or cuenta.id }}', {{ cuenta.monto_abonado or 0 }}, '{{ url_for("cuenta_a_recibir_agregar_pago", id=cuenta.id) }}')" 
+                          style="padding: 4px 8px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em;">💰 Agregar Pago</button>
+                  <form method="POST" action="{{ url_for('cuenta_a_recibir_eliminar', id=cuenta.id) }}" 
+                        style="display: inline;" onsubmit="return confirm('¿Está seguro de eliminar esta cuenta a recibir?');">
+                    <button type="submit" style="padding: 4px 8px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em;">🗑️</button>
+                  </form>
+                </div>
               </td>
             </tr>
           {% endfor %}
           
           {% if not cuentas %}
             <tr>
-              <td colspan="18" style="text-align: center; padding: 40px; color: #999;">
+              <td colspan="20" style="text-align: center; padding: 40px; color: #999;">
                 No hay cuentas a recibir registradas. <a href="{{ url_for('cuenta_a_recibir_nuevo') }}">Crear primera cuenta a recibir</a>
               </td>
             </tr>
@@ -271,9 +341,186 @@
         </tbody>
       </table>
     </div>
+
+    {# Controles de paginación #}
+    {% if total_registros and total_registros > 0 %}
+      <div class="paginacion">
+        <div class="paginacion-info">
+          <span>
+            Mostrando {{ ((pagina - 1) * limite) + 1 }} - 
+            {{ [pagina * limite, total_registros]|min }} de {{ total_registros }} registros
+          </span>
+          <span>
+            Página {{ pagina }} de {{ total_paginas }}
+          </span>
+        </div>
+        <div class="paginacion-controls">
+          <form method="GET" action="{{ url_for('cuentas_a_recibir_index') }}" style="display: flex; align-items: center; gap: 10px;">
+            {# Mantener todos los filtros en los parámetros ocultos #}
+            {% if request.args.get('fecha_desde') %}
+              <input type="hidden" name="fecha_desde" value="{{ request.args.get('fecha_desde') }}">
+            {% endif %}
+            {% if request.args.get('fecha_hasta') %}
+              <input type="hidden" name="fecha_hasta" value="{{ request.args.get('fecha_hasta') }}">
+            {% endif %}
+            {% if request.args.get('cliente') %}
+              <input type="hidden" name="cliente" value="{{ request.args.get('cliente') }}">
+            {% endif %}
+            {% if request.args.get('estado') %}
+              <input type="hidden" name="estado" value="{{ request.args.get('estado') }}">
+            {% endif %}
+            {% if request.args.get('banco_id') %}
+              <input type="hidden" name="banco_id" value="{{ request.args.get('banco_id') }}">
+            {% endif %}
+            <label style="font-size: 0.9em; font-weight: 600;">Filas por página:</label>
+            <select name="limite" onchange="this.form.submit()" style="padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.9em;">
+              <option value="25" {% if limite == 25 %}selected{% endif %}>25</option>
+              <option value="50" {% if limite == 50 %}selected{% endif %}>50</option>
+              <option value="100" {% if limite == 100 %}selected{% endif %}>100</option>
+              <option value="200" {% if limite == 200 %}selected{% endif %}>200</option>
+            </select>
+            <input type="hidden" name="pagina" value="1">
+          </form>
+        </div>
+        <div class="paginacion-buttons">
+          {% if pagina > 1 %}
+            <a href="{{ url_for('cuentas_a_recibir_index', pagina=pagina-1, limite=limite, fecha_desde=request.args.get('fecha_desde', ''), fecha_hasta=request.args.get('fecha_hasta', ''), cliente=request.args.get('cliente', ''), estado=request.args.get('estado', ''), banco_id=request.args.get('banco_id', '')) }}">
+              ← Anterior
+            </a>
+          {% else %}
+            <button disabled>← Anterior</button>
+          {% endif %}
+          
+          {% if pagina < total_paginas %}
+            <a href="{{ url_for('cuentas_a_recibir_index', pagina=pagina+1, limite=limite, fecha_desde=request.args.get('fecha_desde', ''), fecha_hasta=request.args.get('fecha_hasta', ''), cliente=request.args.get('cliente', ''), estado=request.args.get('estado', ''), banco_id=request.args.get('banco_id', '')) }}">
+              Siguiente →
+            </a>
+          {% else %}
+            <button disabled>Siguiente →</button>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Modal para Agregar Pago -->
+  <div id="modalAgregarPago" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; overflow-y: auto;">
+    <div style="background: white; margin: 50px auto; max-width: 500px; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0;">💰 Agregar Pago</h2>
+        <button onclick="cerrarModalPago()" style="background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 18px;">✕</button>
+      </div>
+      
+      <div id="infoCuentaPago" style="background: #f9f9f9; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+        <p><strong>Cuenta:</strong> <span id="numeroCuentaPago"></span></p>
+        <p><strong>Monto Abonado Actual:</strong> <span id="montoAbonadoActual"></span></p>
+      </div>
+      
+      <form id="formAgregarPago" onsubmit="enviarPago(event)">
+        <input type="hidden" id="cuentaIdPago" name="cuenta_id">
+        <input type="hidden" id="urlAgregarPago" name="url">
+        
+        <div style="margin-bottom: 15px;">
+          <label for="fecha_pago_modal" style="display: block; font-weight: 600; margin-bottom: 5px;">Fecha de Pago:</label>
+          <input type="date" id="fecha_pago_modal" name="fecha_pago" required 
+                 style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+          <label for="monto_pago_modal" style="display: block; font-weight: 600; margin-bottom: 5px;">Monto del Pago:</label>
+          <input type="text" id="monto_pago_modal" name="monto_pago" required 
+                 placeholder="0.00" 
+                 style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+        </div>
+        
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button type="button" onclick="cerrarModalPago()" 
+                  style="background: #757575; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Cancelar</button>
+          <button type="submit" 
+                  style="background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold;">Agregar Pago</button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <script>
+    let cuentaIdActual = null;
+    let urlAgregarPagoActual = null;
+    
+    function abrirModalPago(cuentaId, numeroCuenta, montoAbonado, url) {
+      cuentaIdActual = cuentaId;
+      urlAgregarPagoActual = url;
+      
+      document.getElementById('cuentaIdPago').value = cuentaId;
+      document.getElementById('urlAgregarPago').value = url;
+      document.getElementById('numeroCuentaPago').textContent = numeroCuenta;
+      document.getElementById('montoAbonadoActual').textContent = new Intl.NumberFormat('es-PY', { 
+        minimumFractionDigits: 2, 
+        maximumFractionDigits: 2 
+      }).format(montoAbonado || 0);
+      
+      // Establecer fecha de hoy por defecto
+      const hoy = new Date().toISOString().split('T')[0];
+      document.getElementById('fecha_pago_modal').value = hoy;
+      
+      // Limpiar monto
+      document.getElementById('monto_pago_modal').value = '';
+      
+      document.getElementById('modalAgregarPago').style.display = 'block';
+    }
+    
+    function cerrarModalPago() {
+      document.getElementById('modalAgregarPago').style.display = 'none';
+      document.getElementById('formAgregarPago').reset();
+    }
+    
+    function enviarPago(event) {
+      event.preventDefault();
+      
+      const formData = new FormData(event.target);
+      const url = urlAgregarPagoActual;
+      
+      // Mostrar indicador de carga
+      const submitBtn = event.target.querySelector('button[type="submit"]');
+      const originalText = submitBtn.textContent;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Procesando...';
+      
+      fetch(url, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          alert('Pago agregado correctamente');
+          cerrarModalPago();
+          // Recargar la página para mostrar los cambios
+          window.location.reload();
+        } else {
+          alert('Error: ' + (data.error || 'No se pudo agregar el pago'));
+          submitBtn.disabled = false;
+          submitBtn.textContent = originalText;
+        }
+      })
+      .catch(error => {
+        alert('Error al agregar pago: ' + error);
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+      });
+    }
+    
+    // Cerrar modal al hacer clic fuera
+    window.onclick = function(event) {
+      const modal = document.getElementById('modalAgregarPago');
+      if (event.target == modal) {
+        cerrarModalPago();
+      }
+    }
+    
     function importarCSV(input) {
       if (input.files && input.files[0]) {
         const formData = new FormData();

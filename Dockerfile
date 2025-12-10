@@ -17,25 +17,21 @@ COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r /app/requirements.txt
 
-# Copiar el resto de la aplicación
+# Copiar el resto de la aplicación (docker-entrypoint.sh se copia aquí también)
 COPY . /app
 
 # Crear directorio de uploads si no existe
 RUN mkdir -p /app/uploads
 
-# Hacer ejecutable el script de inicialización
-RUN chmod +x /app/init_db.py
+# Hacer ejecutables los scripts
+RUN chmod +x /app/init_db.py /app/docker-entrypoint.sh
 
 # Exponer puerto
 EXPOSE 5000
 
-# Script de inicio que inicializa la DB y luego ejecuta gunicorn
-COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh
-
-# Ejecutar con gunicorn en 0.0.0.0:5000 (timeout configurable)
+# Ejecutar con gunicorn en 0.0.0.0:5000 (timeout configurable desde variable de entorno)
 ENV GUNICORN_TIMEOUT=300
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-CMD ["gunicorn", "-b", "0.0.0.0:5000", "--workers", "2", "--threads", "4", "--timeout", "300", "app:app"]
+CMD ["gunicorn"]
 
 

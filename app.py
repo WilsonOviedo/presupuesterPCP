@@ -3973,7 +3973,41 @@ def cuentas_a_recibir_index():
     if banco_filtro:
         filtros['banco_id'] = banco_filtro
     
-    cuentas = financiero.obtener_cuentas_a_recibir(filtros if filtros else None)
+    # Paginación
+    pagina = request.args.get('pagina', type=int, default=1)
+    limite = request.args.get('limite', type=int, default=50)
+    
+    # Validar límite (mínimo 10, máximo 500)
+    if limite < 10:
+        limite = 10
+    elif limite > 500:
+        limite = 500
+    
+    # Calcular offset
+    offset = (pagina - 1) * limite
+    
+    # Obtener total de registros
+    total_registros = financiero.contar_cuentas_a_recibir(filtros if filtros else None)
+    
+    # Calcular total de páginas
+    total_paginas = (total_registros + limite - 1) // limite if total_registros > 0 else 1
+    
+    # Asegurar que la página esté en rango válido
+    if pagina < 1:
+        pagina = 1
+    elif pagina > total_paginas and total_paginas > 0:
+        pagina = total_paginas
+    
+    # Recalcular offset con la página corregida
+    offset = (pagina - 1) * limite
+    
+    # Obtener cuentas con paginación
+    cuentas = financiero.obtener_cuentas_a_recibir(
+        filtros if filtros else None,
+        limite=limite,
+        offset=offset
+    )
+    
     error = request.args.get('error')
     mensaje = request.args.get('mensaje')
     
@@ -3981,6 +4015,10 @@ def cuentas_a_recibir_index():
                          cuentas=cuentas,
                          documentos=documentos,
                          bancos=bancos,
+                         pagina=pagina,
+                         limite=limite,
+                         total_registros=total_registros,
+                         total_paginas=total_paginas,
                          categorias_ingresos=categorias_ingresos,
                          tipos_ingresos=tipos_ingresos,
                          proyectos=proyectos,
@@ -4248,6 +4286,36 @@ def cuenta_a_recibir_eliminar(id):
         return redirect(url_for('cuentas_a_recibir_index', error=f'Error al eliminar cuenta a recibir: {str(e)}'))
 
 
+@app.route("/financiero/cuentas-a-recibir/<int:id>/agregar-pago", methods=["POST"], endpoint="cuenta_a_recibir_agregar_pago")
+@auth.login_required
+@auth.permission_required('/financiero/cuentas-a-recibir')
+def cuenta_a_recibir_agregar_pago(id):
+    """Agregar pago a una cuenta a recibir"""
+    try:
+        monto_pago_str = request.form.get('monto_pago', '').strip()
+        fecha_pago_str = request.form.get('fecha_pago', '').strip()
+        
+        if not monto_pago_str:
+            return jsonify({'success': False, 'error': 'El monto del pago es obligatorio'}), 400
+        
+        if not fecha_pago_str:
+            return jsonify({'success': False, 'error': 'La fecha de pago es obligatoria'}), 400
+        
+        # Convertir monto (aceptar formato con punto o coma)
+        monto_pago = float(monto_pago_str.replace('.', '').replace(',', '.'))
+        
+        # Convertir fecha
+        fecha_pago = datetime.strptime(fecha_pago_str, "%Y-%m-%d").date()
+        
+        financiero.agregar_pago_cuenta_a_recibir(id, monto_pago, fecha_pago)
+        
+        return jsonify({'success': True, 'mensaje': 'Pago agregado correctamente'})
+    except ValueError as e:
+        return jsonify({'success': False, 'error': f'Error en los datos: {str(e)}'}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Error al agregar pago: {str(e)}'}), 500
+
+
 @app.route("/financiero/cuentas-a-recibir/exportar-csv", methods=["GET"], endpoint="cuentas_a_recibir_exportar_csv")
 @auth.login_required
 @auth.permission_required('/financiero/cuentas-a-recibir')
@@ -4350,7 +4418,41 @@ def cuentas_a_pagar_index():
     if banco_filtro:
         filtros['banco_id'] = banco_filtro
     
-    cuentas = financiero.obtener_cuentas_a_pagar(filtros if filtros else None)
+    # Paginación
+    pagina = request.args.get('pagina', type=int, default=1)
+    limite = request.args.get('limite', type=int, default=50)
+    
+    # Validar límite (mínimo 10, máximo 500)
+    if limite < 10:
+        limite = 10
+    elif limite > 500:
+        limite = 500
+    
+    # Calcular offset
+    offset = (pagina - 1) * limite
+    
+    # Obtener total de registros
+    total_registros = financiero.contar_cuentas_a_pagar(filtros if filtros else None)
+    
+    # Calcular total de páginas
+    total_paginas = (total_registros + limite - 1) // limite if total_registros > 0 else 1
+    
+    # Asegurar que la página esté en rango válido
+    if pagina < 1:
+        pagina = 1
+    elif pagina > total_paginas and total_paginas > 0:
+        pagina = total_paginas
+    
+    # Recalcular offset con la página corregida
+    offset = (pagina - 1) * limite
+    
+    # Obtener cuentas con paginación
+    cuentas = financiero.obtener_cuentas_a_pagar(
+        filtros if filtros else None,
+        limite=limite,
+        offset=offset
+    )
+    
     error = request.args.get('error')
     mensaje = request.args.get('mensaje')
     
@@ -4358,6 +4460,10 @@ def cuentas_a_pagar_index():
                          cuentas=cuentas,
                          documentos=documentos,
                          bancos=bancos,
+                         pagina=pagina,
+                         limite=limite,
+                         total_registros=total_registros,
+                         total_paginas=total_paginas,
                          categorias_gastos=categorias_gastos,
                          tipos_gastos=tipos_gastos,
                          proyectos=proyectos,
@@ -4613,6 +4719,36 @@ def cuenta_a_pagar_eliminar(id):
         return redirect(url_for('cuentas_a_pagar_index', mensaje='Cuenta a pagar eliminada correctamente'))
     except Exception as e:
         return redirect(url_for('cuentas_a_pagar_index', error=f'Error al eliminar cuenta a pagar: {str(e)}'))
+
+
+@app.route("/financiero/cuentas-a-pagar/<int:id>/agregar-pago", methods=["POST"], endpoint="cuenta_a_pagar_agregar_pago")
+@auth.login_required
+@auth.permission_required('/financiero/cuentas-a-pagar')
+def cuenta_a_pagar_agregar_pago(id):
+    """Agregar pago a una cuenta a pagar"""
+    try:
+        monto_pago_str = request.form.get('monto_pago', '').strip()
+        fecha_pago_str = request.form.get('fecha_pago', '').strip()
+        
+        if not monto_pago_str:
+            return jsonify({'success': False, 'error': 'El monto del pago es obligatorio'}), 400
+        
+        if not fecha_pago_str:
+            return jsonify({'success': False, 'error': 'La fecha de pago es obligatoria'}), 400
+        
+        # Convertir monto (aceptar formato con punto o coma)
+        monto_pago = float(monto_pago_str.replace('.', '').replace(',', '.'))
+        
+        # Convertir fecha
+        fecha_pago = datetime.strptime(fecha_pago_str, "%Y-%m-%d").date()
+        
+        financiero.agregar_pago_cuenta_a_pagar(id, monto_pago, fecha_pago)
+        
+        return jsonify({'success': True, 'mensaje': 'Pago agregado correctamente'})
+    except ValueError as e:
+        return jsonify({'success': False, 'error': f'Error en los datos: {str(e)}'}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Error al agregar pago: {str(e)}'}), 500
 
 
 @app.route("/financiero/cuentas-a-pagar/exportar-csv", methods=["GET"], endpoint="cuentas_a_pagar_exportar_csv")

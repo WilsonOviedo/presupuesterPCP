@@ -20,5 +20,14 @@ fi
 echo "=========================================="
 echo "Iniciando aplicación..."
 echo "=========================================="
-exec "$@"
+
+# Si el primer argumento es "gunicorn", usar la variable de entorno GUNICORN_TIMEOUT
+if [ "$1" = "gunicorn" ]; then
+    TIMEOUT="${GUNICORN_TIMEOUT:-300}"
+    echo "Usando timeout de Gunicorn: ${TIMEOUT} segundos"
+    exec gunicorn -b 0.0.0.0:5000 --workers 2 --threads 4 --timeout "${TIMEOUT}" app:app
+else
+    # Para otros comandos, ejecutar normalmente
+    exec "$@"
+fi
 

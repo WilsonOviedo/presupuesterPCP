@@ -958,6 +958,15 @@ BEGIN
         ALTER TABLE cuentas_a_recibir 
         ADD COLUMN factura VARCHAR(100);
     END IF;
+    
+    -- Agregar columna monto_abonado
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'cuentas_a_recibir' AND column_name = 'monto_abonado'
+    ) THEN
+        ALTER TABLE cuentas_a_recibir 
+        ADD COLUMN monto_abonado NUMERIC(15, 2) DEFAULT 0;
+    END IF;
 END $$;
 
 -- Índices para cuentas a recibir
@@ -1000,6 +1009,15 @@ BEGIN
     ) THEN
         ALTER TABLE cuentas_a_pagar 
         ADD COLUMN factura VARCHAR(100);
+    END IF;
+    
+    -- Agregar columna monto_abonado
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'cuentas_a_pagar' AND column_name = 'monto_abonado'
+    ) THEN
+        ALTER TABLE cuentas_a_pagar 
+        ADD COLUMN monto_abonado NUMERIC(15, 2) DEFAULT 0;
     END IF;
 END $$;
 

@@ -92,6 +92,18 @@
       background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
       color: white;
     }
+    .estado-pagado-en-dia, .estado-pagado-en_dia {
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      color: white;
+    }
+    .estado-pagado-adelantado {
+      background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
+      color: white;
+    }
+    .estado-pagado-atrasado {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white;
+    }
     .estado-pendiente {
       background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
       color: white;
@@ -227,8 +239,43 @@
     {% if reportes %}
       {% set total_cuentas = reportes|length %}
       {% set total_monto = reportes|sum(attribute='monto') %}
-      {% set cuentas_pagadas = reportes|selectattr('estado_pago', 'equalto', 'Pagado')|list|length %}
+      {% set cuentas_pagadas_list = [] %}
+      {% for r in reportes %}
+        {% if r.estado_pago and 'pagado' in r.estado_pago.lower() %}
+          {% set _ = cuentas_pagadas_list.append(1) %}
+        {% endif %}
+      {% endfor %}
+      {% set cuentas_pagadas = cuentas_pagadas_list|length %}
       {% set cuentas_atrasadas = reportes|selectattr('estado_pago', 'equalto', 'Atrasado')|list|length %}
+      
+      {# Calcular total sin atraso y total atrasado #}
+      {# Una factura está atrasada si tiene días de atraso > 0 Y NO está pagada #}
+      {# Las facturas pagadas (aunque hayan sido pagadas con atraso) no cuentan como atrasadas en el total #}
+      {% set reportes_atrasados = [] %}
+      {% set reportes_sin_atraso = [] %}
+      {% for reporte in reportes %}
+        {% set es_pagado = reporte.estado_pago and 'pagado' in reporte.estado_pago.lower() %}
+        {% set es_atrasado = False %}
+        
+        {# Solo considerar atrasado si NO está pagado #}
+        {% if not es_pagado %}
+          {% if reporte.dias_atraso %}
+            {% if reporte.dias_atraso|int > 0 %}
+              {% set es_atrasado = True %}
+            {% endif %}
+          {% elif reporte.estado_pago and reporte.estado_pago|upper == 'ATRASADO' %}
+            {% set es_atrasado = True %}
+          {% endif %}
+        {% endif %}
+        
+        {% if es_atrasado %}
+          {% set _ = reportes_atrasados.append(reporte.monto) %}
+        {% else %}
+          {% set _ = reportes_sin_atraso.append(reporte.monto) %}
+        {% endif %}
+      {% endfor %}
+      {% set total_atrasado = reportes_atrasados|sum %}
+      {% set total_sin_atraso = reportes_sin_atraso|sum %}
       
       <div class="resumen">
         <div class="resumen-item">
@@ -237,7 +284,15 @@
         </div>
         <div class="resumen-item">
           <strong>{{ "{:,.0f}".format(total_monto) }}</strong>
-          <span>Monto Total (Gs)</span>
+          <span>Total (Gs)</span>
+        </div>
+        <div class="resumen-item">
+          <strong>{{ "{:,.0f}".format(total_sin_atraso) }}</strong>
+          <span>Total Sin Atraso (Gs)</span>
+        </div>
+        <div class="resumen-item">
+          <strong>{{ "{:,.0f}".format(total_atrasado) }}</strong>
+          <span>Total Atrasado (Gs)</span>
         </div>
         <div class="resumen-item">
           <strong>{{ cuentas_pagadas }}</strong>
@@ -259,7 +314,7 @@
               <th>Fecha Emisión</th>
               <th>Fecha Vencimiento</th>
               <th>Fecha Pago</th>
-              <th>Monto</th>
+              <th>Saldo</th>
               <th>Días Atraso</th>
               <th>Estado</th>
             </tr>
@@ -312,7 +367,20 @@
                   </span>
                 </td>
                 <td>
-                  <span class="estado-badge estado-{{ reporte.estado_pago.lower().replace(' ', '_') }}">
+                  {% set estado_texto = reporte.estado_pago.lower() %}
+                  {% set estado_class = 'pagado' %}
+                  {% if 'pagado' in estado_texto %}
+                    {% if 'en día' in reporte.estado_pago or 'en_dia' in estado_texto or 'en_día' in estado_texto %}
+                      {% set estado_class = 'pagado-en-dia' %}
+                    {% elif 'adelantado' in estado_texto %}
+                      {% set estado_class = 'pagado-adelantado' %}
+                    {% elif 'atrasado' in estado_texto %}
+                      {% set estado_class = 'pagado-atrasado' %}
+                    {% endif %}
+                  {% else %}
+                    {% set estado_class = estado_texto.replace(' ', '_') %}
+                  {% endif %}
+                  <span class="estado-badge estado-{{ estado_class }}">
                     {{ reporte.estado_pago }}
                   </span>
                 </td>
