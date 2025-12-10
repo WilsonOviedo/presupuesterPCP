@@ -3214,11 +3214,21 @@ def reportes_cuentas_a_pagar_index():
     estado_filtro = request.args.get('estado', '').strip() or None
     tipo_filtro = request.args.get('tipo', '').strip() or None
     
+    # Paginación
+    pagina = request.args.get('pagina', type=int, default=1)
+    limite = request.args.get('limite', type=int, default=50)
+    
+    # Validar límite (mínimo 10, máximo 500)
+    if limite < 10:
+        limite = 10
+    elif limite > 500:
+        limite = 500
+    
     # Obtener lista de proveedores para el filtro
     proveedores = reportes_clientes.obtener_proveedores_con_cuentas()
     
-    # Obtener reportes
-    reportes = reportes_clientes.obtener_reportes_cuentas_a_pagar(
+    # Obtener total de registros
+    total_registros = reportes_clientes.contar_reportes_cuentas_a_pagar(
         proveedor_nombre=proveedor_nombre,
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
@@ -3226,9 +3236,28 @@ def reportes_cuentas_a_pagar_index():
         tipo_filtro=tipo_filtro
     )
     
-    # Filtrar por estado si se especifica
-    if estado_filtro:
-        reportes = [r for r in reportes if r['estado_pago'].lower() == estado_filtro.lower()]
+    # Calcular total de páginas
+    total_paginas = (total_registros + limite - 1) // limite if total_registros > 0 else 1
+    
+    # Asegurar que la página esté en rango válido
+    if pagina < 1:
+        pagina = 1
+    elif pagina > total_paginas and total_paginas > 0:
+        pagina = total_paginas
+    
+    # Calcular offset
+    offset = (pagina - 1) * limite
+    
+    # Obtener reportes con paginación
+    reportes = reportes_clientes.obtener_reportes_cuentas_a_pagar(
+        proveedor_nombre=proveedor_nombre,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        estado_pago_filtro=estado_filtro,
+        tipo_filtro=tipo_filtro,
+        limite=limite,
+        offset=offset
+    )
     
     return render_template('reportes/cuentas_a_pagar.html',
                          reportes=reportes,
@@ -3237,7 +3266,73 @@ def reportes_cuentas_a_pagar_index():
                          fecha_desde=fecha_desde or '',
                          fecha_hasta=fecha_hasta or '',
                          estado_seleccionado=estado_filtro or '',
-                         tipo_seleccionado=tipo_filtro or '')
+                         tipo_seleccionado=tipo_filtro or '',
+                         pagina=pagina,
+                         limite=limite,
+                         total_registros=total_registros,
+                         total_paginas=total_paginas)
+
+
+@app.route("/reportes/analisis", methods=["GET"], endpoint="reportes_analisis_index")
+@auth.login_required
+@auth.permission_required('/reportes/analisis')
+def reportes_analisis_index():
+    """Dashboard de análisis históricos y financieros"""
+    from datetime import datetime, date
+    
+    # Filtros
+    fecha_desde = request.args.get('fecha_desde', '').strip() or None
+    fecha_hasta = request.args.get('fecha_hasta', '').strip() or None
+    ano = request.args.get('ano', type=int)
+    proyecto_id = request.args.get('proyecto_id', type=int)
+    banco_id = request.args.get('banco_id', type=int)
+    tipo_reporte = request.args.get('tipo_reporte', 'realizado')  # 'realizado' o 'proyectado'
+    
+    # Obtener datos para filtros
+    proyectos = financiero.obtener_proyectos(activo=True)
+    bancos = financiero.obtener_bancos(activo=True)
+    
+    # Obtener datos del dashboard
+    saldos_bancos = reportes_clientes.obtener_saldos_bancos()
+    receita_mensual = reportes_clientes.obtener_receita_bruta_mensual(
+        ano=ano, proyecto_id=proyecto_id, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta,
+        tipo_reporte=tipo_reporte
+    )
+    custos_mensual = reportes_clientes.obtener_custos_despesas_mensual(
+        ano=ano, proyecto_id=proyecto_id, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta,
+        tipo_reporte=tipo_reporte
+    )
+    flujo_caja = reportes_clientes.obtener_flujo_caja_mensual(
+        ano=ano, proyecto_id=proyecto_id, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta
+    )
+    evolucion_saldo = reportes_clientes.obtener_evolucion_saldo_mensual(
+        banco_id=banco_id, ano=ano, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta
+    )
+    
+    # Calcular totales
+    total_receita = sum(float(r['receita_bruta'] or 0) for r in receita_mensual)
+    total_custos = sum(float(c['custos_despesas'] or 0) for c in custos_mensual)
+    total_lucro = total_receita - total_custos
+    total_saldo_bancos = sum(float(s['saldo_actual'] or 0) for s in saldos_bancos)
+    
+    return render_template('reportes/analisis.html',
+                         saldos_bancos=saldos_bancos,
+                         receita_mensual=receita_mensual,
+                         custos_mensual=custos_mensual,
+                         flujo_caja=flujo_caja,
+                         evolucion_saldo=evolucion_saldo,
+                         total_receita=total_receita,
+                         total_custos=total_custos,
+                         total_lucro=total_lucro,
+                         total_saldo_bancos=total_saldo_bancos,
+                         proyectos=proyectos,
+                         bancos=bancos,
+                         fecha_desde=fecha_desde or '',
+                         fecha_hasta=fecha_hasta or '',
+                         ano=ano or date.today().year,
+                         proyecto_id=proyecto_id,
+                         banco_id=banco_id,
+                         tipo_reporte=tipo_reporte)
 
 
 @app.route("/reportes/cuentas-a-recibir", methods=["GET"], endpoint="reportes_cuentas_a_recibir_index")
@@ -3251,11 +3346,21 @@ def reportes_cuentas_a_recibir_index():
     estado_filtro = request.args.get('estado', '').strip() or None
     tipo_filtro = request.args.get('tipo', '').strip() or None
     
+    # Paginación
+    pagina = request.args.get('pagina', type=int, default=1)
+    limite = request.args.get('limite', type=int, default=50)
+    
+    # Validar límite (mínimo 10, máximo 500)
+    if limite < 10:
+        limite = 10
+    elif limite > 500:
+        limite = 500
+    
     # Obtener lista de clientes para el filtro
     clientes = reportes_clientes.obtener_clientes_con_cuentas_a_recibir()
     
-    # Obtener reportes
-    reportes = reportes_clientes.obtener_reportes_cuentas_a_recibir(
+    # Obtener total de registros
+    total_registros = reportes_clientes.contar_reportes_cuentas_a_recibir(
         cliente_nombre=cliente_nombre,
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
@@ -3263,9 +3368,28 @@ def reportes_cuentas_a_recibir_index():
         tipo_filtro=tipo_filtro
     )
     
-    # Filtrar por estado si se especifica
-    if estado_filtro:
-        reportes = [r for r in reportes if r['estado_pago'].lower() == estado_filtro.lower()]
+    # Calcular total de páginas
+    total_paginas = (total_registros + limite - 1) // limite if total_registros > 0 else 1
+    
+    # Asegurar que la página esté en rango válido
+    if pagina < 1:
+        pagina = 1
+    elif pagina > total_paginas and total_paginas > 0:
+        pagina = total_paginas
+    
+    # Calcular offset
+    offset = (pagina - 1) * limite
+    
+    # Obtener reportes con paginación
+    reportes = reportes_clientes.obtener_reportes_cuentas_a_recibir(
+        cliente_nombre=cliente_nombre,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        estado_pago_filtro=estado_filtro,
+        tipo_filtro=tipo_filtro,
+        limite=limite,
+        offset=offset
+    )
     
     return render_template('reportes/cuentas_a_recibir.html',
                          reportes=reportes,
@@ -3274,7 +3398,11 @@ def reportes_cuentas_a_recibir_index():
                          fecha_desde=fecha_desde or '',
                          fecha_hasta=fecha_hasta or '',
                          estado_seleccionado=estado_filtro or '',
-                         tipo_seleccionado=tipo_filtro or '')
+                         tipo_seleccionado=tipo_filtro or '',
+                         pagina=pagina,
+                         limite=limite,
+                         total_registros=total_registros,
+                         total_paginas=total_paginas)
 
 
 @app.route("/api/facturacion/eliminar-factura/<int:factura_id>", methods=["DELETE"])
@@ -4822,6 +4950,201 @@ def cuentas_a_pagar_previsualizar_csv():
 
 
 @app.route("/financiero/cuentas-a-pagar/importar-csv", methods=["POST"], endpoint="cuentas_a_pagar_importar_csv")
+
+
+# ==================== RUTAS DE TRANSFERENCIAS ENTRE CUENTAS ====================
+
+@app.route("/financiero/transferencias", methods=["GET"], endpoint="transferencias_index")
+@auth.login_required
+@auth.permission_required('/financiero/transferencias')
+def transferencias_index():
+    """Página principal de gestión de transferencias entre cuentas"""
+    # Filtros
+    filtros = {}
+    fecha_desde = request.args.get('fecha_desde', '').strip()
+    fecha_hasta = request.args.get('fecha_hasta', '').strip()
+    banco_origen_id = request.args.get('banco_origen_id', type=int)
+    banco_destino_id = request.args.get('banco_destino_id', type=int)
+    
+    if fecha_desde:
+        filtros['fecha_desde'] = fecha_desde
+    if fecha_hasta:
+        filtros['fecha_hasta'] = fecha_hasta
+    if banco_origen_id:
+        filtros['banco_origen_id'] = banco_origen_id
+    if banco_destino_id:
+        filtros['banco_destino_id'] = banco_destino_id
+    
+    # Paginación
+    pagina = request.args.get('pagina', type=int, default=1)
+    limite = request.args.get('limite', type=int, default=50)
+    
+    if limite < 10:
+        limite = 10
+    elif limite > 500:
+        limite = 500
+    
+    # Obtener bancos para filtros
+    bancos = financiero.obtener_bancos(activo=True)
+    
+    # Obtener total de registros
+    total_registros = financiero.contar_transferencias(filtros if filtros else None)
+    
+    # Calcular total de páginas
+    total_paginas = (total_registros + limite - 1) // limite if total_registros > 0 else 1
+    
+    if pagina < 1:
+        pagina = 1
+    elif pagina > total_paginas and total_paginas > 0:
+        pagina = total_paginas
+    
+    offset = (pagina - 1) * limite
+    
+    # Obtener transferencias
+    transferencias = financiero.obtener_transferencias(
+        filtros if filtros else None,
+        limite=limite,
+        offset=offset
+    )
+    
+    error = request.args.get('error')
+    mensaje = request.args.get('mensaje')
+    
+    return render_template('financiero/transferencias/index.html',
+                         transferencias=transferencias,
+                         bancos=bancos,
+                         fecha_desde=fecha_desde or '',
+                         fecha_hasta=fecha_hasta or '',
+                         banco_origen_id=banco_origen_id,
+                         banco_destino_id=banco_destino_id,
+                         pagina=pagina,
+                         limite=limite,
+                         total_registros=total_registros,
+                         total_paginas=total_paginas,
+                         error=error,
+                         mensaje=mensaje)
+
+
+@app.route("/financiero/transferencias/nuevo", methods=["GET", "POST"], endpoint="transferencia_nuevo")
+@auth.login_required
+@auth.permission_required('/financiero/transferencias')
+def transferencia_nuevo():
+    """Crear nueva transferencia entre cuentas"""
+    if request.method == "POST":
+        try:
+            fecha_str = request.form.get('fecha', '').strip()
+            banco_origen_id = request.form.get('banco_origen_id', type=int)
+            banco_destino_id = request.form.get('banco_destino_id', type=int)
+            monto_str = request.form.get('monto', '').strip()
+            descripcion = request.form.get('descripcion', '').strip() or None
+            
+            if not fecha_str:
+                return redirect(url_for('transferencias_index', error='La fecha es obligatoria'))
+            
+            if not banco_origen_id:
+                return redirect(url_for('transferencias_index', error='El banco de origen es obligatorio'))
+            
+            if not banco_destino_id:
+                return redirect(url_for('transferencias_index', error='El banco de destino es obligatorio'))
+            
+            if banco_origen_id == banco_destino_id:
+                return redirect(url_for('transferencias_index', error='El banco de origen y destino no pueden ser el mismo'))
+            
+            if not monto_str:
+                return redirect(url_for('transferencias_index', error='El monto es obligatorio'))
+            
+            # Convertir monto (aceptar formato con punto o coma)
+            monto = float(monto_str.replace('.', '').replace(',', '.'))
+            
+            if monto <= 0:
+                return redirect(url_for('transferencias_index', error='El monto debe ser mayor a 0'))
+            
+            # Convertir fecha
+            fecha = datetime.strptime(fecha_str, "%Y-%m-%d").date()
+            
+            financiero.crear_transferencia(fecha, banco_origen_id, banco_destino_id, monto, descripcion)
+            
+            return redirect(url_for('transferencias_index', mensaje='Transferencia creada correctamente'))
+        except ValueError as e:
+            return redirect(url_for('transferencias_index', error=f'Error en los datos: {str(e)}'))
+        except Exception as e:
+            return redirect(url_for('transferencias_index', error=f'Error al crear transferencia: {str(e)}'))
+    
+    # GET: mostrar formulario
+    bancos = financiero.obtener_bancos(activo=True)
+    return render_template('financiero/transferencias/form.html',
+                         transferencia=None,
+                         bancos=bancos,
+                         request=request)
+
+
+@app.route("/financiero/transferencias/<int:id>/editar", methods=["GET", "POST"], endpoint="transferencia_editar")
+@auth.login_required
+@auth.permission_required('/financiero/transferencias')
+def transferencia_editar(id):
+    """Editar transferencia existente"""
+    transferencia = financiero.obtener_transferencia_por_id(id)
+    if not transferencia:
+        return redirect(url_for('transferencias_index', error='Transferencia no encontrada'))
+    
+    if request.method == "POST":
+        try:
+            fecha_str = request.form.get('fecha', '').strip()
+            banco_origen_id = request.form.get('banco_origen_id', type=int)
+            banco_destino_id = request.form.get('banco_destino_id', type=int)
+            monto_str = request.form.get('monto', '').strip()
+            descripcion = request.form.get('descripcion', '').strip() or None
+            
+            if not fecha_str:
+                return redirect(url_for('transferencias_index', error='La fecha es obligatoria'))
+            
+            if not banco_origen_id:
+                return redirect(url_for('transferencias_index', error='El banco de origen es obligatorio'))
+            
+            if not banco_destino_id:
+                return redirect(url_for('transferencias_index', error='El banco de destino es obligatorio'))
+            
+            if banco_origen_id == banco_destino_id:
+                return redirect(url_for('transferencias_index', error='El banco de origen y destino no pueden ser el mismo'))
+            
+            if not monto_str:
+                return redirect(url_for('transferencias_index', error='El monto es obligatorio'))
+            
+            # Convertir monto (aceptar formato con punto o coma)
+            monto = float(monto_str.replace('.', '').replace(',', '.'))
+            
+            if monto <= 0:
+                return redirect(url_for('transferencias_index', error='El monto debe ser mayor a 0'))
+            
+            # Convertir fecha
+            fecha = datetime.strptime(fecha_str, "%Y-%m-%d").date()
+            
+            financiero.actualizar_transferencia(id, fecha, banco_origen_id, banco_destino_id, monto, descripcion)
+            
+            return redirect(url_for('transferencias_index', mensaje='Transferencia actualizada correctamente'))
+        except ValueError as e:
+            return redirect(url_for('transferencias_index', error=f'Error en los datos: {str(e)}'))
+        except Exception as e:
+            return redirect(url_for('transferencias_index', error=f'Error al actualizar transferencia: {str(e)}'))
+    
+    # GET: mostrar formulario
+    bancos = financiero.obtener_bancos(activo=True)
+    return render_template('financiero/transferencias/form.html',
+                         transferencia=transferencia,
+                         bancos=bancos,
+                         request=request)
+
+
+@app.route("/financiero/transferencias/<int:id>/eliminar", methods=["POST"], endpoint="transferencia_eliminar")
+@auth.login_required
+@auth.permission_required('/financiero/transferencias')
+def transferencia_eliminar(id):
+    """Eliminar transferencia"""
+    try:
+        financiero.eliminar_transferencia(id)
+        return redirect(url_for('transferencias_index', mensaje='Transferencia eliminada correctamente'))
+    except Exception as e:
+        return redirect(url_for('transferencias_index', error=f'Error al eliminar transferencia: {str(e)}'))
 @auth.login_required
 @auth.permission_required('/financiero/cuentas-a-pagar')
 def cuentas_a_pagar_importar_csv():

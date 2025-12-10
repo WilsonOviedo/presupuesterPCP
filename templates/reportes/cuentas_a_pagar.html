@@ -167,6 +167,59 @@
       font-size: 0.9em;
       font-weight: 500;
     }
+    .paginacion {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 20px;
+      padding: 15px;
+      background: #f9f9f9;
+      border-radius: 8px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .paginacion-info {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+    .paginacion-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .paginacion-controls select {
+      padding: 6px 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    .paginacion-buttons {
+      display: flex;
+      gap: 5px;
+    }
+    .paginacion-buttons a,
+    .paginacion-buttons button {
+      padding: 8px 12px;
+      background: #f44336;
+      color: white;
+      text-decoration: none;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9em;
+      transition: background 0.2s;
+    }
+    .paginacion-buttons a:hover,
+    .paginacion-buttons button:hover {
+      background: #d32f2f;
+    }
+    .paginacion-buttons a:disabled,
+    .paginacion-buttons button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
   </style>
 {% endblock %}
 {% block content %}
@@ -389,6 +442,66 @@
           </tbody>
         </table>
       </div>
+
+      {# Controles de paginación #}
+      {% if total_registros and total_registros > 0 %}
+        <div class="paginacion">
+          <div class="paginacion-info">
+            <span>
+              Mostrando {{ ((pagina - 1) * limite) + 1 }} - 
+              {{ [pagina * limite, total_registros]|min }} de {{ total_registros }} registros
+            </span>
+            <span>
+              Página {{ pagina }} de {{ total_paginas }}
+            </span>
+          </div>
+          <div class="paginacion-controls">
+            <form method="GET" action="{{ url_for('reportes_cuentas_a_pagar_index') }}" style="display: flex; align-items: center; gap: 10px;">
+              {# Mantener todos los filtros en los parámetros ocultos #}
+              {% if request.args.get('proveedor') %}
+                <input type="hidden" name="proveedor" value="{{ request.args.get('proveedor') }}">
+              {% endif %}
+              {% if request.args.get('fecha_desde') %}
+                <input type="hidden" name="fecha_desde" value="{{ request.args.get('fecha_desde') }}">
+              {% endif %}
+              {% if request.args.get('fecha_hasta') %}
+                <input type="hidden" name="fecha_hasta" value="{{ request.args.get('fecha_hasta') }}">
+              {% endif %}
+              {% if request.args.get('estado') %}
+                <input type="hidden" name="estado" value="{{ request.args.get('estado') }}">
+              {% endif %}
+              {% if request.args.get('tipo') %}
+                <input type="hidden" name="tipo" value="{{ request.args.get('tipo') }}">
+              {% endif %}
+              <label style="font-size: 0.9em; font-weight: 600;">Filas por página:</label>
+              <select name="limite" onchange="this.form.submit()" style="padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.9em;">
+                <option value="25" {% if limite == 25 %}selected{% endif %}>25</option>
+                <option value="50" {% if limite == 50 %}selected{% endif %}>50</option>
+                <option value="100" {% if limite == 100 %}selected{% endif %}>100</option>
+                <option value="200" {% if limite == 200 %}selected{% endif %}>200</option>
+              </select>
+              <input type="hidden" name="pagina" value="1">
+            </form>
+          </div>
+          <div class="paginacion-buttons">
+            {% if pagina > 1 %}
+              <a href="{{ url_for('reportes_cuentas_a_pagar_index', pagina=pagina-1, limite=limite, proveedor=request.args.get('proveedor', ''), fecha_desde=request.args.get('fecha_desde', ''), fecha_hasta=request.args.get('fecha_hasta', ''), estado=request.args.get('estado', ''), tipo=request.args.get('tipo', '')) }}">
+                ← Anterior
+              </a>
+            {% else %}
+              <button disabled>← Anterior</button>
+            {% endif %}
+            
+            {% if pagina < total_paginas %}
+              <a href="{{ url_for('reportes_cuentas_a_pagar_index', pagina=pagina+1, limite=limite, proveedor=request.args.get('proveedor', ''), fecha_desde=request.args.get('fecha_desde', ''), fecha_hasta=request.args.get('fecha_hasta', ''), estado=request.args.get('estado', ''), tipo=request.args.get('tipo', '')) }}">
+                Siguiente →
+              </a>
+            {% else %}
+              <button disabled>Siguiente →</button>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
     {% else %}
       <div class="no-data">
         <p>No se encontraron cuentas a pagar con los filtros seleccionados.</p>

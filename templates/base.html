@@ -17,6 +17,7 @@
     .dropdown-menu a { display: block; padding: 10px 16px; color: #333; text-decoration: none; font-weight: 500; }
     .dropdown-menu a:hover { background: #f0f0f0; color: #0d47a1; }
     .container { max-width: 1200px; width: 100%; margin: 20px auto; padding: 0 20px 40px; }
+    .container-full { max-width: 100%; width: 100%; margin: 0; padding: 0; }
     .card { border: 1px solid #ddd; padding: 16px; border-radius: 8px; margin: 12px 0; background:white; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
     a.button, button.button { display: inline-block; padding: 8px 14px; background: #1976d2; color: #fff; text-decoration: none; border-radius: 6px; border: none; cursor: pointer; }
     a.button:hover, button.button:hover { background: #125a9e; }
@@ -65,11 +66,13 @@
         <a href="{{ url_for('saldos_iniciales_index') }}">🏦 Saldos Iniciales</a>
         <a href="{{ url_for('cuentas_a_recibir_index') }}">💰 Cuentas a Recibir</a>
         <a href="{{ url_for('cuentas_a_pagar_index') }}">💸 Cuentas a Pagar</a>
+        <a href="{{ url_for('transferencias_index') }}">🔄 Transferencias entre Cuentas</a>
       </div>
     </div>
     <div class="dropdown">
       <a href="#" class="dropdown-toggle">📊 Reportes</a>
       <div class="dropdown-menu">
+        <a href="{{ url_for('reportes_analisis_index') }}">📈 Análisis Gerencial</a>
         <a href="{{ url_for('reportes_clientes_index') }}">👥 Reporte de Clientes</a>
         <a href="{{ url_for('reportes_cuentas_a_recibir_index') }}">💰 Reporte de Cuentas a Recibir</a>
         <a href="{{ url_for('reportes_cuentas_a_pagar_index') }}">💸 Reporte de Cuentas a Pagar</a>

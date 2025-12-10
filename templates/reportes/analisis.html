@@ -1,0 +1,505 @@
+{% extends 'base.html' %}
+{% block title %}Análisis Gerencial{% endblock %}
+{% block head %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 100% !important;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    .dashboard-container {
+      width: 100%;
+      max-width: 100%;
+      margin: 0;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .filtros-section {
+      background: #f9f9f9;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .filtros-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 15px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+    .form-group label {
+      font-weight: 600;
+      margin-bottom: 5px;
+      color: #555;
+      font-size: 0.9em;
+    }
+    .form-group input,
+    .form-group select {
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 350px 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 20px;
+      width: 100%;
+    }
+    .saldo-cuentas {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .saldo-cuentas h3 {
+      margin-top: 0;
+      color: #333;
+      font-size: 1.1em;
+      border-bottom: 2px solid #2196F3;
+      padding-bottom: 10px;
+    }
+    .saldo-total {
+      font-size: 1.5em;
+      font-weight: bold;
+      color: #2196F3;
+      margin: 15px 0;
+      text-align: center;
+    }
+    .cuenta-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #eee;
+    }
+    .cuenta-item:last-child {
+      border-bottom: none;
+    }
+    .cuenta-nombre {
+      font-size: 0.9em;
+      color: #666;
+    }
+    .cuenta-valor {
+      font-weight: 600;
+      color: #333;
+    }
+    .vision-section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .vision-section h3 {
+      margin-top: 0;
+      color: #333;
+      font-size: 1.1em;
+      border-bottom: 2px solid #4CAF50;
+      padding-bottom: 10px;
+    }
+    .resumen-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    .resumen-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 20px;
+      border-radius: 8px;
+      color: white;
+      text-align: center;
+    }
+    .resumen-card.receita {
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    }
+    .resumen-card.custos {
+      background: linear-gradient(135deg, #ee0979 0%, #ff6a00 100%);
+    }
+    .resumen-card.lucro {
+      background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+    }
+    .resumen-card h4 {
+      margin: 0 0 10px 0;
+      font-size: 0.9em;
+      opacity: 0.9;
+    }
+    .resumen-card .valor {
+      font-size: 1.8em;
+      font-weight: bold;
+    }
+    .chart-container {
+      position: relative;
+      height: 300px;
+      margin-top: 20px;
+    }
+    .chart-container-large {
+      position: relative;
+      height: 450px;
+      margin-top: 20px;
+      width: 100%;
+    }
+    .chart-container {
+      position: relative;
+      height: 350px;
+      margin-top: 20px;
+      width: 100%;
+    }
+    .button {
+      background: #2196F3;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+    .button:hover {
+      background: #1976D2;
+    }
+    @media (max-width: 1400px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+      .saldo-cuentas {
+        max-width: 100%;
+      }
+    }
+  </style>
+{% endblock %}
+{% block content %}
+  <div style="max-width: 100%; width: 100%; margin: 0; padding: 0;">
+    <div class="dashboard-container">
+    <div style="margin-bottom: 20px;">
+      <a class="button button-secondary" href="{{ url_for('menu') }}">← Volver</a>
+    </div>
+
+    <h2>📊 Análisis Gerencial</h2>
+
+    <div class="filtros-section">
+      <h3>Filtros</h3>
+      <form method="GET" action="{{ url_for('reportes_analisis_index') }}">
+        <div class="filtros-row">
+          <div class="form-group">
+            <label>Análisis Diario - Fecha Inicial:</label>
+            <input type="date" name="fecha_desde" value="{{ fecha_desde }}">
+          </div>
+          <div class="form-group">
+            <label>Análisis Diario - Fecha Final:</label>
+            <input type="date" name="fecha_hasta" value="{{ fecha_hasta }}">
+          </div>
+          <div class="form-group">
+            <label>Análisis Anual - Año:</label>
+            <input type="number" name="ano" value="{{ ano }}" min="2020" max="2030">
+          </div>
+          <div class="form-group">
+            <label>Proyecto:</label>
+            <select name="proyecto_id">
+              <option value="">Consolidado</option>
+              {% for proyecto in proyectos %}
+                <option value="{{ proyecto.id }}" {% if proyecto_id == proyecto.id %}selected{% endif %}>
+                  {{ proyecto.nombre }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Tipo de Reporte:</label>
+            <div style="display: flex; gap: 15px; margin-top: 5px;">
+              <label style="display: flex; align-items: center; gap: 5px; font-weight: normal;">
+                <input type="radio" name="tipo_reporte" value="proyectado" {% if tipo_reporte == 'proyectado' %}checked{% endif %}>
+                Proyectado
+              </label>
+              <label style="display: flex; align-items: center; gap: 5px; font-weight: normal;">
+                <input type="radio" name="tipo_reporte" value="realizado" {% if tipo_reporte == 'realizado' %}checked{% endif %}>
+                Realizado
+              </label>
+            </div>
+          </div>
+        </div>
+        <button type="submit" class="button">🔍 Aplicar Filtros</button>
+        <a href="{{ url_for('reportes_analisis_index') }}" class="button button-secondary" style="margin-left: 10px;">🔄 Limpiar</a>
+      </form>
+    </div>
+
+    <div class="dashboard-grid">
+      <!-- Columna Izquierda: Saldo en Cuentas -->
+      <div class="saldo-cuentas">
+        <h3>SALDO EN CUENTAS</h3>
+        <div class="saldo-total">
+          Gs {{ "{:,.0f}".format(total_saldo_bancos) }}
+        </div>
+        <div>
+          {% for banco in saldos_bancos %}
+            <div class="cuenta-item">
+              <span class="cuenta-nombre">{{ banco.nombre }}</span>
+              <span class="cuenta-valor">Gs {{ "{:,.0f}".format(banco.saldo_actual) }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Columna Central: Visión Económica -->
+      <div class="vision-section">
+        <h3>VISIÓN ECONÓMICA</h3>
+        <div class="resumen-cards">
+          <div class="resumen-card receita">
+            <h4>INGRESOS BRUTOS</h4>
+            <div class="valor">Gs {{ "{:,.0f}".format(total_receita) }}</div>
+          </div>
+          <div class="resumen-card custos">
+            <h4>COSTOS Y GASTOS</h4>
+            <div class="valor">Gs {{ "{:,.0f}".format(total_custos) }}</div>
+          </div>
+          <div class="resumen-card lucro">
+            <h4>GANANCIA NETA</h4>
+            <div class="valor">Gs {{ "{:,.0f}".format(total_lucro) }}</div>
+          </div>
+        </div>
+        <div class="chart-container-large">
+          <canvas id="lucroChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Columna Derecha: Visión Financiera -->
+      <div class="vision-section">
+        <h3>VISIÓN FINANCIERA</h3>
+        <div class="chart-container-large">
+          <canvas id="flujoCajaChart"></canvas>
+        </div>
+        <div style="margin-top: 20px;">
+          <label style="font-weight: 600; margin-right: 10px;">Banco:</label>
+          <select id="bancoSelect" onchange="actualizarEvolucionSaldo()" style="padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+            <option value="">TOTAL DE BANCOS</option>
+            {% for banco in bancos %}
+              <option value="{{ banco.id }}" {% if banco_id == banco.id %}selected{% endif %}>
+                {{ banco.nombre }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="chart-container">
+          <canvas id="evolucionSaldoChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Meses en español
+    const meses = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+    
+    // Datos para gráfico de Lucro Líquido
+    const receitaData = {{ receita_mensual | tojson }};
+    const custosData = {{ custos_mensual | tojson }};
+    
+    // Preparar datos para el gráfico
+    const mesesLabels = [];
+    const receitaValues = [];
+    const lucroValues = [];
+    
+    // Crear un mapa de todos los meses
+    const allMonths = new Set();
+    receitaData.forEach(r => allMonths.add(`${r.ano}-${r.mes}`));
+    custosData.forEach(c => allMonths.add(`${c.ano}-${c.mes}`));
+    
+    const sortedMonths = Array.from(allMonths).sort();
+    
+    sortedMonths.forEach(monthKey => {
+      const [ano, mes] = monthKey.split('-');
+      mesesLabels.push(meses[parseInt(mes) - 1]);
+      
+      const receita = receitaData.find(r => `${r.ano}-${r.mes}` === monthKey);
+      const custos = custosData.find(c => `${c.ano}-${c.mes}` === monthKey);
+      
+      const receitaVal = receita ? parseFloat(receita.receita_bruta || 0) : 0;
+      const custosVal = custos ? parseFloat(custos.custos_despesas || 0) : 0;
+      
+      receitaValues.push(receitaVal);
+      lucroValues.push(receitaVal - custosVal);
+    });
+    
+    // Gráfico de Lucro Líquido
+    const lucroCtx = document.getElementById('lucroChart').getContext('2d');
+    new Chart(lucroCtx, {
+      type: 'bar',
+      data: {
+        labels: mesesLabels,
+        datasets: [{
+          label: 'Ingresos Brutos',
+          data: receitaValues,
+          backgroundColor: 'rgba(54, 162, 235, 0.6)',
+          borderColor: 'rgba(54, 162, 235, 1)',
+          borderWidth: 1
+        }, {
+          label: 'Ganancia Neta',
+          data: lucroValues,
+          type: 'line',
+          borderColor: 'rgba(0, 0, 0, 1)',
+          borderWidth: 2,
+          fill: false,
+          tension: 0.4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          title: {
+            display: true,
+            text: 'GANANCIA NETA - (RÉGIMEN DE COMPETENCIA)'
+          },
+          legend: {
+            display: true,
+            position: 'top'
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: function(value) {
+                return 'Gs ' + value.toLocaleString('es-PY');
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    // Datos para Flujo de Caja
+    const flujoData = {{ flujo_caja | tojson }};
+    const flujoLabels = [];
+    const entradasValues = [];
+    const salidasValues = [];
+    
+    flujoData.forEach(f => {
+      flujoLabels.push(meses[f.mes - 1]);
+      entradasValues.push(parseFloat(f.entradas || 0));
+      salidasValues.push(parseFloat(f.salidas || 0));
+    });
+    
+    // Gráfico de Flujo de Caja
+    const flujoCtx = document.getElementById('flujoCajaChart').getContext('2d');
+    new Chart(flujoCtx, {
+      type: 'bar',
+      data: {
+        labels: flujoLabels,
+        datasets: [{
+          label: 'Entradas',
+          data: entradasValues,
+          backgroundColor: 'rgba(54, 162, 235, 0.6)',
+          borderColor: 'rgba(54, 162, 235, 1)',
+          borderWidth: 1
+        }, {
+          label: 'Salidas',
+          data: salidasValues,
+          type: 'line',
+          borderColor: 'rgba(255, 99, 132, 1)',
+          borderWidth: 2,
+          fill: false,
+          tension: 0.4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          title: {
+            display: true,
+            text: 'FLUJO DE CAJA'
+          },
+          legend: {
+            display: true,
+            position: 'top'
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: function(value) {
+                return 'Gs ' + value.toLocaleString('es-PY');
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    // Datos para Evolución de Saldo
+    const evolucionData = {{ evolucion_saldo | tojson }};
+    let evolucionChart = null;
+    
+    function actualizarEvolucionSaldo() {
+      const bancoId = document.getElementById('bancoSelect').value;
+      const url = new URL(window.location.href);
+      if (bancoId) {
+        url.searchParams.set('banco_id', bancoId);
+      } else {
+        url.searchParams.delete('banco_id');
+      }
+      window.location.href = url.toString();
+    }
+    
+    const evolucionLabels = [];
+    const saldoValues = [];
+    
+    evolucionData.forEach(e => {
+      evolucionLabels.push(meses[e.mes - 1]);
+      saldoValues.push(parseFloat(e.saldo || 0));
+    });
+    
+    // Gráfico de Evolución de Saldo
+    const evolucionCtx = document.getElementById('evolucionSaldoChart').getContext('2d');
+    evolucionChart = new Chart(evolucionCtx, {
+      type: 'bar',
+      data: {
+        labels: evolucionLabels,
+        datasets: [{
+          label: 'Saldo Final',
+          data: saldoValues,
+          backgroundColor: 'rgba(75, 192, 192, 0.6)',
+          borderColor: 'rgba(75, 192, 192, 1)',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          title: {
+            display: true,
+            text: 'EVOLUCIÓN DE SALDO FINAL'
+          },
+          legend: {
+            display: false
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: function(value) {
+                return 'Gs ' + value.toLocaleString('es-PY');
+              }
+            }
+          }
+        }
+      }
+    });
+  </script>
+{% endblock %}
+

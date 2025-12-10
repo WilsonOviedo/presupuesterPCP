@@ -361,7 +361,55 @@ def obtener_clientes_con_facturas():
         conn.close()
 
 
-def obtener_reportes_cuentas_a_pagar(proveedor_nombre=None, fecha_desde=None, fecha_hasta=None, estado_pago_filtro=None, tipo_filtro=None):
+def contar_reportes_cuentas_a_pagar(proveedor_nombre=None, fecha_desde=None, fecha_hasta=None, estado_pago_filtro=None, tipo_filtro=None):
+    """Cuenta el total de reportes de cuentas a pagar según los filtros"""
+    conn, cur = conectar()
+    try:
+        where_clauses = []
+        params = []
+        
+        if proveedor_nombre:
+            where_clauses.append("UPPER(cap.proveedor) LIKE UPPER(%s)")
+            params.append(f"%{proveedor_nombre}%")
+        
+        if fecha_desde:
+            where_clauses.append("cap.fecha_emision >= %s")
+            params.append(fecha_desde)
+        
+        if fecha_hasta:
+            where_clauses.append("cap.fecha_emision <= %s")
+            params.append(fecha_hasta)
+        
+        if tipo_filtro:
+            where_clauses.append("cap.tipo = %s")
+            params.append(tipo_filtro)
+        
+        if estado_pago_filtro:
+            if estado_pago_filtro.lower() == 'pagado':
+                where_clauses.append("cap.estado = 'PAGADO'")
+            elif estado_pago_filtro.lower() == 'pendiente':
+                where_clauses.append("cap.estado = 'ABIERTO'")
+            elif estado_pago_filtro.lower() == 'atrasado':
+                where_clauses.append("(cap.estado = 'ABIERTO' AND cap.vencimiento < CURRENT_DATE) OR cap.status_pago = 'ATRASADO'")
+        
+        where_sql = ""
+        if where_clauses:
+            where_sql = "WHERE " + " AND ".join(where_clauses)
+        
+        query = f"""
+            SELECT COUNT(*)
+            FROM cuentas_a_pagar cap
+            {where_sql}
+        """
+        
+        cur.execute(query, params)
+        return cur.fetchone()[0]
+    finally:
+        cur.close()
+        conn.close()
+
+
+def obtener_reportes_cuentas_a_pagar(proveedor_nombre=None, fecha_desde=None, fecha_hasta=None, estado_pago_filtro=None, tipo_filtro=None, limite=None, offset=None):
     """Obtiene reportes de cuentas a pagar de un proveedor o todos los proveedores"""
     conn, cur = conectar()
     try:
@@ -387,9 +435,24 @@ def obtener_reportes_cuentas_a_pagar(proveedor_nombre=None, fecha_desde=None, fe
             where_clauses.append("cap.tipo = %s")
             params.append(tipo_filtro)
         
+        if estado_pago_filtro:
+            if estado_pago_filtro.lower() == 'pagado':
+                where_clauses.append("cap.estado = 'PAGADO'")
+            elif estado_pago_filtro.lower() == 'pendiente':
+                where_clauses.append("cap.estado = 'ABIERTO'")
+            elif estado_pago_filtro.lower() == 'atrasado':
+                where_clauses.append("(cap.estado = 'ABIERTO' AND cap.vencimiento < CURRENT_DATE) OR cap.status_pago = 'ATRASADO'")
+        
         where_sql = ""
         if where_clauses:
             where_sql = "WHERE " + " AND ".join(where_clauses)
+        
+        # Agregar LIMIT y OFFSET si se proporcionan
+        limit_sql = ""
+        if limite is not None:
+            limit_sql = f"LIMIT {limite}"
+            if offset is not None:
+                limit_sql += f" OFFSET {offset}"
         
         # Query de cuentas a pagar
         query = f"""
@@ -419,6 +482,7 @@ def obtener_reportes_cuentas_a_pagar(proveedor_nombre=None, fecha_desde=None, fe
             LEFT JOIN proyectos p ON cap.proyecto_id = p.id
             {where_sql}
             ORDER BY cap.fecha_emision DESC, cap.id DESC
+            {limit_sql}
         """
         
         cur.execute(query, params)
@@ -580,7 +644,55 @@ def obtener_proveedores_con_cuentas():
         conn.close()
 
 
-def obtener_reportes_cuentas_a_recibir(cliente_nombre=None, fecha_desde=None, fecha_hasta=None, estado_pago_filtro=None, tipo_filtro=None):
+def contar_reportes_cuentas_a_recibir(cliente_nombre=None, fecha_desde=None, fecha_hasta=None, estado_pago_filtro=None, tipo_filtro=None):
+    """Cuenta el total de reportes de cuentas a recibir según los filtros"""
+    conn, cur = conectar()
+    try:
+        where_clauses = []
+        params = []
+        
+        if cliente_nombre:
+            where_clauses.append("UPPER(car.cliente) LIKE UPPER(%s)")
+            params.append(f"%{cliente_nombre}%")
+        
+        if fecha_desde:
+            where_clauses.append("car.fecha_emision >= %s")
+            params.append(fecha_desde)
+        
+        if fecha_hasta:
+            where_clauses.append("car.fecha_emision <= %s")
+            params.append(fecha_hasta)
+        
+        if tipo_filtro:
+            where_clauses.append("car.tipo = %s")
+            params.append(tipo_filtro)
+        
+        if estado_pago_filtro:
+            if estado_pago_filtro.lower() == 'pagado' or estado_pago_filtro.lower() == 'recibido':
+                where_clauses.append("car.estado = 'RECIBIDO'")
+            elif estado_pago_filtro.lower() == 'pendiente':
+                where_clauses.append("car.estado = 'ABIERTO'")
+            elif estado_pago_filtro.lower() == 'atrasado':
+                where_clauses.append("(car.estado = 'ABIERTO' AND car.vencimiento < CURRENT_DATE) OR car.status_recibo = 'ATRASADO'")
+        
+        where_sql = ""
+        if where_clauses:
+            where_sql = "WHERE " + " AND ".join(where_clauses)
+        
+        query = f"""
+            SELECT COUNT(*)
+            FROM cuentas_a_recibir car
+            {where_sql}
+        """
+        
+        cur.execute(query, params)
+        return cur.fetchone()[0]
+    finally:
+        cur.close()
+        conn.close()
+
+
+def obtener_reportes_cuentas_a_recibir(cliente_nombre=None, fecha_desde=None, fecha_hasta=None, estado_pago_filtro=None, tipo_filtro=None, limite=None, offset=None):
     """Obtiene reportes de cuentas a recibir de un cliente o todos los clientes"""
     conn, cur = conectar()
     try:
@@ -607,16 +719,23 @@ def obtener_reportes_cuentas_a_recibir(cliente_nombre=None, fecha_desde=None, fe
             params.append(tipo_filtro)
         
         if estado_pago_filtro:
-            if estado_pago_filtro == 'pagado':
+            if estado_pago_filtro.lower() == 'pagado' or estado_pago_filtro.lower() == 'recibido':
                 where_clauses.append("car.estado = 'RECIBIDO'")
-            elif estado_pago_filtro == 'pendiente':
+            elif estado_pago_filtro.lower() == 'pendiente':
                 where_clauses.append("car.estado = 'ABIERTO'")
-            elif estado_pago_filtro == 'atrasado':
+            elif estado_pago_filtro.lower() == 'atrasado':
                 where_clauses.append("(car.estado = 'ABIERTO' AND car.vencimiento < CURRENT_DATE) OR car.status_recibo = 'ATRASADO'")
         
         where_sql = ""
         if where_clauses:
             where_sql = "WHERE " + " AND ".join(where_clauses)
+        
+        # Agregar LIMIT y OFFSET si se proporcionan
+        limit_sql = ""
+        if limite is not None:
+            limit_sql = f"LIMIT {limite}"
+            if offset is not None:
+                limit_sql += f" OFFSET {offset}"
         
         # Query de cuentas a recibir
         query = f"""
@@ -646,6 +765,7 @@ def obtener_reportes_cuentas_a_recibir(cliente_nombre=None, fecha_desde=None, fe
             LEFT JOIN proyectos p ON car.proyecto_id = p.id
             {where_sql}
             ORDER BY car.fecha_emision DESC, car.id DESC
+            {limit_sql}
         """
         
         cur.execute(query, params)
@@ -783,6 +903,412 @@ def obtener_clientes_con_cuentas_a_recibir():
             ORDER BY cliente
         """)
         return cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ==================== FUNCIONES PARA DASHBOARD DE ANÁLISIS ====================
+
+def obtener_saldos_bancos():
+    """Obtiene los saldos actuales de todos los bancos
+    
+    El saldo se calcula como:
+    saldo_actual = saldo_inicial 
+                   + entradas (monto_abonado de cuentas_a_recibir con fecha_recibo) 
+                   - salidas (monto_abonado de cuentas_a_pagar con fecha_pago)
+                   + transferencias recibidas (como destino)
+                   - transferencias enviadas (como origen)
+    """
+    conn, cur = conectar()
+    try:
+        # Asegurar que la tabla de transferencias existe
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS transferencias_cuentas (
+                id SERIAL PRIMARY KEY,
+                fecha DATE NOT NULL,
+                banco_origen_id INTEGER NOT NULL REFERENCES bancos(id),
+                banco_destino_id INTEGER NOT NULL REFERENCES bancos(id),
+                monto NUMERIC(15, 2) NOT NULL,
+                descripcion TEXT,
+                creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT banco_origen_destino_diferentes CHECK (banco_origen_id != banco_destino_id),
+                CONSTRAINT monto_positivo CHECK (monto > 0)
+            );
+        """)
+        conn.commit()
+        
+        cur.execute("""
+            SELECT 
+                b.id,
+                b.nombre,
+                COALESCE(b.saldo_inicial, 0) as saldo_inicial,
+                COALESCE((
+                    SELECT SUM(COALESCE(car.monto_abonado, 0))
+                    FROM cuentas_a_recibir car
+                    WHERE car.banco_id = b.id 
+                    AND car.fecha_recibo IS NOT NULL
+                ), 0) as entradas,
+                COALESCE((
+                    SELECT SUM(COALESCE(cap.monto_abonado, 0))
+                    FROM cuentas_a_pagar cap
+                    WHERE cap.banco_id = b.id 
+                    AND cap.fecha_pago IS NOT NULL
+                ), 0) as salidas,
+                COALESCE((
+                    SELECT SUM(COALESCE(t.monto, 0))
+                    FROM transferencias_cuentas t
+                    WHERE t.banco_destino_id = b.id
+                ), 0) as transferencias_recibidas,
+                COALESCE((
+                    SELECT SUM(COALESCE(t.monto, 0))
+                    FROM transferencias_cuentas t
+                    WHERE t.banco_origen_id = b.id
+                ), 0) as transferencias_enviadas,
+                (COALESCE(b.saldo_inicial, 0) + 
+                 COALESCE((
+                     SELECT SUM(COALESCE(car.monto_abonado, 0))
+                     FROM cuentas_a_recibir car
+                     WHERE car.banco_id = b.id 
+                     AND car.fecha_recibo IS NOT NULL
+                 ), 0) - 
+                 COALESCE((
+                     SELECT SUM(COALESCE(cap.monto_abonado, 0))
+                     FROM cuentas_a_pagar cap
+                     WHERE cap.banco_id = b.id 
+                     AND cap.fecha_pago IS NOT NULL
+                 ), 0) +
+                 COALESCE((
+                     SELECT SUM(COALESCE(t.monto, 0))
+                     FROM transferencias_cuentas t
+                     WHERE t.banco_destino_id = b.id
+                 ), 0) -
+                 COALESCE((
+                     SELECT SUM(COALESCE(t.monto, 0))
+                     FROM transferencias_cuentas t
+                     WHERE t.banco_origen_id = b.id
+                 ), 0)) as saldo_actual
+            FROM bancos b
+            WHERE b.activo = true
+            ORDER BY b.nombre
+        """)
+        return cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def obtener_receita_bruta_mensual(ano=None, proyecto_id=None, fecha_desde=None, fecha_hasta=None, tipo_reporte='realizado'):
+    """Obtiene la receita bruta mensual (suma de cuentas a recibir)
+    
+    Args:
+        tipo_reporte: 'proyectado' usa valor_cuota (o valor si es NULL), 'realizado' usa monto_abonado
+    """
+    conn, cur = conectar()
+    try:
+        where_clauses = []
+        params = []
+        
+        if ano:
+            where_clauses.append("EXTRACT(YEAR FROM car.fecha_emision) = %s")
+            params.append(ano)
+        
+        if proyecto_id:
+            where_clauses.append("car.proyecto_id = %s")
+            params.append(proyecto_id)
+        
+        if fecha_desde:
+            where_clauses.append("car.fecha_emision >= %s")
+            params.append(fecha_desde)
+        
+        if fecha_hasta:
+            where_clauses.append("car.fecha_emision <= %s")
+            params.append(fecha_hasta)
+        
+        where_sql = ""
+        if where_clauses:
+            where_sql = "WHERE " + " AND ".join(where_clauses)
+        
+        # Determinar qué columna usar según el tipo de reporte
+        if tipo_reporte == 'proyectado':
+            # Proyectado: usar valor_cuota o valor si valor_cuota es NULL
+            campo_valor = "COALESCE(car.valor_cuota, car.valor, 0)"
+        else:
+            # Realizado: usar monto_abonado
+            campo_valor = "COALESCE(car.monto_abonado, 0)"
+        
+        query = f"""
+            SELECT 
+                EXTRACT(MONTH FROM car.fecha_emision) as mes,
+                EXTRACT(YEAR FROM car.fecha_emision) as ano,
+                SUM({campo_valor}) as receita_bruta
+            FROM cuentas_a_recibir car
+            {where_sql}
+            GROUP BY EXTRACT(MONTH FROM car.fecha_emision), EXTRACT(YEAR FROM car.fecha_emision)
+            ORDER BY ano, mes
+        """
+        
+        cur.execute(query, params)
+        return cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def obtener_custos_despesas_mensual(ano=None, proyecto_id=None, fecha_desde=None, fecha_hasta=None, tipo_reporte='realizado'):
+    """Obtiene los custos e despesas mensuales (suma de cuentas a pagar)
+    
+    Args:
+        tipo_reporte: 'proyectado' usa valor_cuota (o valor si es NULL), 'realizado' usa monto_abonado
+    """
+    conn, cur = conectar()
+    try:
+        where_clauses = []
+        params = []
+        
+        if ano:
+            where_clauses.append("EXTRACT(YEAR FROM cap.fecha_emision) = %s")
+            params.append(ano)
+        
+        if proyecto_id:
+            where_clauses.append("cap.proyecto_id = %s")
+            params.append(proyecto_id)
+        
+        if fecha_desde:
+            where_clauses.append("cap.fecha_emision >= %s")
+            params.append(fecha_desde)
+        
+        if fecha_hasta:
+            where_clauses.append("cap.fecha_emision <= %s")
+            params.append(fecha_hasta)
+        
+        where_sql = ""
+        if where_clauses:
+            where_sql = "WHERE " + " AND ".join(where_clauses)
+        
+        # Determinar qué columna usar según el tipo de reporte
+        if tipo_reporte == 'proyectado':
+            # Proyectado: usar valor_cuota o valor si valor_cuota es NULL
+            campo_valor = "COALESCE(cap.valor_cuota, cap.valor, 0)"
+        else:
+            # Realizado: usar monto_abonado
+            campo_valor = "COALESCE(cap.monto_abonado, 0)"
+        
+        query = f"""
+            SELECT 
+                EXTRACT(MONTH FROM cap.fecha_emision) as mes,
+                EXTRACT(YEAR FROM cap.fecha_emision) as ano,
+                SUM({campo_valor}) as custos_despesas
+            FROM cuentas_a_pagar cap
+            {where_sql}
+            GROUP BY EXTRACT(MONTH FROM cap.fecha_emision), EXTRACT(YEAR FROM cap.fecha_emision)
+            ORDER BY ano, mes
+        """
+        
+        cur.execute(query, params)
+        return cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def obtener_flujo_caja_mensual(ano=None, proyecto_id=None, fecha_desde=None, fecha_hasta=None):
+    """Obtiene el flujo de caja mensual (entradas - salidas)"""
+    conn, cur = conectar()
+    try:
+        where_entradas = []
+        where_salidas = []
+        params_entradas = []
+        params_salidas = []
+        
+        if ano:
+            where_entradas.append("EXTRACT(YEAR FROM car.fecha_recibo) = %s")
+            where_salidas.append("EXTRACT(YEAR FROM cap.fecha_pago) = %s")
+            params_entradas.append(ano)
+            params_salidas.append(ano)
+        
+        if proyecto_id:
+            where_entradas.append("car.proyecto_id = %s")
+            where_salidas.append("cap.proyecto_id = %s")
+            params_entradas.append(proyecto_id)
+            params_salidas.append(proyecto_id)
+        
+        if fecha_desde:
+            where_entradas.append("car.fecha_recibo >= %s")
+            where_salidas.append("cap.fecha_pago >= %s")
+            params_entradas.append(fecha_desde)
+            params_salidas.append(fecha_desde)
+        
+        if fecha_hasta:
+            where_entradas.append("car.fecha_recibo <= %s")
+            where_salidas.append("cap.fecha_pago <= %s")
+            params_entradas.append(fecha_hasta)
+            params_salidas.append(fecha_hasta)
+        
+        where_sql_entradas = ""
+        if where_entradas:
+            where_sql_entradas = "AND " + " AND ".join(where_entradas)
+        
+        where_sql_salidas = ""
+        if where_salidas:
+            where_sql_salidas = "AND " + " AND ".join(where_salidas)
+        
+        # Entradas (cuentas a recibir - monto abonado)
+        query_entradas = f"""
+            SELECT 
+                EXTRACT(MONTH FROM car.fecha_recibo) as mes,
+                EXTRACT(YEAR FROM car.fecha_recibo) as ano,
+                SUM(COALESCE(car.monto_abonado, 0)) as entradas
+            FROM cuentas_a_recibir car
+            WHERE car.fecha_recibo IS NOT NULL
+            {where_sql_entradas}
+            GROUP BY EXTRACT(MONTH FROM car.fecha_recibo), EXTRACT(YEAR FROM car.fecha_recibo)
+        """
+        
+        # Salidas (cuentas a pagar - monto abonado)
+        query_salidas = f"""
+            SELECT 
+                EXTRACT(MONTH FROM cap.fecha_pago) as mes,
+                EXTRACT(YEAR FROM cap.fecha_pago) as ano,
+                SUM(COALESCE(cap.monto_abonado, 0)) as salidas
+            FROM cuentas_a_pagar cap
+            WHERE cap.fecha_pago IS NOT NULL
+            {where_sql_salidas}
+            GROUP BY EXTRACT(MONTH FROM cap.fecha_pago), EXTRACT(YEAR FROM cap.fecha_pago)
+        """
+        
+        cur.execute(query_entradas, params_entradas)
+        entradas = {f"{int(r['ano'])}-{int(r['mes'])}": float(r['entradas']) for r in cur.fetchall()}
+        
+        cur.execute(query_salidas, params_salidas)
+        salidas = {f"{int(r['ano'])}-{int(r['mes'])}": float(r['salidas']) for r in cur.fetchall()}
+        
+        # Combinar datos
+        todos_meses = set(list(entradas.keys()) + list(salidas.keys()))
+        resultado = []
+        for mes_key in sorted(todos_meses):
+            ano_val, mes_val = mes_key.split('-')
+            resultado.append({
+                'ano': int(ano_val),
+                'mes': int(mes_val),
+                'entradas': entradas.get(mes_key, 0),
+                'salidas': salidas.get(mes_key, 0)
+            })
+        
+        return resultado
+    finally:
+        cur.close()
+        conn.close()
+
+
+def obtener_evolucion_saldo_mensual(banco_id=None, ano=None, fecha_desde=None, fecha_hasta=None):
+    """Obtiene la evolución del saldo mensual de los bancos"""
+    conn, cur = conectar()
+    try:
+        # Obtener saldo inicial total
+        query_saldos_iniciales = """
+            SELECT SUM(COALESCE(saldo_inicial, 0)) as saldo_inicial_total
+            FROM bancos
+            WHERE activo = true
+        """
+        if banco_id:
+            query_saldos_iniciales = """
+                SELECT COALESCE(saldo_inicial, 0) as saldo_inicial_total
+                FROM bancos
+                WHERE id = %s AND activo = true
+            """
+            cur.execute(query_saldos_iniciales, (banco_id,))
+        else:
+            cur.execute(query_saldos_iniciales)
+        
+        saldo_inicial_total = float(cur.fetchone()['saldo_inicial_total'] or 0)
+        
+        # Construir filtros
+        where_entradas = []
+        where_salidas = []
+        params_entradas = []
+        params_salidas = []
+        
+        if banco_id:
+            where_entradas.append("car.banco_id = %s")
+            where_salidas.append("cap.banco_id = %s")
+            params_entradas.append(banco_id)
+            params_salidas.append(banco_id)
+        
+        if ano:
+            where_entradas.append("EXTRACT(YEAR FROM car.fecha_recibo) = %s")
+            where_salidas.append("EXTRACT(YEAR FROM cap.fecha_pago) = %s")
+            params_entradas.append(ano)
+            params_salidas.append(ano)
+        
+        if fecha_desde:
+            where_entradas.append("car.fecha_recibo >= %s")
+            where_salidas.append("cap.fecha_pago >= %s")
+            params_entradas.append(fecha_desde)
+            params_salidas.append(fecha_desde)
+        
+        if fecha_hasta:
+            where_entradas.append("car.fecha_recibo <= %s")
+            where_salidas.append("cap.fecha_pago <= %s")
+            params_entradas.append(fecha_hasta)
+            params_salidas.append(fecha_hasta)
+        
+        where_sql_entradas = ""
+        if where_entradas:
+            where_sql_entradas = "AND " + " AND ".join(where_entradas)
+        
+        where_sql_salidas = ""
+        if where_salidas:
+            where_sql_salidas = "AND " + " AND ".join(where_salidas)
+        
+        # Obtener entradas mensuales
+        query_entradas = f"""
+            SELECT 
+                EXTRACT(MONTH FROM car.fecha_recibo) as mes,
+                EXTRACT(YEAR FROM car.fecha_recibo) as ano,
+                SUM(COALESCE(car.monto_abonado, 0)) as entradas
+            FROM cuentas_a_recibir car
+            WHERE car.fecha_recibo IS NOT NULL
+            {where_sql_entradas}
+            GROUP BY EXTRACT(MONTH FROM car.fecha_recibo), EXTRACT(YEAR FROM car.fecha_recibo)
+        """
+        
+        # Obtener salidas mensuales
+        query_salidas = f"""
+            SELECT 
+                EXTRACT(MONTH FROM cap.fecha_pago) as mes,
+                EXTRACT(YEAR FROM cap.fecha_pago) as ano,
+                SUM(COALESCE(cap.monto_abonado, 0)) as salidas
+            FROM cuentas_a_pagar cap
+            WHERE cap.fecha_pago IS NOT NULL
+            {where_sql_salidas}
+            GROUP BY EXTRACT(MONTH FROM cap.fecha_pago), EXTRACT(YEAR FROM cap.fecha_pago)
+        """
+        
+        cur.execute(query_entradas, params_entradas)
+        entradas_mes = {f"{int(r['ano'])}-{int(r['mes'])}": float(r['entradas']) for r in cur.fetchall()}
+        
+        cur.execute(query_salidas, params_salidas)
+        salidas_mes = {f"{int(r['ano'])}-{int(r['mes'])}": float(r['salidas']) for r in cur.fetchall()}
+        
+        # Calcular saldos acumulados
+        todos_meses = sorted(set(list(entradas_mes.keys()) + list(salidas_mes.keys())))
+        resultado = []
+        saldo_acumulado = saldo_inicial_total
+        
+        for mes_key in todos_meses:
+            ano_val, mes_val = mes_key.split('-')
+            entradas = entradas_mes.get(mes_key, 0)
+            salidas = salidas_mes.get(mes_key, 0)
+            saldo_acumulado += entradas - salidas
+            
+            resultado.append({
+                'ano': int(ano_val),
+                'mes': int(mes_val),
+                'saldo': saldo_acumulado
+            })
+        
+        return resultado
     finally:
         cur.close()
         conn.close()

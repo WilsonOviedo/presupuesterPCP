@@ -2536,3 +2536,233 @@ def previsualizar_cuentas_a_pagar_csv(csv_content):
     
     return datos_previsualizacion, errores
 
+
+# ==================== FUNCIONES PARA TRANSFERENCIAS ENTRE CUENTAS ====================
+
+def crear_tabla_transferencias():
+    """Crea la tabla de transferencias entre cuentas si no existe"""
+    conn, cur = conectar()
+    try:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS transferencias_cuentas (
+                id SERIAL PRIMARY KEY,
+                fecha DATE NOT NULL,
+                banco_origen_id INTEGER NOT NULL REFERENCES bancos(id),
+                banco_destino_id INTEGER NOT NULL REFERENCES bancos(id),
+                monto NUMERIC(15, 2) NOT NULL,
+                descripcion TEXT,
+                creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT banco_origen_destino_diferentes CHECK (banco_origen_id != banco_destino_id),
+                CONSTRAINT monto_positivo CHECK (monto > 0)
+            );
+        """)
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def obtener_transferencias(filtros=None, limite=None, offset=None):
+    """Obtiene las transferencias entre cuentas"""
+    crear_tabla_transferencias()  # Asegurar que la tabla existe
+    conn, cur = conectar()
+    try:
+        where_clauses = []
+        params = []
+        
+        if filtros:
+            if filtros.get('fecha_desde'):
+                where_clauses.append("t.fecha >= %s")
+                params.append(filtros['fecha_desde'])
+            
+            if filtros.get('fecha_hasta'):
+                where_clauses.append("t.fecha <= %s")
+                params.append(filtros['fecha_hasta'])
+            
+            if filtros.get('banco_origen_id'):
+                where_clauses.append("t.banco_origen_id = %s")
+                params.append(filtros['banco_origen_id'])
+            
+            if filtros.get('banco_destino_id'):
+                where_clauses.append("t.banco_destino_id = %s")
+                params.append(filtros['banco_destino_id'])
+        
+        where_sql = ""
+        if where_clauses:
+            where_sql = "WHERE " + " AND ".join(where_clauses)
+        
+        limit_sql = ""
+        if limite is not None:
+            limit_sql = f"LIMIT {limite}"
+            if offset is not None:
+                limit_sql += f" OFFSET {offset}"
+        
+        query = f"""
+            SELECT 
+                t.id,
+                t.fecha,
+                t.banco_origen_id,
+                t.banco_destino_id,
+                t.monto,
+                t.descripcion,
+                t.creado_en,
+                bo.nombre as banco_origen_nombre,
+                bd.nombre as banco_destino_nombre
+            FROM transferencias_cuentas t
+            LEFT JOIN bancos bo ON t.banco_origen_id = bo.id
+            LEFT JOIN bancos bd ON t.banco_destino_id = bd.id
+            {where_sql}
+            ORDER BY t.fecha DESC, t.id DESC
+            {limit_sql}
+        """
+        
+        cur.execute(query, params)
+        return cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def contar_transferencias(filtros=None):
+    """Cuenta el total de transferencias"""
+    crear_tabla_transferencias()
+    conn, cur = conectar()
+    try:
+        where_clauses = []
+        params = []
+        
+        if filtros:
+            if filtros.get('fecha_desde'):
+                where_clauses.append("fecha >= %s")
+                params.append(filtros['fecha_desde'])
+            
+            if filtros.get('fecha_hasta'):
+                where_clauses.append("fecha <= %s")
+                params.append(filtros['fecha_hasta'])
+            
+            if filtros.get('banco_origen_id'):
+                where_clauses.append("banco_origen_id = %s")
+                params.append(filtros['banco_origen_id'])
+            
+            if filtros.get('banco_destino_id'):
+                where_clauses.append("banco_destino_id = %s")
+                params.append(filtros['banco_destino_id'])
+        
+        where_sql = ""
+        if where_clauses:
+            where_sql = "WHERE " + " AND ".join(where_clauses)
+        
+        query = f"""
+            SELECT COUNT(*)
+            FROM transferencias_cuentas
+            {where_sql}
+        """
+        
+        cur.execute(query, params)
+        return cur.fetchone()[0]
+    finally:
+        cur.close()
+        conn.close()
+
+
+def obtener_transferencia_por_id(transferencia_id):
+    """Obtiene una transferencia por su ID"""
+    crear_tabla_transferencias()
+    conn, cur = conectar()
+    try:
+        cur.execute("""
+            SELECT 
+                t.id,
+                t.fecha,
+                t.banco_origen_id,
+                t.banco_destino_id,
+                t.monto,
+                t.descripcion,
+                t.creado_en,
+                bo.nombre as banco_origen_nombre,
+                bd.nombre as banco_destino_nombre
+            FROM transferencias_cuentas t
+            LEFT JOIN bancos bo ON t.banco_origen_id = bo.id
+            LEFT JOIN bancos bd ON t.banco_destino_id = bd.id
+            WHERE t.id = %s
+        """, (transferencia_id,))
+        return cur.fetchone()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def crear_transferencia(fecha, banco_origen_id, banco_destino_id, monto, descripcion=None):
+    """Crea una nueva transferencia entre cuentas"""
+    crear_tabla_transferencias()
+    conn, cur = conectar()
+    try:
+        if banco_origen_id == banco_destino_id:
+            raise ValueError("El banco de origen y destino no pueden ser el mismo")
+        
+        if monto <= 0:
+            raise ValueError("El monto debe ser mayor a 0")
+        
+        cur.execute("""
+            INSERT INTO transferencias_cuentas (fecha, banco_origen_id, banco_destino_id, monto, descripcion)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
+        """, (fecha, banco_origen_id, banco_destino_id, monto, descripcion))
+        
+        transferencia_id = cur.fetchone()['id']
+        conn.commit()
+        return transferencia_id
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        cur.close()
+        conn.close()
+
+
+def actualizar_transferencia(transferencia_id, fecha, banco_origen_id, banco_destino_id, monto, descripcion=None):
+    """Actualiza una transferencia existente"""
+    crear_tabla_transferencias()
+    conn, cur = conectar()
+    try:
+        if banco_origen_id == banco_destino_id:
+            raise ValueError("El banco de origen y destino no pueden ser el mismo")
+        
+        if monto <= 0:
+            raise ValueError("El monto debe ser mayor a 0")
+        
+        cur.execute("""
+            UPDATE transferencias_cuentas
+            SET fecha = %s,
+                banco_origen_id = %s,
+                banco_destino_id = %s,
+                monto = %s,
+                descripcion = %s
+            WHERE id = %s
+        """, (fecha, banco_origen_id, banco_destino_id, monto, descripcion, transferencia_id))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        cur.close()
+        conn.close()
+
+
+def eliminar_transferencia(transferencia_id):
+    """Elimina una transferencia"""
+    crear_tabla_transferencias()
+    conn, cur = conectar()
+    try:
+        cur.execute("DELETE FROM transferencias_cuentas WHERE id = %s", (transferencia_id,))
+        conn.commit()
+        return cur.rowcount > 0
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        cur.close()
+        conn.close()
+

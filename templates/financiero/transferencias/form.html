@@ -1,0 +1,190 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Editar' if transferencia else 'Nueva' }} Transferencia{% endblock %}
+{% block content %}
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="margin-bottom: 20px;">
+      <a class="button button-secondary" href="{{ url_for('transferencias_index') }}">← Volver</a>
+    </div>
+
+    <h2>{{ 'Editar' if transferencia else 'Nueva' }} Transferencia entre Cuentas</h2>
+
+    <form method="POST" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; font-weight: 600; margin-bottom: 5px;">Fecha *:</label>
+        <input type="date" name="fecha" 
+               value="{{ transferencia.fecha.strftime('%Y-%m-%d') if transferencia and transferencia.fecha else '' }}" 
+               required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+      </div>
+
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; font-weight: 600; margin-bottom: 5px;">Banco Origen *:</label>
+        <select name="banco_origen_id" required 
+                style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"
+                onchange="actualizarBancosDestino()">
+          <option value="">Seleccione un banco</option>
+          {% for banco in bancos %}
+            <option value="{{ banco.id }}" 
+                    {% if transferencia and transferencia.banco_origen_id == banco.id %}selected{% endif %}>
+              {{ banco.nombre }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; font-weight: 600; margin-bottom: 5px;">Banco Destino *:</label>
+        <select name="banco_destino_id" id="banco_destino_id" required 
+                style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+          <option value="">Seleccione un banco</option>
+          {% for banco in bancos %}
+            <option value="{{ banco.id }}" 
+                    {% if transferencia and transferencia.banco_destino_id == banco.id %}selected{% endif %}>
+              {{ banco.nombre }}
+            </option>
+          {% endfor %}
+        </select>
+        <small style="color: #666;">Debe ser diferente al banco de origen</small>
+      </div>
+
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; font-weight: 600; margin-bottom: 5px;">Monto *:</label>
+        <input type="text" name="monto" id="montoInput"
+               value="{{ "{:,.2f}".format(transferencia.monto) if transferencia and transferencia.monto else '' }}" 
+               required 
+               placeholder="0,00"
+               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"
+               oninput="limpiarMonto(this)"
+               onblur="formatearMontoFinal(this)">
+        <small style="color: #666;">Ingrese el monto a transferir (se formateará automáticamente)</small>
+      </div>
+
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; font-weight: 600; margin-bottom: 5px;">Descripción:</label>
+        <textarea name="descripcion" rows="3" 
+                  style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;">{{ transferencia.descripcion if transferencia and transferencia.descripcion else '' }}</textarea>
+        <small style="color: #666;">Descripción opcional de la transferencia</small>
+      </div>
+
+      <div style="margin-top: 20px; display: flex; gap: 10px;">
+        <button type="submit" class="button" style="background: #9C27B0;">💾 Guardar</button>
+        <a href="{{ url_for('transferencias_index') }}" class="button button-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    // Formateador de números para Paraguay (es-PY)
+    const formatter = new Intl.NumberFormat('es-PY', { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 2 
+    });
+    
+    function normalizarMonto(valor) {
+      if (!valor) return '';
+      // Convertir a string y limpiar espacios
+      let valorStr = valor.toString().trim().replace(/\s/g, '');
+      
+      // Si tiene punto y coma, es formato español (3.650.000,00)
+      // Si solo tiene coma, es formato español sin miles (3,67)
+      // Si solo tiene punto, es formato inglés (3650000.00)
+      
+      // Detectar si es formato español (tiene coma como separador decimal)
+      if (valorStr.includes(',')) {
+        // Formato español: eliminar puntos (separadores de miles) y reemplazar coma por punto
+        valorStr = valorStr.replace(/\./g, '').replace(',', '.');
+      }
+      // Si no tiene coma, asumir que ya está en formato numérico o inglés
+      
+      return valorStr;
+    }
+    
+    function limpiarMonto(input) {
+      // Solo permitir números, puntos y comas
+      const cursorPos = input.selectionStart;
+      const valorOriginal = input.value;
+      let valor = valorOriginal.replace(/[^\d.,]/g, '');
+      
+      // Si se eliminaron caracteres, ajustar posición del cursor
+      if (valor !== valorOriginal) {
+        input.value = valor;
+        setTimeout(() => {
+          try {
+            const diferencia = valor.length - valorOriginal.length;
+            const nuevaPos = Math.max(0, Math.min(cursorPos + diferencia, valor.length));
+            input.setSelectionRange(nuevaPos, nuevaPos);
+          } catch (e) {}
+        }, 0);
+      }
+    }
+    
+    function formatearMontoFinal(input) {
+      const valorNormalizado = normalizarMonto(input.value);
+      const valor = parseFloat(valorNormalizado);
+      if (!isNaN(valor) && valor >= 0) {
+        input.value = formatter.format(valor);
+      } else if (input.value && !isNaN(parseFloat(input.value.replace(/[^\d.,]/g, '')))) {
+        // Si el valor original es válido pero la normalización falló, intentar de nuevo
+        const valorOriginal = input.value.replace(/[^\d.,]/g, '');
+        const valorFinal = parseFloat(normalizarMonto(valorOriginal));
+        if (!isNaN(valorFinal) && valorFinal >= 0) {
+          input.value = formatter.format(valorFinal);
+        }
+      } else if (input.value.trim() === '') {
+        input.value = '';
+      }
+    }
+    
+    function actualizarBancosDestino() {
+      const bancoOrigenId = document.querySelector('select[name="banco_origen_id"]').value;
+      const bancoDestinoSelect = document.getElementById('banco_destino_id');
+      
+      // Habilitar todos los bancos
+      bancoDestinoSelect.querySelectorAll('option').forEach(option => {
+        if (option.value) {
+          option.disabled = false;
+          option.style.display = '';
+        }
+      });
+      
+      // Deshabilitar el banco de origen en el selector de destino
+      if (bancoOrigenId) {
+        bancoDestinoSelect.querySelector(`option[value="${bancoOrigenId}"]`).disabled = true;
+        bancoDestinoSelect.querySelector(`option[value="${bancoOrigenId}"]`).style.display = 'none';
+        
+        // Si el destino actual es el mismo que el origen, limpiar la selección
+        if (bancoDestinoSelect.value == bancoOrigenId) {
+          bancoDestinoSelect.value = '';
+        }
+      }
+    }
+    
+    // Ejecutar al cargar la página
+    document.addEventListener('DOMContentLoaded', function() {
+      actualizarBancosDestino();
+      
+      // Formatear el monto inicial si tiene valor
+      const montoInput = document.getElementById('montoInput');
+      if (montoInput && montoInput.value) {
+        const valorOriginal = montoInput.value.replace(/,/g, '');
+        const valorNumero = parseFloat(valorOriginal);
+        if (!isNaN(valorNumero) && valorNumero >= 0) {
+          montoInput.value = formatter.format(valorNumero);
+        }
+      }
+    });
+    
+    // Interceptar el envío del formulario para normalizar el monto antes de enviar
+    document.querySelector('form').addEventListener('submit', function(e) {
+      const montoInput = document.getElementById('montoInput');
+      if (montoInput && montoInput.value) {
+        const valorNormalizado = normalizarMonto(montoInput.value);
+        const valor = parseFloat(valorNormalizado);
+        if (!isNaN(valor) && valor >= 0) {
+          // Reemplazar el valor formateado por el valor numérico normalizado (con punto como decimal)
+          montoInput.value = valorNormalizado;
+        }
+      }
+    });
+  </script>
+{% endblock %}
+
