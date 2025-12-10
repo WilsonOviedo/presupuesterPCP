@@ -2247,6 +2247,14 @@ def importar_cuentas_a_recibir_csv(csv_content):
             valor = float(row.get('Valor', 0).replace(',', '.')) if row.get('Valor') else 0
             valor_cuota = float(row.get('Valor Cuota', 0).replace(',', '.')) if row.get('Valor Cuota') else None
             
+            tipo = _to_upper(row.get('Tipo', 'RECURRENTE').strip() or 'RECURRENTE')
+            
+            # Si es NCRE, hacer el valor y valor_cuota negativos
+            if tipo == 'NCRE':
+                valor = -abs(valor)
+                if valor_cuota is not None:
+                    valor_cuota = -abs(valor_cuota)
+            
             vencimiento = None
             if row.get('Vencimiento'):
                 vencimiento = datetime.strptime(row['Vencimiento'], '%d-%m-%Y').date()
@@ -2260,7 +2268,7 @@ def importar_cuentas_a_recibir_csv(csv_content):
                 documento_id=documento_id,
                 cuenta_id=cuenta_id,
                 plano_cuenta=_to_upper(row.get('Plano de Cuenta', '').strip() or None),
-                tipo=_to_upper(row.get('Tipo', 'RECURRENTE').strip() or 'RECURRENTE'),
+                tipo=tipo,
                 cliente=_to_upper(row.get('Cliente', '').strip() or None),
                 factura=_to_upper(row.get('Factura', '').strip() or None),
                 descripcion=_to_upper(row.get('Descripción', '').strip() or None),
@@ -2340,6 +2348,14 @@ def importar_cuentas_a_pagar_csv(csv_content):
             valor = float(row.get('Valor', 0).replace(',', '.')) if row.get('Valor') else 0
             valor_cuota = float(row.get('Valor Cuota', 0).replace(',', '.')) if row.get('Valor Cuota') else None
             
+            tipo = _to_upper(row.get('Tipo', 'RECURRENTE').strip() or 'RECURRENTE')
+            
+            # Si es NCRE, hacer el valor y valor_cuota negativos
+            if tipo == 'NCRE':
+                valor = -abs(valor)
+                if valor_cuota is not None:
+                    valor_cuota = -abs(valor_cuota)
+            
             vencimiento = None
             if row.get('Vencimiento'):
                 vencimiento = datetime.strptime(row['Vencimiento'], '%d-%m-%Y').date()
@@ -2353,7 +2369,7 @@ def importar_cuentas_a_pagar_csv(csv_content):
                 documento_id=documento_id,
                 cuenta_id=cuenta_id,
                 plano_cuenta=_to_upper(row.get('Plano de Cuenta', '').strip() or None),
-                tipo=_to_upper(row.get('Tipo', 'RECURRENTE').strip() or 'RECURRENTE'),
+                tipo=tipo,
                 proveedor=_to_upper(row.get('Proveedor', '').strip() or None),
                 factura=_to_upper(row.get('Factura', '').strip() or None),
                 descripcion=_to_upper(row.get('Descripción', '').strip() or None),

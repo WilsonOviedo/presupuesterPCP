@@ -4092,10 +4092,11 @@ def cuenta_a_recibir_nuevo():
                 valor_total = -abs(valor_total)
             
             # Calcular valor de cuota
-            valor_cuota = abs(valor_total) / num_cuotas if num_cuotas > 0 else abs(valor_total)
-            # Si es NOCRE, el valor_cuota también debe ser negativo
-            if tipo == 'NOCRE':
-                valor_cuota = -valor_cuota
+            # Si es NCRE, el valor_cuota también debe ser negativo
+            if tipo == 'NCRE':
+                valor_cuota = valor_total / num_cuotas if num_cuotas > 0 else valor_total
+            else:
+                valor_cuota = abs(valor_total) / num_cuotas if num_cuotas > 0 else abs(valor_total)
             
             # Calcular estado automáticamente
             estado = 'RECIBIDO' if fecha_recibo else 'ABIERTO'
@@ -4537,10 +4538,11 @@ def cuenta_a_pagar_nuevo():
                 valor_total = -abs(valor_total)
             
             # Calcular valor de cuota
-            valor_cuota = abs(valor_total) / num_cuotas if num_cuotas > 0 else abs(valor_total)
-            # Si es NOCRE, el valor_cuota también debe ser negativo
-            if tipo == 'NOCRE':
-                valor_cuota = -valor_cuota
+            # Si es NCRE, el valor_cuota también debe ser negativo
+            if tipo == 'NCRE':
+                valor_cuota = valor_total / num_cuotas if num_cuotas > 0 else valor_total
+            else:
+                valor_cuota = abs(valor_total) / num_cuotas if num_cuotas > 0 else abs(valor_total)
             
             # Calcular estado automáticamente
             estado = 'PAGADO' if fecha_pago else 'ABIERTO'

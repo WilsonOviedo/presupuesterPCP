@@ -506,7 +506,27 @@ def obtener_reportes_cuentas_a_pagar(proveedor_nombre=None, fecha_desde=None, fe
             valor = float(cuenta['valor']) if cuenta['valor'] else 0
             monto_abonado = float(cuenta.get('monto_abonado') or 0)
             monto_comparar = valor_cuota if valor_cuota is not None else valor
-            saldo = abs(monto_comparar) - monto_abonado if monto_comparar else 0
+            
+            # Calcular saldo correctamente
+            # El saldo es la diferencia entre lo que se debe y lo que se ha abonado
+            if monto_comparar is not None:
+                # Para valores positivos: saldo = valor - monto_abonado
+                # Para valores negativos (NCRE): el monto_abonado se guarda como positivo,
+                # pero conceptualmente es negativo, entonces: saldo = valor + monto_abonado
+                if monto_comparar < 0:
+                    # NCRE: el valor es negativo, el monto_abonado es positivo pero conceptualmente negativo
+                    saldo = monto_comparar + monto_abonado
+                    # Si el saldo es positivo (se pagó de más), poner 0
+                    if saldo > 0:
+                        saldo = 0
+                else:
+                    # Valor positivo: saldo = valor - monto_abonado
+                    saldo = monto_comparar - monto_abonado
+                    # Si el saldo queda negativo (se pagó de más), poner 0
+                    if saldo < 0:
+                        saldo = 0
+            else:
+                saldo = 0
             
             reporte = {
                 'tipo': 'CUENTA_A_PAGAR',
@@ -694,7 +714,27 @@ def obtener_reportes_cuentas_a_recibir(cliente_nombre=None, fecha_desde=None, fe
             valor = float(cuenta['valor']) if cuenta['valor'] else 0
             monto_abonado = float(cuenta.get('monto_abonado') or 0)
             monto_comparar = valor_cuota if valor_cuota is not None else valor
-            saldo = abs(monto_comparar) - monto_abonado if monto_comparar else 0
+            
+            # Calcular saldo correctamente
+            # El saldo es la diferencia entre lo que se debe y lo que se ha abonado
+            if monto_comparar is not None:
+                # Para valores positivos: saldo = valor - monto_abonado
+                # Para valores negativos (NCRE): el monto_abonado se guarda como positivo,
+                # pero conceptualmente es negativo, entonces: saldo = valor + monto_abonado
+                if monto_comparar < 0:
+                    # NCRE: el valor es negativo, el monto_abonado es positivo pero conceptualmente negativo
+                    saldo = monto_comparar + monto_abonado
+                    # Si el saldo es positivo (se pagó de más), poner 0
+                    if saldo > 0:
+                        saldo = 0
+                else:
+                    # Valor positivo: saldo = valor - monto_abonado
+                    saldo = monto_comparar - monto_abonado
+                    # Si el saldo queda negativo (se pagó de más), poner 0
+                    if saldo < 0:
+                        saldo = 0
+            else:
+                saldo = 0
             
             reporte = {
                 'tipo': 'CUENTA_A_RECIBIR',
