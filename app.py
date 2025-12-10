@@ -3405,6 +3405,42 @@ def reportes_cuentas_a_recibir_index():
                          total_paginas=total_paginas)
 
 
+@app.route("/reportes/conciliacion-bancaria", methods=["GET"], endpoint="reportes_conciliacion_bancaria_index")
+@auth.login_required
+@auth.permission_required('/reportes/conciliacion-bancaria')
+def reportes_conciliacion_bancaria_index():
+    """Página de conciliación bancaria"""
+    banco_id = request.args.get('banco_id', type=int)
+    anio = request.args.get('anio', type=int, default=datetime.now().year)
+    mes = request.args.get('mes', type=int, default=datetime.now().month)
+    
+    # Obtener lista de bancos
+    bancos = financiero.obtener_bancos(activo=True)
+    
+    # Si no hay banco seleccionado y hay bancos disponibles, usar el primero
+    if not banco_id and bancos:
+        banco_id = bancos[0]['id']
+    
+    conciliacion = None
+    error = request.args.get('error')
+    
+    if banco_id:
+        try:
+            conciliacion = reportes_clientes.obtener_conciliacion_bancaria(banco_id, anio, mes)
+            if not conciliacion:
+                error = 'Banco no encontrado'
+        except Exception as e:
+            error = f'Error al obtener conciliación: {str(e)}'
+    
+    return render_template('reportes/conciliacion_bancaria.html',
+                         bancos=bancos,
+                         banco_id=banco_id,
+                         anio=anio,
+                         mes=mes,
+                         conciliacion=conciliacion,
+                         error=error)
+
+
 @app.route("/api/facturacion/eliminar-factura/<int:factura_id>", methods=["DELETE"])
 @auth.login_required
 @auth.permission_required('/facturacion')

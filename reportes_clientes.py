@@ -1313,3 +1313,162 @@ def obtener_evolucion_saldo_mensual(banco_id=None, ano=None, fecha_desde=None, f
         cur.close()
         conn.close()
 
+
+def obtener_conciliacion_bancaria(banco_id, anio, mes):
+    """Obtiene la conciliación bancaria diaria para un banco, año y mes específicos
+    
+    Retorna:
+    - diccionario con banco_id, banco_nombre, saldo_mes_anterior, movimientos
+    """
+    from calendar import monthrange
+    conn, cur = conectar()
+    try:
+        # Asegurar que la tabla de transferencias existe
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS transferencias_cuentas (
+                id SERIAL PRIMARY KEY,
+                fecha DATE NOT NULL,
+                banco_origen_id INTEGER NOT NULL REFERENCES bancos(id),
+                banco_destino_id INTEGER NOT NULL REFERENCES bancos(id),
+                monto NUMERIC(15, 2) NOT NULL,
+                descripcion TEXT,
+                creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT banco_origen_destino_diferentes CHECK (banco_origen_id != banco_destino_id),
+                CONSTRAINT monto_positivo CHECK (monto > 0)
+            );
+        """)
+        conn.commit()
+        
+        # Obtener información del banco
+        cur.execute("""
+            SELECT id, nombre, COALESCE(saldo_inicial, 0) as saldo_inicial
+            FROM bancos
+            WHERE id = %s AND activo = true
+        """, (banco_id,))
+        banco = cur.fetchone()
+        
+        if not banco:
+            return None
+        
+        # Calcular el último día del mes anterior
+        if mes == 1:
+            mes_anterior = 12
+            anio_anterior = anio - 1
+        else:
+            mes_anterior = mes - 1
+            anio_anterior = anio
+        
+        # Obtener el último día del mes anterior
+        ultimo_dia_mes_anterior = monthrange(anio_anterior, mes_anterior)[1]
+        fecha_fin_mes_anterior = date(anio_anterior, mes_anterior, ultimo_dia_mes_anterior)
+        
+        # Calcular saldo acumulado al final del mes anterior
+        cur.execute("""
+            SELECT 
+                COALESCE(b.saldo_inicial, 0) +
+                COALESCE((
+                    SELECT SUM(COALESCE(car.monto_abonado, 0))
+                    FROM cuentas_a_recibir car
+                    WHERE car.banco_id = b.id 
+                    AND car.fecha_recibo IS NOT NULL
+                    AND car.fecha_recibo <= %s
+                ), 0) - 
+                COALESCE((
+                    SELECT SUM(COALESCE(cap.monto_abonado, 0))
+                    FROM cuentas_a_pagar cap
+                    WHERE cap.banco_id = b.id 
+                    AND cap.fecha_pago IS NOT NULL
+                    AND cap.fecha_pago <= %s
+                ), 0) +
+                COALESCE((
+                    SELECT SUM(COALESCE(t.monto, 0))
+                    FROM transferencias_cuentas t
+                    WHERE t.banco_destino_id = b.id
+                    AND t.fecha <= %s
+                ), 0) -
+                COALESCE((
+                    SELECT SUM(COALESCE(t.monto, 0))
+                    FROM transferencias_cuentas t
+                    WHERE t.banco_origen_id = b.id
+                    AND t.fecha <= %s
+                ), 0) as saldo_acumulado
+            FROM bancos b
+            WHERE b.id = %s
+        """, (fecha_fin_mes_anterior, fecha_fin_mes_anterior, fecha_fin_mes_anterior, fecha_fin_mes_anterior, banco_id))
+        
+        saldo_mes_anterior = cur.fetchone()['saldo_acumulado'] or 0
+        
+        # Obtener el número de días del mes
+        ultimo_dia_mes = monthrange(anio, mes)[1]
+        
+        # Generar lista de días del mes
+        movimientos = []
+        saldo_acumulado = float(saldo_mes_anterior)
+        
+        for dia in range(1, ultimo_dia_mes + 1):
+            fecha_actual = date(anio, mes, dia)
+            
+            # Ingresos del día (cuentas a recibir)
+            cur.execute("""
+                SELECT COALESCE(SUM(COALESCE(monto_abonado, 0)), 0) as total
+                FROM cuentas_a_recibir
+                WHERE banco_id = %s
+                AND fecha_recibo = %s
+            """, (banco_id, fecha_actual))
+            ingresos = float(cur.fetchone()['total'] or 0)
+            
+            # Salidas del día (cuentas a pagar)
+            cur.execute("""
+                SELECT COALESCE(SUM(COALESCE(monto_abonado, 0)), 0) as total
+                FROM cuentas_a_pagar
+                WHERE banco_id = %s
+                AND fecha_pago = %s
+            """, (banco_id, fecha_actual))
+            salidas = float(cur.fetchone()['total'] or 0)
+            
+            # Transferencias recibidas del día
+            cur.execute("""
+                SELECT COALESCE(SUM(COALESCE(monto, 0)), 0) as total
+                FROM transferencias_cuentas
+                WHERE banco_destino_id = %s
+                AND fecha = %s
+            """, (banco_id, fecha_actual))
+            transferencias_recibidas = float(cur.fetchone()['total'] or 0)
+            
+            # Transferencias enviadas del día
+            cur.execute("""
+                SELECT COALESCE(SUM(COALESCE(monto, 0)), 0) as total
+                FROM transferencias_cuentas
+                WHERE banco_origen_id = %s
+                AND fecha = %s
+            """, (banco_id, fecha_actual))
+            transferencias_enviadas = float(cur.fetchone()['total'] or 0)
+            
+            # Calcular saldo del día
+            saldo_dia = ingresos - salidas + transferencias_recibidas - transferencias_enviadas
+            
+            # Actualizar saldo acumulado
+            saldo_acumulado += saldo_dia
+            
+            # Solo agregar si hay movimientos o es el primer día
+            if ingresos > 0 or salidas > 0 or transferencias_recibidas > 0 or transferencias_enviadas > 0 or dia == 1:
+                movimientos.append({
+                    'fecha': fecha_actual,
+                    'ingresos': ingresos,
+                    'salidas': salidas,
+                    'transferencias_recibidas': transferencias_recibidas,
+                    'transferencias_enviadas': transferencias_enviadas,
+                    'saldo_dia': saldo_dia,
+                    'saldo_acumulado': saldo_acumulado
+                })
+        
+        return {
+            'banco_id': banco_id,
+            'banco_nombre': banco['nombre'],
+            'saldo_mes_anterior': float(saldo_mes_anterior),
+            'movimientos': movimientos
+        }
+    finally:
+        cur.close()
+        conn.close()
+

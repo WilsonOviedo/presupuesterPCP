@@ -1,0 +1,230 @@
+{% extends 'base.html' %}
+{% block title %}Conciliación Bancaria{% endblock %}
+{% block head %}
+  <style>
+    .reportes-container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .filtros-section {
+      background: #f9f9f9;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .filtros-section h3 {
+      margin-top: 0;
+      color: #333;
+    }
+    .filtros-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 15px;
+    }
+    .filtros-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+    .form-group label {
+      font-weight: 600;
+      margin-bottom: 5px;
+      color: #555;
+    }
+    .form-group input,
+    .form-group select {
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .saldo-mes-anterior {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      text-align: center;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .saldo-mes-anterior h3 {
+      margin: 0 0 10px 0;
+      font-size: 1.1em;
+      font-weight: 600;
+    }
+    .saldo-mes-anterior .valor {
+      font-size: 2em;
+      font-weight: bold;
+    }
+    .conciliacion-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .conciliacion-table thead {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+      color: white !important;
+    }
+    .conciliacion-table th {
+      background: transparent !important;
+      color: white !important;
+      padding: 14px 12px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.9em;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .conciliacion-table td {
+      padding: 12px;
+      border-bottom: 1px solid #e8e8e8;
+      font-size: 0.9em;
+    }
+    .conciliacion-table tbody tr {
+      transition: background-color 0.2s ease;
+    }
+    .conciliacion-table tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
+    .conciliacion-table tbody tr:hover {
+      background: #f0f0ff;
+    }
+    .text-right {
+      text-align: right;
+    }
+    .text-green {
+      color: #2e7d32;
+      font-weight: 600;
+    }
+    .text-red {
+      color: #c62828;
+      font-weight: 600;
+    }
+    .text-bold {
+      font-weight: bold;
+    }
+  </style>
+{% endblock %}
+{% block content %}
+  <div class="reportes-container" style="padding: 20px;">
+    <h2>🏦 Conciliación Bancaria</h2>
+
+    {% if error %}
+      <div style="background: #ffebee; color: #c62828; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #ef5350;">
+        <strong>Error:</strong> {{ error }}
+      </div>
+    {% endif %}
+
+    <div class="filtros-section">
+      <h3>Filtros</h3>
+      <form method="GET" action="{{ url_for('reportes_conciliacion_bancaria_index') }}">
+        <div class="filtros-row">
+          <div class="form-group">
+            <label for="banco_id">Cuenta Bancaria:</label>
+            <select id="banco_id" name="banco_id" required>
+              <option value="">Seleccione una cuenta</option>
+              {% for banco in bancos %}
+                <option value="{{ banco.id }}" {% if banco_id == banco.id %}selected{% endif %}>
+                  {{ banco.nombre }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="anio">Año:</label>
+            <input type="number" id="anio" name="anio" value="{{ anio }}" min="2020" max="2100" required>
+          </div>
+          <div class="form-group">
+            <label for="mes">Mes:</label>
+            <select id="mes" name="mes" required>
+              <option value="1" {% if mes == 1 %}selected{% endif %}>Enero</option>
+              <option value="2" {% if mes == 2 %}selected{% endif %}>Febrero</option>
+              <option value="3" {% if mes == 3 %}selected{% endif %}>Marzo</option>
+              <option value="4" {% if mes == 4 %}selected{% endif %}>Abril</option>
+              <option value="5" {% if mes == 5 %}selected{% endif %}>Mayo</option>
+              <option value="6" {% if mes == 6 %}selected{% endif %}>Junio</option>
+              <option value="7" {% if mes == 7 %}selected{% endif %}>Julio</option>
+              <option value="8" {% if mes == 8 %}selected{% endif %}>Agosto</option>
+              <option value="9" {% if mes == 9 %}selected{% endif %}>Septiembre</option>
+              <option value="10" {% if mes == 10 %}selected{% endif %}>Octubre</option>
+              <option value="11" {% if mes == 11 %}selected{% endif %}>Noviembre</option>
+              <option value="12" {% if mes == 12 %}selected{% endif %}>Diciembre</option>
+            </select>
+          </div>
+        </div>
+        <div class="filtros-actions">
+          <button type="submit" class="button" style="background: #667eea;">🔍 Consultar</button>
+        </div>
+      </form>
+    </div>
+
+    {% if conciliacion %}
+      <div class="saldo-mes-anterior">
+        <h3>Saldo Acumulado del Mes Anterior</h3>
+        <div class="valor">Gs {{ "{:,.2f}".format(conciliacion.saldo_mes_anterior) }}</div>
+      </div>
+
+      <div style="overflow-x: auto;">
+        <table class="conciliacion-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th class="text-right">Ingresos del Día</th>
+              <th class="text-right">Salidas del Día</th>
+              <th class="text-right">Saldo del Día</th>
+              <th class="text-right">Saldo Acumulado del Mes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for movimiento in conciliacion.movimientos %}
+              <tr>
+                <td>{{ movimiento.fecha.strftime('%d/%m/%Y') }}</td>
+                <td class="text-right text-green">
+                  {% if movimiento.ingresos > 0 %}
+                    Gs {{ "{:,.2f}".format(movimiento.ingresos) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td class="text-right text-red">
+                  {% if movimiento.salidas > 0 %}
+                    Gs {{ "{:,.2f}".format(movimiento.salidas) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td class="text-right {% if movimiento.saldo_dia > 0 %}text-green{% elif movimiento.saldo_dia < 0 %}text-red{% endif %}">
+                  Gs {{ "{:,.2f}".format(movimiento.saldo_dia) }}
+                </td>
+                <td class="text-right text-bold {% if movimiento.saldo_acumulado > 0 %}text-green{% elif movimiento.saldo_acumulado < 0 %}text-red{% endif %}">
+                  Gs {{ "{:,.2f}".format(movimiento.saldo_acumulado) }}
+                </td>
+              </tr>
+            {% endfor %}
+            
+            {% if not conciliacion.movimientos %}
+              <tr>
+                <td colspan="5" style="text-align: center; padding: 40px; color: #999;">
+                  No hay movimientos registrados para este período.
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    {% elif banco_id %}
+      <div style="background: #fff3cd; color: #856404; padding: 15px; border-radius: 6px; margin-top: 20px; border: 1px solid #ffc107;">
+        Seleccione una cuenta bancaria, año y mes para ver la conciliación.
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}
+

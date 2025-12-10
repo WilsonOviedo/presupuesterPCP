@@ -677,7 +677,8 @@ INSERT INTO permisos_rutas (ruta, nombre, descripcion) VALUES
     ('/facturacion', 'Facturación', 'Acceso al módulo de facturación'),
     ('/reportes/clientes', 'Reportes de Clientes', 'Acceso a reportes de clientes'),
     ('/reportes/cuentas-a-recibir', 'Reportes de Cuentas a Recibir', 'Acceso a reportes de cuentas a recibir'),
-    ('/reportes/cuentas-a-pagar', 'Reportes de Cuentas a Pagar', 'Acceso a reportes de cuentas a pagar')
+    ('/reportes/cuentas-a-pagar', 'Reportes de Cuentas a Pagar', 'Acceso a reportes de cuentas a pagar'),
+    ('/reportes/analisis', 'Análisis Históricos', 'Acceso al análisis histórico y dashboard financiero')
 ON CONFLICT (ruta) DO NOTHING;
 
 -- ============================================
@@ -1035,6 +1036,12 @@ ON CONFLICT (ruta) DO NOTHING;
 INSERT INTO permisos_rutas (ruta, nombre, descripcion) 
 VALUES 
     ('/financiero/cuentas-a-recibir', 'Cuentas a Recibir', 'Gestión de cuentas a recibir'),
-    ('/financiero/cuentas-a-pagar', 'Cuentas a Pagar', 'Gestión de cuentas a pagar')
+    ('/financiero/cuentas-a-pagar', 'Cuentas a Pagar', 'Gestión de cuentas a pagar'),
+    ('/financiero/transferencias', 'Transferencias entre Cuentas', 'Gestión de transferencias entre cuentas bancarias')
+ON CONFLICT (ruta) DO NOTHING;
+
+-- Agregar permisos para conciliación bancaria
+INSERT INTO permisos_rutas (ruta, nombre, descripcion) 
+VALUES ('/reportes/conciliacion-bancaria', 'Conciliación Bancaria', 'Acceso a la conciliación bancaria diaria')
 ON CONFLICT (ruta) DO NOTHING;
 
