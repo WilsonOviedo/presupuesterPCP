@@ -1,0 +1,754 @@
+{% extends 'base.html' %}
+{% block title %}DRE - Demonstrativo de Resultado{% endblock %}
+{% block head %}
+  <style>
+    body {
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    .container {
+      max-width: 100% !important;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    .reportes-container {
+      max-width: 100% !important;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 10px 5px;
+      box-sizing: border-box;
+    }
+    .filtros-section {
+      background: #f9f9f9;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .filtros-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 15px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+    .form-group label {
+      font-weight: 600;
+      margin-bottom: 5px;
+      color: #555;
+    }
+    .form-group input,
+    .form-group select {
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .radio-group {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+    }
+    .radio-option {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .dre-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 0.85em;
+    }
+    .dre-table thead {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+      color: white !important;
+    }
+    .dre-table th {
+      background: transparent !important;
+      color: white !important;
+      padding: 12px 8px;
+      text-align: center;
+      font-weight: 600;
+      font-size: 0.9em;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-right: 1px solid rgba(255,255,255,0.2);
+    }
+    .dre-table th:first-child {
+      text-align: left;
+      padding-left: 15px;
+    }
+    .dre-table td {
+      padding: 10px 8px;
+      border-bottom: 1px solid #e8e8e8;
+      border-right: 1px solid #e8e8e8;
+      text-align: right;
+    }
+    .dre-table td:first-child {
+      text-align: left;
+      padding-left: 15px;
+      font-weight: 600;
+    }
+    .dre-table tbody tr {
+      transition: background-color 0.2s ease;
+    }
+    .dre-table tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
+    .dre-table tbody tr:hover {
+      background: #f0f0ff;
+    }
+    .row-receita {
+      background: #42a5f5 !important;
+      color: #ffffff !important;
+      font-weight: 700;
+    }
+    .row-receita-sub {
+      padding-left: 30px !important;
+      font-style: italic;
+    }
+    .row-gasto {
+      background: #ef5350 !important;
+      color: #ffffff !important;
+      font-weight: 700;
+    }
+    .row-gasto td {
+      color: #ffffff !important;
+    }
+    .row-gasto td.col-total,
+    .row-gasto td.col-porcentaje {
+      color: #ffffff !important;
+    }
+    .row-gasto-sub {
+      padding-left: 30px !important;
+      font-style: italic;
+    }
+    .row-margem {
+      background: #9e9e9e !important;
+      color: #ffffff !important;
+      font-weight: 600;
+    }
+    .row-margem td {
+      color: #ffffff !important;
+    }
+    .row-margem td.col-total,
+    .row-margem td.col-porcentaje {
+      color: #ffffff !important;
+    }
+    .row-lucro {
+      background: #757575 !important;
+      color: #ffffff !important;
+      font-weight: 700;
+    }
+    .row-lucro td {
+      color: #ffffff !important;
+    }
+    .row-lucro td.col-total,
+    .row-lucro td.col-porcentaje {
+      color: #ffffff !important;
+    }
+    .text-right {
+      text-align: right;
+    }
+    .valor-cero {
+      color: #999;
+    }
+    .overflow-container {
+      overflow-x: auto;
+      margin-top: 20px;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 0;
+    }
+    .dre-table {
+      min-width: 100%;
+      table-layout: auto;
+    }
+    .dre-table th,
+    .dre-table td {
+      white-space: nowrap;
+      min-width: 120px;
+    }
+    .dre-table th:first-child,
+    .dre-table td:first-child {
+      min-width: 250px;
+      position: sticky;
+      left: 0;
+      background: inherit;
+      z-index: 10;
+    }
+    .col-total {
+      background: #f5f5f5 !important;
+      font-weight: 700;
+    }
+    .col-porcentaje {
+      background: #e0e0e0 !important;
+      font-weight: 600;
+    }
+    .text-red {
+      color: #c62828 !important;
+    }
+  </style>
+{% endblock %}
+{% block content %}
+  <div class="reportes-container">
+    <h2>📊 DRE - Demonstrativo de Resultado</h2>
+
+    {% if error %}
+      <div style="background: #ffebee; color: #c62828; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #ef5350;">
+        <strong>Error:</strong> {{ error }}
+      </div>
+    {% endif %}
+
+    <div class="filtros-section">
+      <h3 style="margin-top: 0;">Filtros</h3>
+      <form method="GET" action="{{ url_for('reportes_dre_index') }}">
+        <div class="filtros-row">
+          <div class="form-group">
+            <label for="ano">Seleccione el año:</label>
+            <input type="number" id="ano" name="ano" value="{{ ano }}" min="2020" max="2100" required>
+          </div>
+          <div class="form-group">
+            <label for="proyecto_id">Seleccione el Proyecto:</label>
+            <select id="proyecto_id" name="proyecto_id">
+              <option value="">CONSOLIDADO</option>
+              {% for proyecto in proyectos %}
+                <option value="{{ proyecto.id }}" {% if proyecto_id == proyecto.id %}selected{% endif %}>
+                  {{ proyecto.nombre }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Tipo de Reporte:</label>
+            <div class="radio-group">
+              <div class="radio-option">
+                <input type="radio" id="tipo_proyectado" name="tipo_reporte" value="proyectado" {% if tipo_reporte == 'proyectado' %}checked{% endif %}>
+                <label for="tipo_proyectado">Proyectado</label>
+              </div>
+              <div class="radio-option">
+                <input type="radio" id="tipo_realizado" name="tipo_reporte" value="realizado" {% if tipo_reporte == 'realizado' %}checked{% endif %}>
+                <label for="tipo_realizado">Realizado</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top: 15px;">
+          <button type="submit" class="button" style="background: #667eea;">🔍 Consultar</button>
+        </div>
+      </form>
+    </div>
+
+    {% if dre %}
+      <div class="overflow-container">
+        <table class="dre-table">
+          <thead>
+            <tr>
+              <th style="min-width: 250px;">DEMONSTRATIVO DE RESULTADO</th>
+              <th>ENERO</th>
+              <th>FEBRERO</th>
+              <th>MARZO</th>
+              <th>ABRIL</th>
+              <th>MAYO</th>
+              <th>JUNIO</th>
+              <th>JULIO</th>
+              <th>AGOSTO</th>
+              <th>SEPTIEMBRE</th>
+              <th>OCTUBRE</th>
+              <th>NOVIEMBRE</th>
+              <th>DICIEMBRE</th>
+              <th class="col-total">{{ ano }}</th>
+              <th class="col-porcentaje">AV%</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Ingresos Brutos -->
+            <tr class="row-receita">
+              <td>Ingresos Brutos</td>
+              {% set total_receita_bruta = 0 %}
+              {% for mes in dre.meses %}
+                {% set total_receita_bruta = total_receita_bruta + mes.receita_bruta %}
+                <td class="{% if mes.receita_bruta == 0 %}valor-cero{% endif %}">
+                  {% if mes.receita_bruta != 0 %}
+                    Gs {{ "{:,.2f}".format(mes.receita_bruta) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              {% endfor %}
+              <td class="col-total {% if total_receita_bruta == 0 %}valor-cero{% endif %}">
+                {% if total_receita_bruta != 0 %}
+                  Gs {{ "{:,.2f}".format(total_receita_bruta) }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              {% set total_receita_liquida = dre.meses|sum(attribute='receita_liquida') %}
+              <td class="col-porcentaje">
+                {% if total_receita_liquida != 0 %}
+                  {{ "{:.0f}".format((total_receita_bruta / total_receita_liquida * 100) if total_receita_liquida != 0 else 0) }}%
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+            
+            <!-- Ingresos por Categoría -->
+            {% for cat in dre.categorias_ingresos %}
+              <tr class="row-receita-sub">
+                <td>{{ cat.nombre }}</td>
+                {% set total_cat_ingresos = 0 %}
+                {% for mes in dre.meses %}
+                  {% set valor = mes.ingresos_categoria.get(cat.id, 0) %}
+                  {% set total_cat_ingresos = total_cat_ingresos + valor %}
+                  <td class="{% if valor == 0 %}valor-cero{% endif %}">
+                    {% if valor != 0 %}
+                      Gs {{ "{:,.2f}".format(valor) }}
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
+                {% endfor %}
+                <td class="col-total {% if total_cat_ingresos == 0 %}valor-cero{% endif %}">
+                  {% if total_cat_ingresos != 0 %}
+                    Gs {{ "{:,.2f}".format(total_cat_ingresos) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td class="col-porcentaje">
+                  {% if total_receita_liquida != 0 %}
+                    {{ "{:.0f}".format((total_cat_ingresos / total_receita_liquida * 100) if total_receita_liquida != 0 else 0) }}%
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+            
+            <!-- Deducciones sobre Ventas -->
+            <tr class="row-gasto">
+              <td>Deducciones sobre Ventas</td>
+              {% set total_deducciones = 0 %}
+              {% for mes in dre.meses %}
+                {% set total_deducciones = total_deducciones + mes.deducciones %}
+                <td class="{% if mes.deducciones == 0 %}valor-cero{% endif %}">
+                  {% if mes.deducciones != 0 %}
+                    Gs {{ "{:,.2f}".format(mes.deducciones) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              {% endfor %}
+              <td class="col-total {% if total_deducciones == 0 %}valor-cero{% endif %}">
+                {% if total_deducciones != 0 %}
+                  Gs {{ "{:,.2f}".format(total_deducciones) }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td class="col-porcentaje">
+                {% if total_receita_liquida != 0 %}
+                  {{ "{:.0f}".format((total_deducciones / total_receita_liquida * 100) if total_receita_liquida != 0 else 0) }}%
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+            
+            <!-- Ingresos Netos -->
+            <tr class="row-receita">
+              <td>Ingresos Netos</td>
+              {% set total_receita_liquida = 0 %}
+              {% for mes in dre.meses %}
+                {% set total_receita_liquida = total_receita_liquida + mes.receita_liquida %}
+                <td class="{% if mes.receita_liquida == 0 %}valor-cero{% endif %}">
+                  {% if mes.receita_liquida != 0 %}
+                    Gs {{ "{:,.2f}".format(mes.receita_liquida) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              {% endfor %}
+              <td class="col-total {% if total_receita_liquida == 0 %}valor-cero{% endif %}">
+                {% if total_receita_liquida != 0 %}
+                  Gs {{ "{:,.2f}".format(total_receita_liquida) }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td class="col-porcentaje">100%</td>
+            </tr>
+            
+            <!-- Costos Variables -->
+            <tr class="row-gasto">
+              <td>Costos Variables</td>
+              {% set total_costos_variables = 0 %}
+              {% for mes in dre.meses %}
+                {% set total_costos_variables = total_costos_variables + mes.costos_variables %}
+                <td class="{% if mes.costos_variables == 0 %}valor-cero{% endif %}">
+                  {% if mes.costos_variables != 0 %}
+                    Gs {{ "{:,.2f}".format(mes.costos_variables) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              {% endfor %}
+              <td class="col-total {% if total_costos_variables == 0 %}valor-cero{% endif %}">
+                {% if total_costos_variables != 0 %}
+                  Gs {{ "{:,.2f}".format(total_costos_variables) }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td class="col-porcentaje">
+                {% if total_receita_liquida != 0 %}
+                  {{ "{:.0f}".format((total_costos_variables / total_receita_liquida * 100) if total_receita_liquida != 0 else 0) }}%
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+            
+            <!-- Margen de Contribución -->
+            <tr class="row-margem">
+              <td>Margen de Contribución</td>
+              {% set total_margem_contribuicao = 0 %}
+              {% for mes in dre.meses %}
+                {% set total_margem_contribuicao = total_margem_contribuicao + mes.margem_contribuicao %}
+                <td>
+                  {% if mes.margem_contribuicao != 0 %}
+                    Gs {{ "{:,.2f}".format(mes.margem_contribuicao) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              {% endfor %}
+              <td class="col-total">
+                {% if total_margem_contribuicao != 0 %}
+                  Gs {{ "{:,.2f}".format(total_margem_contribuicao) }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td class="col-porcentaje">
+                {% if total_receita_liquida != 0 %}
+                  {{ "{:.0f}".format((total_margem_contribuicao / total_receita_liquida * 100) if total_receita_liquida != 0 else 0) }}%
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+            
+            <!-- % Margen de Contribución -->
+            <tr class="row-margem">
+              <td>% Margen de Contribución</td>
+              {% for mes in dre.meses %}
+                <td>
+                  {% if mes.percentual_margem_contribuicao != 0 %}
+                    {{ "{:.0f}".format(mes.percentual_margem_contribuicao) }}%
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              {% endfor %}
+              <td class="col-total">
+                {% if total_receita_liquida != 0 %}
+                  {{ "{:.0f}".format((total_margem_contribuicao / total_receita_liquida * 100) if total_receita_liquida != 0 else 0) }}%
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td class="col-porcentaje">-</td>
+            </tr>
+            
+            <!-- Gastos -->
+            <tr class="row-gasto">
+              <td>Gastos</td>
+              {% set total_despesas = 0 %}
+              {% for mes in dre.meses %}
+                {% set total_despesas = total_despesas + mes.despesas %}
+                <td class="{% if mes.despesas == 0 %}valor-cero{% endif %}">
+                  {% if mes.despesas != 0 %}
+                    Gs {{ "{:,.2f}".format(mes.despesas) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              {% endfor %}
+              <td class="col-total {% if total_despesas == 0 %}valor-cero{% endif %}">
+                {% if total_despesas != 0 %}
+                  Gs {{ "{:,.2f}".format(total_despesas) }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td class="col-porcentaje">
+                {% if total_receita_liquida != 0 %}
+                  {{ "{:.0f}".format((total_despesas / total_receita_liquida * 100) if total_receita_liquida != 0 else 0) }}%
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+            
+            <!-- Gastos por Categoría (excepto las especiales) -->
+            {% for cat in dre.categorias_gastos %}
+              {% if cat.id not in [dre.categoria_deducciones_id, dre.categoria_costos_variables_id, dre.categoria_gastos_financieros_id, dre.categoria_impuestos_directos_id] %}
+                <tr class="row-gasto-sub">
+                  <td>{{ cat.nombre }}</td>
+                  {% set total_cat_gastos = 0 %}
+                  {% for mes in dre.meses %}
+                    {% set valor = mes.gastos_categoria.get(cat.id, 0) %}
+                    {% set total_cat_gastos = total_cat_gastos + valor %}
+                    <td class="{% if valor == 0 %}valor-cero{% endif %}">
+                      {% if valor != 0 %}
+                        Gs {{ "{:,.2f}".format(valor) }}
+                      {% else %}
+                        -
+                      {% endif %}
+                    </td>
+                  {% endfor %}
+                  <td class="col-total {% if total_cat_gastos == 0 %}valor-cero{% endif %}">
+                    {% if total_cat_gastos != 0 %}
+                      Gs {{ "{:,.2f}".format(total_cat_gastos) }}
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
+                  <td class="col-porcentaje">
+                    {% if total_receita_liquida != 0 %}
+                      {{ "{:.0f}".format((total_cat_gastos / total_receita_liquida * 100) if total_receita_liquida != 0 else 0) }}%
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endif %}
+            {% endfor %}
+            
+            <!-- Ganancia Operacional -->
+            <tr class="row-lucro">
+              <td>Ganancia Operacional</td>
+              {% set total_lucro_operacional = 0 %}
+              {% for mes in dre.meses %}
+                {% set total_lucro_operacional = total_lucro_operacional + mes.lucro_operacional %}
+                <td>
+                  {% if mes.lucro_operacional != 0 %}
+                    Gs {{ "{:,.2f}".format(mes.lucro_operacional) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              {% endfor %}
+              <td class="col-total">
+                {% if total_lucro_operacional != 0 %}
+                  Gs {{ "{:,.2f}".format(total_lucro_operacional) }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td class="col-porcentaje">
+                {% if total_receita_liquida != 0 %}
+                  {{ "{:.0f}".format((total_lucro_operacional / total_receita_liquida * 100) if total_receita_liquida != 0 else 0) }}%
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+            
+            <!-- Resultado Financiero -->
+            <tr class="row-gasto">
+              <td>Resultado Financiero</td>
+              {% set total_resultado_financeiro = 0 %}
+              {% for mes in dre.meses %}
+                {% set total_resultado_financeiro = total_resultado_financeiro + mes.resultado_financeiro %}
+                <td>
+                  {% if mes.resultado_financeiro != 0 %}
+                    Gs {{ "{:,.2f}".format(mes.resultado_financeiro) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              {% endfor %}
+              <td class="col-total">
+                {% if total_resultado_financeiro != 0 %}
+                  Gs {{ "{:,.2f}".format(total_resultado_financeiro) }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td class="col-porcentaje">
+                {% if total_receita_liquida != 0 %}
+                  {{ "{:.0f}".format((total_resultado_financeiro / total_receita_liquida * 100) if total_receita_liquida != 0 else 0) }}%
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+            
+            <!-- Ingresos Financieros -->
+            {% if dre.categoria_ingresos_financieros_id %}
+              <tr class="row-gasto-sub">
+                <td>Ingresos Financieros</td>
+                {% set total_ingresos_financieros = 0 %}
+                {% for mes in dre.meses %}
+                  {% set total_ingresos_financieros = total_ingresos_financieros + mes.ingresos_financieros %}
+                  <td class="{% if mes.ingresos_financieros == 0 %}valor-cero{% endif %}">
+                    {% if mes.ingresos_financieros != 0 %}
+                      Gs {{ "{:,.2f}".format(mes.ingresos_financieros) }}
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
+                {% endfor %}
+                <td class="col-total {% if total_ingresos_financieros == 0 %}valor-cero{% endif %}">
+                  {% if total_ingresos_financieros != 0 %}
+                    Gs {{ "{:,.2f}".format(total_ingresos_financieros) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td class="col-porcentaje">
+                  {% if total_receita_liquida != 0 %}
+                    {{ "{:.0f}".format((total_ingresos_financieros / total_receita_liquida * 100) if total_receita_liquida != 0 else 0) }}%
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              </tr>
+            {% endif %}
+            
+            <!-- Gastos Financieros -->
+            {% if dre.categoria_gastos_financieros_id %}
+              <tr class="row-gasto-sub">
+                <td>Gastos Financieros</td>
+                {% set total_gastos_financieros = 0 %}
+                {% for mes in dre.meses %}
+                  {% set total_gastos_financieros = total_gastos_financieros + mes.gastos_financieros %}
+                  <td class="{% if mes.gastos_financieros == 0 %}valor-cero{% endif %}">
+                    {% if mes.gastos_financieros != 0 %}
+                      Gs {{ "{:,.2f}".format(mes.gastos_financieros) }}
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
+                {% endfor %}
+                <td class="col-total {% if total_gastos_financieros == 0 %}valor-cero{% endif %}">
+                  {% if total_gastos_financieros != 0 %}
+                    Gs {{ "{:,.2f}".format(total_gastos_financieros) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td class="col-porcentaje">
+                  {% if total_receita_liquida != 0 %}
+                    {{ "{:.0f}".format((total_gastos_financieros / total_receita_liquida * 100) if total_receita_liquida != 0 else 0) }}%
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              </tr>
+            {% endif %}
+            
+            <!-- Impuestos Directos -->
+            {% if dre.categoria_impuestos_directos_id %}
+              <tr class="row-gasto">
+                <td>Impuestos Directos</td>
+                {% set total_impuestos_directos = 0 %}
+                {% for mes in dre.meses %}
+                  {% set total_impuestos_directos = total_impuestos_directos + mes.impuestos_directos %}
+                  <td class="{% if mes.impuestos_directos == 0 %}valor-cero{% endif %}">
+                    {% if mes.impuestos_directos != 0 %}
+                      Gs {{ "{:,.2f}".format(mes.impuestos_directos) }}
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
+                {% endfor %}
+                <td class="col-total {% if total_impuestos_directos == 0 %}valor-cero{% endif %}">
+                  {% if total_impuestos_directos != 0 %}
+                    Gs {{ "{:,.2f}".format(total_impuestos_directos) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td class="col-porcentaje">
+                  {% if total_receita_liquida != 0 %}
+                    {{ "{:.0f}".format((total_impuestos_directos / total_receita_liquida * 100) if total_receita_liquida != 0 else 0) }}%
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              </tr>
+            {% endif %}
+            
+            <!-- Ganancia Neta -->
+            <tr class="row-lucro">
+              <td>Ganancia Neta</td>
+              {% set total_lucro_liquido = 0 %}
+              {% for mes in dre.meses %}
+                {% set total_lucro_liquido = total_lucro_liquido + mes.lucro_liquido %}
+                <td>
+                  {% if mes.lucro_liquido != 0 %}
+                    Gs {{ "{:,.2f}".format(mes.lucro_liquido) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              {% endfor %}
+              <td class="col-total">
+                {% if total_lucro_liquido != 0 %}
+                  Gs {{ "{:,.2f}".format(total_lucro_liquido) }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td class="col-porcentaje">
+                {% if total_receita_liquida != 0 %}
+                  {{ "{:.0f}".format((total_lucro_liquido / total_receita_liquida * 100) if total_receita_liquida != 0 else 0) }}%
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+            
+            <!-- % Margen Neto -->
+            <tr class="row-lucro">
+              <td>% Margen Neto</td>
+              {% for mes in dre.meses %}
+                <td>
+                  {% if mes.percentual_margem_liquida != 0 %}
+                    {{ "{:.0f}".format(mes.percentual_margem_liquida) }}%
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              {% endfor %}
+              <td class="col-total">
+                {% if total_receita_liquida != 0 %}
+                  {{ "{:.0f}".format((total_lucro_liquido / total_receita_liquida * 100) if total_receita_liquida != 0 else 0) }}%
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td class="col-porcentaje">-</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div style="background: #fff3cd; color: #856404; padding: 15px; border-radius: 6px; margin-top: 20px; border: 1px solid #ffc107;">
+        Seleccione un año y haga clic en "Consultar" para ver el DRE.
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}
+

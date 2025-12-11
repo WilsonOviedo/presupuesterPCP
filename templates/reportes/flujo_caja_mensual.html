@@ -1,0 +1,453 @@
+{% extends 'base.html' %}
+{% block title %}Flujo de Caja Mensual{% endblock %}
+{% block head %}
+  <style>
+    body {
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    .container {
+      max-width: 100% !important;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    .reportes-container {
+      max-width: 100% !important;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 10px 5px;
+      box-sizing: border-box;
+    }
+    .filtros-section {
+      background: #f9f9f9;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .filtros-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 15px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+    .form-group label {
+      font-weight: 600;
+      margin-bottom: 5px;
+      color: #555;
+    }
+    .form-group input,
+    .form-group select {
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .radio-group {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+    }
+    .radio-option {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .flujo-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 0.85em;
+    }
+    .flujo-table thead {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+      color: white !important;
+    }
+    .flujo-table th {
+      background: transparent !important;
+      color: white !important;
+      padding: 12px 8px;
+      text-align: center;
+      font-weight: 600;
+      font-size: 0.9em;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-right: 1px solid rgba(255,255,255,0.2);
+    }
+    .flujo-table th:first-child {
+      text-align: left;
+      padding-left: 15px;
+    }
+    .flujo-table td {
+      padding: 10px 8px;
+      border-bottom: 1px solid #e8e8e8;
+      border-right: 1px solid #e8e8e8;
+      text-align: right;
+    }
+    .flujo-table td:first-child {
+      text-align: left;
+      padding-left: 15px;
+      font-weight: 600;
+    }
+    .flujo-table tbody tr {
+      transition: background-color 0.2s ease;
+    }
+    .flujo-table tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
+    .flujo-table tbody tr:hover {
+      background: #f0f0ff;
+    }
+    .row-saldo-inicial {
+      background: #616161 !important;
+      font-weight: 600;
+      color: #ffffff !important;
+    }
+    .row-entradas-header {
+      background: #42a5f5 !important;
+      color: #ffffff !important;
+      font-weight: 700;
+    }
+    .row-entradas-sub {
+      padding-left: 30px !important;
+      font-style: italic;
+    }
+    .row-salidas-header {
+      background: #ef5350 !important;
+      color: #ffffff !important;
+      font-weight: 700;
+    }
+    .row-salidas-sub {
+      padding-left: 30px !important;
+      font-style: italic;
+    }
+    .row-saldo-operacional {
+      font-weight: 600;
+    }
+    .row-saldo-operacional td:first-child {
+      background: #424242 !important;
+      color: #ffffff !important;
+    }
+    .row-saldo-operacional td {
+      background: #fff3e0 !important;
+    }
+    .row-saldo-operacional td.celda-positiva {
+      background: #c8e6c9 !important;
+      color: #2e7d32 !important;
+    }
+    .row-saldo-operacional td.celda-negativa {
+      background: #ffcdd2 !important;
+      color: #c62828 !important;
+    }
+    .row-saldo-operacional td.celda-vacia {
+      background: #ffffff !important;
+      color: #999 !important;
+    }
+    .row-saldo-final {
+      font-weight: 700;
+    }
+    .row-saldo-final td:first-child {
+      background: #424242 !important;
+      color: #ffffff !important;
+    }
+    .row-saldo-final td {
+      background: #e8f5e9 !important;
+    }
+    .row-saldo-final td.celda-positiva {
+      background: #a5d6a7 !important;
+      color: #1b5e20 !important;
+    }
+    .row-saldo-final td.celda-negativa {
+      background: #ef9a9a !important;
+      color: #b71c1c !important;
+    }
+    .row-saldo-final td.celda-vacia {
+      background: #ffffff !important;
+      color: #999 !important;
+    }
+    .text-right {
+      text-align: right;
+    }
+    .valor-cero {
+      color: #999;
+    }
+    .overflow-container {
+      overflow-x: auto;
+      margin-top: 20px;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 0;
+    }
+    .flujo-table {
+      min-width: 100%;
+      table-layout: auto;
+    }
+    .flujo-table th,
+    .flujo-table td {
+      white-space: nowrap;
+      min-width: 120px;
+    }
+    .flujo-table th:first-child,
+    .flujo-table td:first-child {
+      min-width: 250px;
+      position: sticky;
+      left: 0;
+      background: inherit;
+      z-index: 10;
+    }
+  </style>
+{% endblock %}
+{% block content %}
+  <div class="reportes-container">
+    <h2>💰 Flujo de Caja Mensual</h2>
+
+    {% if error %}
+      <div style="background: #ffebee; color: #c62828; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #ef5350;">
+        <strong>Error:</strong> {{ error }}
+      </div>
+    {% endif %}
+
+    <div class="filtros-section">
+      <h3 style="margin-top: 0;">Filtros</h3>
+      <form method="GET" action="{{ url_for('reportes_flujo_caja_mensual_index') }}">
+        <div class="filtros-row">
+          <div class="form-group">
+            <label for="ano">Seleccione el año:</label>
+            <input type="number" id="ano" name="ano" value="{{ ano }}" min="2020" max="2100" required>
+          </div>
+          <div class="form-group">
+            <label for="proyecto_id">Seleccione el Proyecto:</label>
+            <select id="proyecto_id" name="proyecto_id">
+              <option value="">CONSOLIDADO</option>
+              {% for proyecto in proyectos %}
+                <option value="{{ proyecto.id }}" {% if proyecto_id == proyecto.id %}selected{% endif %}>
+                  {{ proyecto.nombre }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Tipo de Reporte:</label>
+            <div class="radio-group">
+              <div class="radio-option">
+                <input type="radio" id="tipo_proyectado" name="tipo_reporte" value="proyectado" {% if tipo_reporte == 'proyectado' %}checked{% endif %}>
+                <label for="tipo_proyectado">Proyectado</label>
+              </div>
+              <div class="radio-option">
+                <input type="radio" id="tipo_realizado" name="tipo_reporte" value="realizado" {% if tipo_reporte == 'realizado' %}checked{% endif %}>
+                <label for="tipo_realizado">Realizado</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top: 15px;">
+          <button type="submit" class="button" style="background: #667eea;">🔍 Consultar</button>
+        </div>
+      </form>
+    </div>
+
+    {% if flujo_caja %}
+      <div class="overflow-container">
+        <table class="flujo-table">
+          <thead>
+            <tr>
+              <th style="min-width: 250px;">Flujo de Caja Mensual</th>
+              <th>ENERO</th>
+              <th>FEBRERO</th>
+              <th>MARZO</th>
+              <th>ABRIL</th>
+              <th>MAYO</th>
+              <th>JUNIO</th>
+              <th>JULIO</th>
+              <th>AGOSTO</th>
+              <th>SEPTIEMBRE</th>
+              <th>OCTUBRE</th>
+              <th>NOVIEMBRE</th>
+              <th>DICIEMBRE</th>
+              <th>TOTAL</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Saldo Inicial -->
+            <tr class="row-saldo-inicial">
+              <td>(A) SALDO INICIAL</td>
+              {% for mes in flujo_caja.meses %}
+                <td class="{% if mes.saldo_inicial == 0 %}valor-cero{% endif %}">
+                  {% if mes.saldo_inicial != 0 %}
+                    Gs {{ "{:,.2f}".format(mes.saldo_inicial) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              {% endfor %}
+              <td class="valor-cero">-</td>
+            </tr>
+            
+            <!-- Entradas Header -->
+            <tr class="row-entradas-header">
+              <td>(B) ENTRADAS</td>
+              {% for mes in flujo_caja.meses %}
+                <td class="{% if mes.total_ingresos == 0 %}valor-cero{% endif %}">
+                  {% if mes.total_ingresos != 0 %}
+                    Gs {{ "{:,.2f}".format(mes.total_ingresos) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              {% endfor %}
+              {% set total_entradas = flujo_caja.meses|sum(attribute='total_ingresos') %}
+              <td class="{% if total_entradas == 0 %}valor-cero{% endif %}">
+                {% if total_entradas != 0 %}
+                  Gs {{ "{:,.2f}".format(total_entradas) }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+            
+            <!-- Entradas por Categoría -->
+            {% for cat in flujo_caja.categorias_ingresos %}
+              <tr class="row-entradas-sub">
+                <td>{{ cat.nombre }}</td>
+                {% set total_cat_ingresos = 0 %}
+                {% for mes in flujo_caja.meses %}
+                  {% set valor = mes.ingresos_categoria.get(cat.id, 0) %}
+                  {% set total_cat_ingresos = total_cat_ingresos + valor %}
+                  <td class="{% if valor == 0 %}valor-cero{% endif %}">
+                    {% if valor != 0 %}
+                      Gs {{ "{:,.2f}".format(valor) }}
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
+                {% endfor %}
+                <td class="{% if total_cat_ingresos == 0 %}valor-cero{% endif %}">
+                  {% if total_cat_ingresos != 0 %}
+                    Gs {{ "{:,.2f}".format(total_cat_ingresos) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+            
+            <!-- Salidas Header -->
+            <tr class="row-salidas-header">
+              <td>(C) SAÍDAS</td>
+              {% for mes in flujo_caja.meses %}
+                <td class="{% if mes.total_gastos == 0 %}valor-cero{% endif %}">
+                  {% if mes.total_gastos != 0 %}
+                    Gs {{ "{:,.2f}".format(mes.total_gastos) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              {% endfor %}
+              {% set total_salidas = flujo_caja.meses|sum(attribute='total_gastos') %}
+              <td class="{% if total_salidas == 0 %}valor-cero{% endif %}">
+                {% if total_salidas != 0 %}
+                  Gs {{ "{:,.2f}".format(total_salidas) }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+            
+            <!-- Salidas por Categoría -->
+            {% for cat in flujo_caja.categorias_gastos %}
+              <tr class="row-salidas-sub">
+                <td>{{ cat.nombre }}</td>
+                {% set total_cat_gastos = 0 %}
+                {% for mes in flujo_caja.meses %}
+                  {% set valor = mes.gastos_categoria.get(cat.id, 0) %}
+                  {% set total_cat_gastos = total_cat_gastos + valor %}
+                  <td class="{% if valor == 0 %}valor-cero{% endif %}">
+                    {% if valor != 0 %}
+                      Gs {{ "{:,.2f}".format(valor) }}
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
+                {% endfor %}
+                <td class="{% if total_cat_gastos == 0 %}valor-cero{% endif %}">
+                  {% if total_cat_gastos != 0 %}
+                    Gs {{ "{:,.2f}".format(total_cat_gastos) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+            
+            <!-- Saldo Operacional -->
+            <tr class="row-saldo-operacional">
+              <td>SALDO OPERACIONAL (B - C)</td>
+              {% for mes in flujo_caja.meses %}
+                {% if mes.saldo_operacional > 0 %}
+                  <td class="celda-positiva">
+                    Gs {{ "{:,.2f}".format(mes.saldo_operacional) }}
+                  </td>
+                {% elif mes.saldo_operacional < 0 %}
+                  <td class="celda-negativa">
+                    Gs {{ "{:,.2f}".format(mes.saldo_operacional) }}
+                  </td>
+                {% else %}
+                  <td class="celda-vacia valor-cero">
+                    -
+                  </td>
+                {% endif %}
+              {% endfor %}
+              {% set total_saldo_operacional = flujo_caja.meses|sum(attribute='saldo_operacional') %}
+              {% if total_saldo_operacional > 0 %}
+                <td class="celda-positiva">
+                  Gs {{ "{:,.2f}".format(total_saldo_operacional) }}
+                </td>
+              {% elif total_saldo_operacional < 0 %}
+                <td class="celda-negativa">
+                  Gs {{ "{:,.2f}".format(total_saldo_operacional) }}
+                </td>
+              {% else %}
+                <td class="celda-vacia valor-cero">
+                  -
+                </td>
+              {% endif %}
+            </tr>
+            
+            <!-- Saldo Final -->
+            <tr class="row-saldo-final">
+              <td>SALDO FINAL (A + B - C)</td>
+              {% for mes in flujo_caja.meses %}
+                {% if mes.saldo_final > 0 %}
+                  <td class="celda-positiva">
+                    Gs {{ "{:,.2f}".format(mes.saldo_final) }}
+                  </td>
+                {% elif mes.saldo_final < 0 %}
+                  <td class="celda-negativa">
+                    Gs {{ "{:,.2f}".format(mes.saldo_final) }}
+                  </td>
+                {% else %}
+                  <td class="celda-vacia valor-cero">
+                    -
+                  </td>
+                {% endif %}
+              {% endfor %}
+              <td class="valor-cero">-</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div style="background: #fff3cd; color: #856404; padding: 15px; border-radius: 6px; margin-top: 20px; border: 1px solid #ffc107;">
+        Seleccione un año y haga clic en "Consultar" para ver el flujo de caja mensual.
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}
+

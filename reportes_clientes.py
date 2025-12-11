@@ -1478,3 +1478,452 @@ def obtener_conciliacion_bancaria(banco_id, anio, mes):
         cur.close()
         conn.close()
 
+
+def obtener_flujo_caja_mensual_detallado(ano=None, proyecto_id=None, tipo_reporte='realizado'):
+    """Obtiene el flujo de caja mensual detallado por categorías
+    
+    Args:
+        tipo_reporte: 'proyectado' usa valor_cuota, 'realizado' usa monto_abonado
+    """
+    from calendar import monthrange
+    conn, cur = conectar()
+    try:
+        # Obtener todas las categorías de ingresos y gastos
+        cur.execute("""
+            SELECT id, nombre, codigo
+            FROM categorias_ingresos
+            WHERE activo = true
+            ORDER BY orden, codigo
+        """)
+        categorias_ingresos = cur.fetchall()
+        
+        cur.execute("""
+            SELECT id, nombre, codigo
+            FROM categorias_gastos
+            WHERE activo = true
+            ORDER BY orden, codigo
+        """)
+        categorias_gastos = cur.fetchall()
+        
+        # Construir filtros
+        where_clauses_ingresos = []
+        where_clauses_gastos = []
+        params_ingresos = []
+        params_gastos = []
+        
+        if ano:
+            if tipo_reporte == 'proyectado':
+                where_clauses_ingresos.append("EXTRACT(YEAR FROM car.fecha_emision) = %s")
+                where_clauses_gastos.append("EXTRACT(YEAR FROM cap.fecha_emision) = %s")
+            else:
+                where_clauses_ingresos.append("EXTRACT(YEAR FROM car.fecha_recibo) = %s")
+                where_clauses_gastos.append("EXTRACT(YEAR FROM cap.fecha_pago) = %s")
+            params_ingresos.append(ano)
+            params_gastos.append(ano)
+        
+        if proyecto_id:
+            where_clauses_ingresos.append("car.proyecto_id = %s")
+            where_clauses_gastos.append("cap.proyecto_id = %s")
+            params_ingresos.append(proyecto_id)
+            params_gastos.append(proyecto_id)
+        
+        where_sql_ingresos = ""
+        if where_clauses_ingresos:
+            where_sql_ingresos = "AND " + " AND ".join(where_clauses_ingresos)
+        
+        where_sql_gastos = ""
+        if where_clauses_gastos:
+            where_sql_gastos = "AND " + " AND ".join(where_clauses_gastos)
+        
+        # Determinar qué columna usar según el tipo de reporte
+        if tipo_reporte == 'proyectado':
+            campo_ingresos = "COALESCE(car.valor_cuota, car.valor, 0)"
+            campo_gastos = "COALESCE(cap.valor_cuota, cap.valor, 0)"
+            fecha_ingresos = "car.fecha_emision"
+            fecha_gastos = "cap.fecha_emision"
+        else:
+            campo_ingresos = "COALESCE(car.monto_abonado, 0)"
+            campo_gastos = "COALESCE(cap.monto_abonado, 0)"
+            fecha_ingresos = "car.fecha_recibo"
+            fecha_gastos = "cap.fecha_pago"
+            where_sql_ingresos += " AND car.fecha_recibo IS NOT NULL"
+            where_sql_gastos += " AND cap.fecha_pago IS NOT NULL"
+        
+        # Obtener ingresos por categoría y mes
+        ingresos_por_categoria = {}
+        for cat in categorias_ingresos:
+            query = f"""
+                SELECT 
+                    EXTRACT(MONTH FROM {fecha_ingresos}) as mes,
+                    EXTRACT(YEAR FROM {fecha_ingresos}) as ano,
+                    SUM({campo_ingresos}) as total
+                FROM cuentas_a_recibir car
+                WHERE car.cuenta_id = %s
+                {where_sql_ingresos}
+                GROUP BY EXTRACT(MONTH FROM {fecha_ingresos}), EXTRACT(YEAR FROM {fecha_ingresos})
+            """
+            cur.execute(query, [cat['id']] + params_ingresos)
+            ingresos_por_categoria[cat['id']] = {
+                f"{int(r['ano'])}-{int(r['mes'])}": float(r['total']) 
+                for r in cur.fetchall()
+            }
+        
+        # Obtener gastos por categoría y mes
+        gastos_por_categoria = {}
+        for cat in categorias_gastos:
+            query = f"""
+                SELECT 
+                    EXTRACT(MONTH FROM {fecha_gastos}) as mes,
+                    EXTRACT(YEAR FROM {fecha_gastos}) as ano,
+                    SUM({campo_gastos}) as total
+                FROM cuentas_a_pagar cap
+                WHERE cap.cuenta_id = %s
+                {where_sql_gastos}
+                GROUP BY EXTRACT(MONTH FROM {fecha_gastos}), EXTRACT(YEAR FROM {fecha_gastos})
+            """
+            cur.execute(query, [cat['id']] + params_gastos)
+            gastos_por_categoria[cat['id']] = {
+                f"{int(r['ano'])}-{int(r['mes'])}": float(r['total']) 
+                for r in cur.fetchall()
+            }
+        
+        # Obtener saldo inicial total de bancos
+        cur.execute("""
+            SELECT SUM(COALESCE(saldo_inicial, 0)) as saldo_inicial_total
+            FROM bancos
+            WHERE activo = true
+        """)
+        saldo_inicial_total = float(cur.fetchone()['saldo_inicial_total'] or 0)
+        
+        # Obtener movimientos anteriores al año seleccionado para calcular saldo inicial
+        if ano:
+            fecha_inicio_ano = date(ano, 1, 1)
+            
+            # Entradas anteriores
+            if tipo_reporte == 'realizado':
+                cur.execute("""
+                    SELECT SUM(COALESCE(monto_abonado, 0)) as total
+                    FROM cuentas_a_recibir
+                    WHERE fecha_recibo IS NOT NULL AND fecha_recibo < %s
+                """, (fecha_inicio_ano,))
+            else:
+                cur.execute("""
+                    SELECT SUM(COALESCE(valor_cuota, valor, 0)) as total
+                    FROM cuentas_a_recibir
+                    WHERE fecha_emision < %s
+                """, (fecha_inicio_ano,))
+            entradas_anteriores = float(cur.fetchone()['total'] or 0)
+            
+            # Salidas anteriores
+            if tipo_reporte == 'realizado':
+                cur.execute("""
+                    SELECT SUM(COALESCE(monto_abonado, 0)) as total
+                    FROM cuentas_a_pagar
+                    WHERE fecha_pago IS NOT NULL AND fecha_pago < %s
+                """, (fecha_inicio_ano,))
+            else:
+                cur.execute("""
+                    SELECT SUM(COALESCE(valor_cuota, valor, 0)) as total
+                    FROM cuentas_a_pagar
+                    WHERE fecha_emision < %s
+                """, (fecha_inicio_ano,))
+            salidas_anteriores = float(cur.fetchone()['total'] or 0)
+            
+            saldo_inicial_enero = saldo_inicial_total + entradas_anteriores - salidas_anteriores
+        else:
+            saldo_inicial_enero = saldo_inicial_total
+        
+        # Construir estructura de datos por mes
+        meses_nombres = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 
+                        'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
+        
+        resultado = {
+            'ano': ano,
+            'proyecto_id': proyecto_id,
+            'tipo_reporte': tipo_reporte,
+            'categorias_ingresos': [{'id': c['id'], 'nombre': c['nombre']} for c in categorias_ingresos],
+            'categorias_gastos': [{'id': c['id'], 'nombre': c['nombre']} for c in categorias_gastos],
+            'meses': []
+        }
+        
+        saldo_actual = saldo_inicial_enero
+        
+        for mes in range(1, 13):
+            mes_key = f"{ano}-{mes}" if ano else None
+            mes_nombre = meses_nombres[mes - 1]
+            
+            # Calcular saldo inicial del mes (saldo final del mes anterior)
+            saldo_inicial_mes = saldo_actual
+            
+            # Total de ingresos del mes
+            total_ingresos = 0
+            ingresos_categoria = {}
+            for cat in categorias_ingresos:
+                valor = ingresos_por_categoria.get(cat['id'], {}).get(mes_key, 0)
+                ingresos_categoria[cat['id']] = valor
+                total_ingresos += valor
+            
+            # Total de gastos del mes
+            total_gastos = 0
+            gastos_categoria = {}
+            for cat in categorias_gastos:
+                valor = gastos_por_categoria.get(cat['id'], {}).get(mes_key, 0)
+                gastos_categoria[cat['id']] = valor
+                total_gastos += valor
+            
+            # Saldo operacional
+            saldo_operacional = total_ingresos - total_gastos
+            
+            # Saldo final
+            saldo_final = saldo_inicial_mes + total_ingresos - total_gastos
+            saldo_actual = saldo_final
+            
+            resultado['meses'].append({
+                'mes': mes,
+                'mes_nombre': mes_nombre,
+                'saldo_inicial': saldo_inicial_mes,
+                'total_ingresos': total_ingresos,
+                'ingresos_categoria': ingresos_categoria,
+                'total_gastos': total_gastos,
+                'gastos_categoria': gastos_categoria,
+                'saldo_operacional': saldo_operacional,
+                'saldo_final': saldo_final
+            })
+        
+        return resultado
+    finally:
+        cur.close()
+        conn.close()
+
+
+def obtener_dre_mensual(ano=None, proyecto_id=None, tipo_reporte='realizado'):
+    """Obtiene el DRE (Demonstrativo de Resultado) mensual
+    
+    Args:
+        tipo_reporte: 'proyectado' usa valor_cuota, 'realizado' usa monto_abonado
+    """
+    conn, cur = conectar()
+    try:
+        # Obtener todas las categorías de ingresos y gastos
+        cur.execute("""
+            SELECT id, nombre, codigo
+            FROM categorias_ingresos
+            WHERE activo = true
+            ORDER BY orden, codigo
+        """)
+        categorias_ingresos = cur.fetchall()
+        
+        cur.execute("""
+            SELECT id, nombre, codigo
+            FROM categorias_gastos
+            WHERE activo = true
+            ORDER BY orden, codigo
+        """)
+        categorias_gastos = cur.fetchall()
+        
+        # Identificar categorías especiales por nombre (case insensitive)
+        categoria_deducciones_id = None
+        categoria_costos_variables_id = None
+        categoria_ingresos_financieros_id = None
+        categoria_gastos_financieros_id = None
+        categoria_impuestos_directos_id = None
+        
+        for cat in categorias_gastos:
+            nombre_upper = cat['nombre'].upper()
+            if 'DEDUCCION' in nombre_upper or 'DEDUCCIÓN' in nombre_upper or 'DEDUCCIONES' in nombre_upper:
+                categoria_deducciones_id = cat['id']
+            elif 'COSTO VARIABLE' in nombre_upper or 'COSTOS VARIABLES' in nombre_upper:
+                categoria_costos_variables_id = cat['id']
+            elif 'GASTO FINANCIERO' in nombre_upper or 'GASTOS FINANCIEROS' in nombre_upper:
+                categoria_gastos_financieros_id = cat['id']
+            elif 'IMPUESTO DIRECTO' in nombre_upper or 'IMPUESTOS DIRECTOS' in nombre_upper:
+                categoria_impuestos_directos_id = cat['id']
+        
+        for cat in categorias_ingresos:
+            nombre_upper = cat['nombre'].upper()
+            if 'INGRESO FINANCIERO' in nombre_upper or 'INGRESOS FINANCIEROS' in nombre_upper:
+                categoria_ingresos_financieros_id = cat['id']
+        
+        # Construir filtros
+        where_clauses_ingresos = []
+        where_clauses_gastos = []
+        params_ingresos = []
+        params_gastos = []
+        
+        if ano:
+            if tipo_reporte == 'proyectado':
+                where_clauses_ingresos.append("EXTRACT(YEAR FROM car.fecha_emision) = %s")
+                where_clauses_gastos.append("EXTRACT(YEAR FROM cap.fecha_emision) = %s")
+            else:
+                where_clauses_ingresos.append("EXTRACT(YEAR FROM car.fecha_recibo) = %s")
+                where_clauses_gastos.append("EXTRACT(YEAR FROM cap.fecha_pago) = %s")
+            params_ingresos.append(ano)
+            params_gastos.append(ano)
+        
+        if proyecto_id:
+            where_clauses_ingresos.append("car.proyecto_id = %s")
+            where_clauses_gastos.append("cap.proyecto_id = %s")
+            params_ingresos.append(proyecto_id)
+            params_gastos.append(proyecto_id)
+        
+        where_sql_ingresos = ""
+        if where_clauses_ingresos:
+            where_sql_ingresos = "AND " + " AND ".join(where_clauses_ingresos)
+        
+        where_sql_gastos = ""
+        if where_clauses_gastos:
+            where_sql_gastos = "AND " + " AND ".join(where_clauses_gastos)
+        
+        # Determinar qué columna usar según el tipo de reporte
+        if tipo_reporte == 'proyectado':
+            campo_ingresos = "COALESCE(car.valor_cuota, car.valor, 0)"
+            campo_gastos = "COALESCE(cap.valor_cuota, cap.valor, 0)"
+            fecha_ingresos = "car.fecha_emision"
+            fecha_gastos = "cap.fecha_emision"
+        else:
+            campo_ingresos = "COALESCE(car.monto_abonado, 0)"
+            campo_gastos = "COALESCE(cap.monto_abonado, 0)"
+            fecha_ingresos = "car.fecha_recibo"
+            fecha_gastos = "cap.fecha_pago"
+            where_sql_ingresos += " AND car.fecha_recibo IS NOT NULL"
+            where_sql_gastos += " AND cap.fecha_pago IS NOT NULL"
+        
+        # Obtener ingresos por categoría y mes
+        ingresos_por_categoria = {}
+        for cat in categorias_ingresos:
+            query = f"""
+                SELECT 
+                    EXTRACT(MONTH FROM {fecha_ingresos}) as mes,
+                    EXTRACT(YEAR FROM {fecha_ingresos}) as ano,
+                    SUM({campo_ingresos}) as total
+                FROM cuentas_a_recibir car
+                WHERE car.cuenta_id = %s
+                {where_sql_ingresos}
+                GROUP BY EXTRACT(MONTH FROM {fecha_ingresos}), EXTRACT(YEAR FROM {fecha_ingresos})
+            """
+            cur.execute(query, [cat['id']] + params_ingresos)
+            ingresos_por_categoria[cat['id']] = {
+                f"{int(r['ano'])}-{int(r['mes'])}": float(r['total']) 
+                for r in cur.fetchall()
+            }
+        
+        # Obtener gastos por categoría y mes
+        gastos_por_categoria = {}
+        for cat in categorias_gastos:
+            query = f"""
+                SELECT 
+                    EXTRACT(MONTH FROM {fecha_gastos}) as mes,
+                    EXTRACT(YEAR FROM {fecha_gastos}) as ano,
+                    SUM({campo_gastos}) as total
+                FROM cuentas_a_pagar cap
+                WHERE cap.cuenta_id = %s
+                {where_sql_gastos}
+                GROUP BY EXTRACT(MONTH FROM {fecha_gastos}), EXTRACT(YEAR FROM {fecha_gastos})
+            """
+            cur.execute(query, [cat['id']] + params_gastos)
+            gastos_por_categoria[cat['id']] = {
+                f"{int(r['ano'])}-{int(r['mes'])}": float(r['total']) 
+                for r in cur.fetchall()
+            }
+        
+        # Construir estructura de datos por mes
+        meses_nombres = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 
+                        'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
+        
+        resultado = {
+            'ano': ano,
+            'proyecto_id': proyecto_id,
+            'tipo_reporte': tipo_reporte,
+            'categorias_ingresos': [{'id': c['id'], 'nombre': c['nombre']} for c in categorias_ingresos],
+            'categorias_gastos': [{'id': c['id'], 'nombre': c['nombre']} for c in categorias_gastos],
+            'categoria_deducciones_id': categoria_deducciones_id,
+            'categoria_costos_variables_id': categoria_costos_variables_id,
+            'categoria_ingresos_financieros_id': categoria_ingresos_financieros_id,
+            'categoria_gastos_financieros_id': categoria_gastos_financieros_id,
+            'categoria_impuestos_directos_id': categoria_impuestos_directos_id,
+            'meses': []
+        }
+        
+        for mes in range(1, 13):
+            mes_key = f"{ano}-{mes}" if ano else None
+            mes_nombre = meses_nombres[mes - 1]
+            
+            # Receita Bruta (suma de todos los ingresos)
+            receita_bruta = 0
+            ingresos_categoria = {}
+            for cat in categorias_ingresos:
+                valor = ingresos_por_categoria.get(cat['id'], {}).get(mes_key, 0)
+                ingresos_categoria[cat['id']] = valor
+                receita_bruta += valor
+            
+            # Deducciones sobre Ventas
+            deducciones = gastos_por_categoria.get(categoria_deducciones_id, {}).get(mes_key, 0) if categoria_deducciones_id else 0
+            
+            # Receita Líquida
+            receita_liquida = receita_bruta - deducciones
+            
+            # Costos Variables
+            costos_variables = gastos_por_categoria.get(categoria_costos_variables_id, {}).get(mes_key, 0) if categoria_costos_variables_id else 0
+            
+            # Margem Contribuição
+            margem_contribuicao = receita_liquida - costos_variables
+            
+            # % Margem Contribuição
+            percentual_margem_contribuicao = (margem_contribuicao / receita_liquida * 100) if receita_liquida != 0 else 0
+            
+            # Despesas (todas las categorías de gastos excepto deducciones, costos variables, gastos financieros e impuestos)
+            despesas = 0
+            gastos_categoria = {}
+            for cat in categorias_gastos:
+                if cat['id'] not in [categoria_deducciones_id, categoria_costos_variables_id, 
+                                     categoria_gastos_financieros_id, categoria_impuestos_directos_id]:
+                    valor = gastos_por_categoria.get(cat['id'], {}).get(mes_key, 0)
+                    gastos_categoria[cat['id']] = valor
+                    despesas += valor
+            
+            # Lucro Operacional
+            lucro_operacional = margem_contribuicao - despesas
+            
+            # Ingresos Financieros
+            ingresos_financieros = ingresos_por_categoria.get(categoria_ingresos_financieros_id, {}).get(mes_key, 0) if categoria_ingresos_financieros_id else 0
+            
+            # Gastos Financieros
+            gastos_financieros = gastos_por_categoria.get(categoria_gastos_financieros_id, {}).get(mes_key, 0) if categoria_gastos_financieros_id else 0
+            
+            # Resultado Financeiro
+            resultado_financeiro = ingresos_financieros - gastos_financieros
+            
+            # Impuestos Directos
+            impuestos_directos = gastos_por_categoria.get(categoria_impuestos_directos_id, {}).get(mes_key, 0) if categoria_impuestos_directos_id else 0
+            
+            # Lucro Líquido
+            lucro_liquido = lucro_operacional + resultado_financeiro - impuestos_directos
+            
+            # % Margem Líquida
+            percentual_margem_liquida = (lucro_liquido / receita_liquida * 100) if receita_liquida != 0 else 0
+            
+            resultado['meses'].append({
+                'mes': mes,
+                'mes_nombre': mes_nombre,
+                'receita_bruta': receita_bruta,
+                'ingresos_categoria': ingresos_categoria,
+                'deducciones': deducciones,
+                'receita_liquida': receita_liquida,
+                'costos_variables': costos_variables,
+                'margem_contribuicao': margem_contribuicao,
+                'percentual_margem_contribuicao': percentual_margem_contribuicao,
+                'despesas': despesas,
+                'gastos_categoria': gastos_categoria,
+                'lucro_operacional': lucro_operacional,
+                'ingresos_financieros': ingresos_financieros,
+                'gastos_financieros': gastos_financieros,
+                'resultado_financeiro': resultado_financeiro,
+                'impuestos_directos': impuestos_directos,
+                'lucro_liquido': lucro_liquido,
+                'percentual_margem_liquida': percentual_margem_liquida
+            })
+        
+        return resultado
+    finally:
+        cur.close()
+        conn.close()

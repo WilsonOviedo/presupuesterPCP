@@ -3422,6 +3422,82 @@ def reportes_cuentas_a_recibir_index():
                          total_paginas=total_paginas)
 
 
+@app.route("/reportes/flujo-caja-mensual", methods=["GET"], endpoint="reportes_flujo_caja_mensual_index")
+@auth.login_required
+@auth.permission_required('/reportes/flujo-caja-mensual')
+def reportes_flujo_caja_mensual_index():
+    """Reporte de flujo de caja mensual detallado por categorías"""
+    from datetime import datetime
+    
+    # Filtros
+    ano = request.args.get('ano', type=int, default=datetime.now().year)
+    proyecto_id = request.args.get('proyecto_id', type=int)
+    tipo_reporte = request.args.get('tipo_reporte', 'realizado')  # 'realizado' o 'proyectado'
+    
+    # Obtener datos para filtros
+    proyectos = financiero.obtener_proyectos(activo=True)
+    
+    # Obtener datos del flujo de caja
+    flujo_caja = None
+    error = None
+    
+    if ano:
+        try:
+            flujo_caja = reportes_clientes.obtener_flujo_caja_mensual_detallado(
+                ano=ano,
+                proyecto_id=proyecto_id,
+                tipo_reporte=tipo_reporte
+            )
+        except Exception as e:
+            error = f'Error al obtener flujo de caja: {str(e)}'
+    
+    return render_template('reportes/flujo_caja_mensual.html',
+                         flujo_caja=flujo_caja,
+                         proyectos=proyectos,
+                         ano=ano,
+                         proyecto_id=proyecto_id,
+                         tipo_reporte=tipo_reporte,
+                         error=error)
+
+
+@app.route("/reportes/dre", methods=["GET"], endpoint="reportes_dre_index")
+@auth.login_required
+@auth.permission_required('/reportes/dre')
+def reportes_dre_index():
+    """Reporte DRE (Demonstrativo de Resultado) mensual"""
+    from datetime import datetime
+    
+    # Filtros
+    ano = request.args.get('ano', type=int, default=datetime.now().year)
+    proyecto_id = request.args.get('proyecto_id', type=int)
+    tipo_reporte = request.args.get('tipo_reporte', 'realizado')  # 'realizado' o 'proyectado'
+    
+    # Obtener datos para filtros
+    proyectos = financiero.obtener_proyectos(activo=True)
+    
+    # Obtener datos del DRE
+    dre = None
+    error = None
+    
+    if ano:
+        try:
+            dre = reportes_clientes.obtener_dre_mensual(
+                ano=ano,
+                proyecto_id=proyecto_id,
+                tipo_reporte=tipo_reporte
+            )
+        except Exception as e:
+            error = f'Error al obtener DRE: {str(e)}'
+    
+    return render_template('reportes/dre.html',
+                         dre=dre,
+                         proyectos=proyectos,
+                         ano=ano,
+                         proyecto_id=proyecto_id,
+                         tipo_reporte=tipo_reporte,
+                         error=error)
+
+
 @app.route("/reportes/conciliacion-bancaria", methods=["GET"], endpoint="reportes_conciliacion_bancaria_index")
 @auth.login_required
 @auth.permission_required('/reportes/conciliacion-bancaria')

@@ -1045,3 +1045,11 @@ INSERT INTO permisos_rutas (ruta, nombre, descripcion)
 VALUES ('/reportes/conciliacion-bancaria', 'Conciliación Bancaria', 'Acceso a la conciliación bancaria diaria')
 ON CONFLICT (ruta) DO NOTHING;
 
+INSERT INTO permisos_rutas (ruta, nombre, descripcion) 
+VALUES ('/reportes/flujo-caja-mensual', 'Flujo de Caja Mensual', 'Acceso al reporte de flujo de caja mensual detallado')
+ON CONFLICT (ruta) DO NOTHING;
+
+INSERT INTO permisos_rutas (ruta, nombre, descripcion) 
+VALUES ('/reportes/dre', 'DRE - Demonstrativo de Resultado', 'Acceso al reporte DRE (Demonstrativo de Resultado)')
+ON CONFLICT (ruta) DO NOTHING;
+
