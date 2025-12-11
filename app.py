@@ -3294,11 +3294,11 @@ def reportes_analisis_index():
     
     # Obtener datos del dashboard
     saldos_bancos = reportes_clientes.obtener_saldos_bancos()
-    receita_mensual = reportes_clientes.obtener_receita_bruta_mensual(
+    receita_mensual_raw = reportes_clientes.obtener_receita_bruta_mensual(
         ano=ano, proyecto_id=proyecto_id, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta,
         tipo_reporte=tipo_reporte
     )
-    custos_mensual = reportes_clientes.obtener_custos_despesas_mensual(
+    custos_mensual_raw = reportes_clientes.obtener_custos_despesas_mensual(
         ano=ano, proyecto_id=proyecto_id, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta,
         tipo_reporte=tipo_reporte
     )
@@ -3308,6 +3308,23 @@ def reportes_analisis_index():
     evolucion_saldo = reportes_clientes.obtener_evolucion_saldo_mensual(
         banco_id=banco_id, ano=ano, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta
     )
+    
+    # Convertir datos a formato JSON-friendly (convertir Decimal a int/float)
+    receita_mensual = []
+    for r in receita_mensual_raw:
+        receita_mensual.append({
+            'mes': int(float(r['mes'])),
+            'ano': int(float(r['ano'])),
+            'receita_bruta': float(r['receita_bruta'] or 0)
+        })
+    
+    custos_mensual = []
+    for c in custos_mensual_raw:
+        custos_mensual.append({
+            'mes': int(float(c['mes'])),
+            'ano': int(float(c['ano'])),
+            'custos_despesas': float(c['custos_despesas'] or 0)
+        })
     
     # Calcular totales
     total_receita = sum(float(r['receita_bruta'] or 0) for r in receita_mensual)

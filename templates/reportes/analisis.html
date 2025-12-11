@@ -312,27 +312,84 @@
     
     // Crear un mapa de todos los meses
     const allMonths = new Set();
-    receitaData.forEach(r => allMonths.add(`${r.ano}-${r.mes}`));
-    custosData.forEach(c => allMonths.add(`${c.ano}-${c.mes}`));
+    
+    // Normalizar y agregar meses de receita
+    if (receitaData && Array.isArray(receitaData)) {
+      receitaData.forEach(r => {
+        if (r && r.ano !== undefined && r.mes !== undefined) {
+          const ano = parseInt(r.ano);
+          const mes = parseInt(r.mes);
+          if (!isNaN(ano) && !isNaN(mes) && mes >= 1 && mes <= 12) {
+            allMonths.add(`${ano}-${String(mes).padStart(2, '0')}`);
+          }
+        }
+      });
+    }
+    
+    // Normalizar y agregar meses de custos
+    if (custosData && Array.isArray(custosData)) {
+      custosData.forEach(c => {
+        if (c && c.ano !== undefined && c.mes !== undefined) {
+          const ano = parseInt(c.ano);
+          const mes = parseInt(c.mes);
+          if (!isNaN(ano) && !isNaN(mes) && mes >= 1 && mes <= 12) {
+            allMonths.add(`${ano}-${String(mes).padStart(2, '0')}`);
+          }
+        }
+      });
+    }
     
     const sortedMonths = Array.from(allMonths).sort();
     
     sortedMonths.forEach(monthKey => {
-      const [ano, mes] = monthKey.split('-');
-      mesesLabels.push(meses[parseInt(mes) - 1]);
+      const [anoStr, mesStr] = monthKey.split('-');
+      const mes = parseInt(mesStr);
+      const ano = parseInt(anoStr);
       
-      const receita = receitaData.find(r => `${r.ano}-${r.mes}` === monthKey);
-      const custos = custosData.find(c => `${c.ano}-${c.mes}` === monthKey);
-      
-      const receitaVal = receita ? parseFloat(receita.receita_bruta || 0) : 0;
-      const custosVal = custos ? parseFloat(custos.custos_despesas || 0) : 0;
-      
-      receitaValues.push(receitaVal);
-      lucroValues.push(receitaVal - custosVal);
+      if (!isNaN(mes) && mes >= 1 && mes <= 12) {
+        mesesLabels.push(meses[mes - 1] + ' ' + ano);
+        
+        // Buscar receita para este mes
+        let receitaVal = 0;
+        if (receitaData && Array.isArray(receitaData)) {
+          const receita = receitaData.find(r => {
+            const rAno = parseInt(r.ano);
+            const rMes = parseInt(r.mes);
+            return rAno === ano && rMes === mes;
+          });
+          if (receita) {
+            receitaVal = parseFloat(receita.receita_bruta || 0) || 0;
+          }
+        }
+        
+        // Buscar custos para este mes
+        let custosVal = 0;
+        if (custosData && Array.isArray(custosData)) {
+          const custos = custosData.find(c => {
+            const cAno = parseInt(c.ano);
+            const cMes = parseInt(c.mes);
+            return cAno === ano && cMes === mes;
+          });
+          if (custos) {
+            custosVal = parseFloat(custos.custos_despesas || 0) || 0;
+          }
+        }
+        
+        receitaValues.push(receitaVal);
+        lucroValues.push(receitaVal - custosVal);
+      }
     });
     
     // Gráfico de Lucro Líquido
     const lucroCtx = document.getElementById('lucroChart').getContext('2d');
+    
+    // Si no hay datos, mostrar gráfico vacío con mensaje
+    if (mesesLabels.length === 0) {
+      mesesLabels.push('Sin datos');
+      receitaValues.push(0);
+      lucroValues.push(0);
+    }
+    
     new Chart(lucroCtx, {
       type: 'bar',
       data: {

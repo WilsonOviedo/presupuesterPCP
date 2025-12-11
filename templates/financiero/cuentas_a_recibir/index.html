@@ -159,6 +159,10 @@
       background: #d4edda;
       color: #155724;
     }
+    .status-pendiente {
+      background: #fff3cd;
+      color: #856404;
+    }
     .valor-negativo {
       color: #d32f2f !important;
       font-weight: bold !important;
@@ -303,8 +307,8 @@
               <td>{{ cuenta.vencimiento.strftime('%d/%m/%Y') if cuenta.vencimiento else '-' }}</td>
               <td>{{ cuenta.fecha_recibo.strftime('%d/%m/%Y') if cuenta.fecha_recibo else '-' }}</td>
               <td>
-                <span class="status-badge status-{{ cuenta.estado.lower().replace(' ', '-') }}">
-                  {{ cuenta.estado or '-' }}
+                <span class="status-badge status-{{ (cuenta.estado_mostrar or cuenta.estado or '-').lower().replace(' ', '-') }}">
+                  {{ cuenta.estado_mostrar or cuenta.estado or '-' }}
                 </span>
               </td>
               <td>

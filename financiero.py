@@ -1334,7 +1334,8 @@ def obtener_cuentas_a_recibir(filtros=None, limite=None, offset=None):
             if offset is not None:
                 limit_sql += f" OFFSET {offset}"
         
-        cur.execute(f"""
+        # Construir la consulta SQL sin f-string para evitar problemas con %
+        query = """
             SELECT 
                 car.*,
                 td.nombre AS documento_nombre,
@@ -1342,16 +1343,44 @@ def obtener_cuentas_a_recibir(filtros=None, limite=None, offset=None):
                 ci.nombre AS cuenta_nombre,
                 p.nombre AS proyecto_nombre,
                 COALESCE(car.monto_abonado, 0) AS monto_abonado,
-                (COALESCE(car.valor_cuota, car.valor, 0) - COALESCE(car.monto_abonado, 0)) AS saldo
+                CASE 
+                    WHEN COALESCE(car.valor_cuota, car.valor, 0) < 0 THEN
+                        -- Para NCRE (valores negativos): saldo = valor + monto_abonado
+                        GREATEST(0, COALESCE(car.valor_cuota, car.valor, 0) + COALESCE(car.monto_abonado, 0))
+                    ELSE
+                        -- Para valores positivos: saldo = valor - monto_abonado
+                        GREATEST(0, COALESCE(car.valor_cuota, car.valor, 0) - COALESCE(car.monto_abonado, 0))
+                END AS saldo,
+                CASE 
+                    WHEN UPPER(COALESCE(car.tipo, '')) = 'FCON' OR UPPER(COALESCE(td.nombre, '')) LIKE '%%CONTADO%%' OR UPPER(COALESCE(td.nombre, '')) = 'FCON' THEN
+                        CASE 
+                            WHEN COALESCE(car.valor_cuota, car.valor, 0) < 0 THEN
+                                -- Para NCRE: verificar si hay saldo pendiente y fecha de pago
+                                CASE 
+                                    WHEN GREATEST(0, COALESCE(car.valor_cuota, car.valor, 0) + COALESCE(car.monto_abonado, 0)) > 0.01 AND car.fecha_recibo IS NOT NULL THEN 'PENDIENTE'
+                                    WHEN GREATEST(0, COALESCE(car.valor_cuota, car.valor, 0) + COALESCE(car.monto_abonado, 0)) > 0.01 AND car.fecha_recibo IS NULL THEN 'ABIERTO'
+                                    ELSE car.estado 
+                                END
+                            ELSE
+                                -- Para valores positivos: verificar si hay saldo pendiente y fecha de pago
+                                CASE 
+                                    WHEN GREATEST(0, COALESCE(car.valor_cuota, car.valor, 0) - COALESCE(car.monto_abonado, 0)) > 0.01 AND car.fecha_recibo IS NOT NULL THEN 'PENDIENTE'
+                                    WHEN GREATEST(0, COALESCE(car.valor_cuota, car.valor, 0) - COALESCE(car.monto_abonado, 0)) > 0.01 AND car.fecha_recibo IS NULL THEN 'ABIERTO'
+                                    ELSE car.estado 
+                                END
+                        END
+                    ELSE car.estado
+                END AS estado_mostrar
             FROM cuentas_a_recibir car
             LEFT JOIN tipos_documentos td ON car.documento_id = td.id
             LEFT JOIN bancos b ON car.banco_id = b.id
             LEFT JOIN categorias_ingresos ci ON car.cuenta_id = ci.id
             LEFT JOIN proyectos p ON car.proyecto_id = p.id
-            {where_sql}
+        """ + where_sql + """
             ORDER BY car.fecha_emision DESC, car.id DESC
-            {limit_sql}
-        """, params)
+        """ + limit_sql
+        
+        cur.execute(query, params)
         
         return cur.fetchall()
     finally:
