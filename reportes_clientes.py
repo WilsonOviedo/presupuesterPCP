@@ -1419,7 +1419,7 @@ def obtener_conciliacion_bancaria(banco_id, anio, mes):
                 WHERE banco_id = %s
                 AND fecha_recibo = %s
             """, (banco_id, fecha_actual))
-            ingresos = float(cur.fetchone()['total'] or 0)
+            ingresos_cuentas = float(cur.fetchone()['total'] or 0)
             
             # Salidas del día (cuentas a pagar)
             cur.execute("""
@@ -1428,9 +1428,9 @@ def obtener_conciliacion_bancaria(banco_id, anio, mes):
                 WHERE banco_id = %s
                 AND fecha_pago = %s
             """, (banco_id, fecha_actual))
-            salidas = float(cur.fetchone()['total'] or 0)
+            salidas_cuentas = float(cur.fetchone()['total'] or 0)
             
-            # Transferencias recibidas del día
+            # Transferencias recibidas del día (entradas)
             cur.execute("""
                 SELECT COALESCE(SUM(COALESCE(monto, 0)), 0) as total
                 FROM transferencias_cuentas
@@ -1439,7 +1439,7 @@ def obtener_conciliacion_bancaria(banco_id, anio, mes):
             """, (banco_id, fecha_actual))
             transferencias_recibidas = float(cur.fetchone()['total'] or 0)
             
-            # Transferencias enviadas del día
+            # Transferencias enviadas del día (salidas)
             cur.execute("""
                 SELECT COALESCE(SUM(COALESCE(monto, 0)), 0) as total
                 FROM transferencias_cuentas
@@ -1448,20 +1448,22 @@ def obtener_conciliacion_bancaria(banco_id, anio, mes):
             """, (banco_id, fecha_actual))
             transferencias_enviadas = float(cur.fetchone()['total'] or 0)
             
+            # Sumar transferencias a ingresos y salidas
+            ingresos = ingresos_cuentas + transferencias_recibidas
+            salidas = salidas_cuentas + transferencias_enviadas
+            
             # Calcular saldo del día
-            saldo_dia = ingresos - salidas + transferencias_recibidas - transferencias_enviadas
+            saldo_dia = ingresos - salidas
             
             # Actualizar saldo acumulado
             saldo_acumulado += saldo_dia
             
             # Solo agregar si hay movimientos o es el primer día
-            if ingresos > 0 or salidas > 0 or transferencias_recibidas > 0 or transferencias_enviadas > 0 or dia == 1:
+            if ingresos > 0 or salidas > 0 or dia == 1:
                 movimientos.append({
                     'fecha': fecha_actual,
                     'ingresos': ingresos,
                     'salidas': salidas,
-                    'transferencias_recibidas': transferencias_recibidas,
-                    'transferencias_enviadas': transferencias_enviadas,
                     'saldo_dia': saldo_dia,
                     'saldo_acumulado': saldo_acumulado
                 })

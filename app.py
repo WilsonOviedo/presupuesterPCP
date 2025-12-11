@@ -4142,6 +4142,7 @@ def cuentas_a_recibir_index():
     cliente_filtro = request.args.get('cliente', '').strip()
     estado_filtro = request.args.get('estado', '').strip()
     banco_filtro = request.args.get('banco_id', type=int)
+    saldo_filtro = request.args.get('saldo_filtro', '').strip()
     
     if fecha_desde:
         filtros['fecha_desde'] = fecha_desde
@@ -4153,6 +4154,8 @@ def cuentas_a_recibir_index():
         filtros['estado'] = estado_filtro
     if banco_filtro:
         filtros['banco_id'] = banco_filtro
+    if saldo_filtro:
+        filtros['saldo'] = saldo_filtro
     
     # Paginación
     pagina = request.args.get('pagina', type=int, default=1)
@@ -4209,6 +4212,7 @@ def cuentas_a_recibir_index():
                          cliente_filtro=cliente_filtro,
                          estado_filtro=estado_filtro,
                          banco_filtro=banco_filtro,
+                         saldo_filtro=saldo_filtro,
                          error=error,
                          mensaje=mensaje)
 
@@ -4588,6 +4592,7 @@ def cuentas_a_pagar_index():
     proveedor_filtro = request.args.get('proveedor', '')
     estado_filtro = request.args.get('estado', '')
     banco_filtro = request.args.get('banco_id', '')
+    saldo_filtro = request.args.get('saldo_filtro', '').strip()
     
     if fecha_desde:
         filtros['fecha_desde'] = fecha_desde
@@ -4599,6 +4604,8 @@ def cuentas_a_pagar_index():
         filtros['estado'] = estado_filtro
     if banco_filtro:
         filtros['banco_id'] = banco_filtro
+    if saldo_filtro:
+        filtros['saldo'] = saldo_filtro
     
     # Paginación
     pagina = request.args.get('pagina', type=int, default=1)
@@ -4655,6 +4662,7 @@ def cuentas_a_pagar_index():
                          proveedor_filtro=proveedor_filtro,
                          estado_filtro=estado_filtro,
                          banco_filtro=banco_filtro,
+                         saldo_filtro=saldo_filtro,
                          error=error,
                          mensaje=mensaje)
 

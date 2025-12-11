@@ -343,8 +343,11 @@
               <label for="fecha_recibo">Fecha del recibo:</label>
               <input type="date" id="fecha_recibo" name="fecha_recibo"
                      value="{{ cuenta.fecha_recibo.strftime('%Y-%m-%d') if cuenta and cuenta.fecha_recibo else '' }}"
-                     onchange="calcularEstado()">
+                     onchange="calcularEstado(); verificarFCONyFechaRecibo();">
               <small style="color: #666; font-size: 12px;">Si se ingresa, el estado se calculará automáticamente</small>
+              <div id="fcon-monto-info" style="display: none; margin-top: 5px; padding: 8px; background: #e3f2fd; border-left: 3px solid #2196F3; border-radius: 4px; font-size: 12px; color: #1976D2;">
+                <strong>ℹ️ Información:</strong> Al seleccionar FCON y una fecha de recibo, el monto abonado se establecerá automáticamente igual al valor de la cuota.
+              </div>
             </div>
 
             <div class="form-group">
@@ -598,6 +601,30 @@
       // El estado se calculará en el backend basado en fecha_recibo
       // Si hay fecha_recibo, será RECIBIDO, si no, ABIERTO
     }
+
+    // Función para verificar si es FCON y hay fecha de recibo
+    function verificarFCONyFechaRecibo() {
+      const tipoFCON = document.getElementById('tipo_fcon');
+      const fechaRecibo = document.getElementById('fecha_recibo').value;
+      const infoDiv = document.getElementById('fcon-monto-info');
+      
+      if (tipoFCON && tipoFCON.checked && fechaRecibo) {
+        infoDiv.style.display = 'block';
+      } else {
+        infoDiv.style.display = 'none';
+      }
+    }
+
+    // Agregar event listener a los radio buttons de tipo
+    document.addEventListener('DOMContentLoaded', function() {
+      const tipoRadios = document.querySelectorAll('input[name="tipo"]');
+      tipoRadios.forEach(radio => {
+        radio.addEventListener('change', verificarFCONyFechaRecibo);
+      });
+      
+      // Verificar al cargar la página si ya hay valores
+      verificarFCONyFechaRecibo();
+    });
 
     // Event listeners para cálculo automático
     document.addEventListener('DOMContentLoaded', function() {

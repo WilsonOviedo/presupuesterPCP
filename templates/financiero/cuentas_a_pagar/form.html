@@ -341,8 +341,11 @@
               <label for="fecha_pago">Fecha del pago:</label>
               <input type="date" id="fecha_pago" name="fecha_pago"
                      value="{{ cuenta.fecha_pago.strftime('%Y-%m-%d') if cuenta and cuenta.fecha_pago else '' }}"
-                     onchange="calcularEstado()">
+                     onchange="calcularEstado(); verificarFCONyFechaPago();">
               <small style="color: #666; font-size: 12px;">Si se ingresa, el estado se calculará automáticamente</small>
+              <div id="fcon-monto-info" style="display: none; margin-top: 5px; padding: 8px; background: #e3f2fd; border-left: 3px solid #2196F3; border-radius: 4px; font-size: 12px; color: #1976D2;">
+                <strong>ℹ️ Información:</strong> Al seleccionar FCON y una fecha de pago, el monto abonado se establecerá automáticamente igual al valor de la cuota.
+              </div>
             </div>
 
             <div class="form-group">
@@ -596,6 +599,30 @@
       // El estado se calculará en el backend basado en fecha_pago
       // Si hay fecha_pago, será PAGADO, si no, ABIERTO
     }
+
+    // Función para verificar si es FCON y hay fecha de pago
+    function verificarFCONyFechaPago() {
+      const tipoFCON = document.getElementById('tipo_fcon');
+      const fechaPago = document.getElementById('fecha_pago').value;
+      const infoDiv = document.getElementById('fcon-monto-info');
+      
+      if (tipoFCON && tipoFCON.checked && fechaPago) {
+        infoDiv.style.display = 'block';
+      } else {
+        infoDiv.style.display = 'none';
+      }
+    }
+
+    // Agregar event listener a los radio buttons de tipo
+    document.addEventListener('DOMContentLoaded', function() {
+      const tipoRadios = document.querySelectorAll('input[name="tipo"]');
+      tipoRadios.forEach(radio => {
+        radio.addEventListener('change', verificarFCONyFechaPago);
+      });
+      
+      // Verificar al cargar la página si ya hay valores
+      verificarFCONyFechaPago();
+    });
 
     // Event listeners para cálculo automático
     document.addEventListener('DOMContentLoaded', function() {

@@ -1415,6 +1415,30 @@ def contar_cuentas_a_recibir(filtros=None):
             if filtros.get('banco_id'):
                 where_clauses.append("car.banco_id = %s")
                 params.append(filtros['banco_id'])
+            
+            # Filtro de saldo (se aplicará después del cálculo del saldo)
+            saldo_filtro = filtros.get('saldo')
+            if saldo_filtro:
+                if saldo_filtro == '>0':
+                    # Saldo mayor a 0
+                    where_clauses.append("""
+                        (CASE 
+                            WHEN COALESCE(car.valor_cuota, car.valor, 0) < 0 THEN
+                                GREATEST(0, COALESCE(car.valor_cuota, car.valor, 0) + COALESCE(car.monto_abonado, 0))
+                            ELSE
+                                GREATEST(0, COALESCE(car.valor_cuota, car.valor, 0) - COALESCE(car.monto_abonado, 0))
+                        END) > 0.01
+                    """)
+                elif saldo_filtro == '=0':
+                    # Saldo igual a 0
+                    where_clauses.append("""
+                        (CASE 
+                            WHEN COALESCE(car.valor_cuota, car.valor, 0) < 0 THEN
+                                GREATEST(0, COALESCE(car.valor_cuota, car.valor, 0) + COALESCE(car.monto_abonado, 0))
+                            ELSE
+                                GREATEST(0, COALESCE(car.valor_cuota, car.valor, 0) - COALESCE(car.monto_abonado, 0))
+                        END) <= 0.01
+                    """)
         
         where_sql = ""
         if where_clauses:
@@ -1504,17 +1528,26 @@ def crear_cuenta_a_recibir(fecha_emision, documento_id=None, cuenta_id=None, pla
         if fecha_recibo and vencimiento:
             status_recibo = calcular_status_recibo(vencimiento, fecha_recibo)
         
+        # Si es FCON (al contado) Y hay fecha_recibo, establecer monto_abonado igual al valor_cuota (o valor si no hay valor_cuota)
+        monto_abonado = None
+        if tipo == 'FCON' and fecha_recibo:
+            # Si hay valor_cuota, usar ese valor; si no, usar el valor total
+            monto_abonado = valor_cuota if valor_cuota is not None else valor
+            # Asegurar que sea positivo (absoluto)
+            if monto_abonado is not None:
+                monto_abonado = abs(monto_abonado)
+        
         cur.execute("""
             INSERT INTO cuentas_a_recibir (
                 fecha_emision, documento_id, cuenta_id, plano_cuenta, tipo, cliente, factura, descripcion,
                 banco_id, valor, cuotas, valor_cuota, vencimiento, fecha_recibo,
-                estado, status_recibo, proyecto_id
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                estado, status_recibo, proyecto_id, monto_abonado
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             fecha_emision, documento_id, cuenta_id, plano_cuenta, tipo, cliente, factura, descripcion,
             banco_id, valor, cuotas, valor_cuota, vencimiento, fecha_recibo,
-            estado, status_recibo, proyecto_id
+            estado, status_recibo, proyecto_id, monto_abonado
         ))
         
         cuenta_id = cur.fetchone()['id']
@@ -1609,6 +1642,28 @@ def actualizar_cuenta_a_recibir(cuenta_id, fecha_emision=None, documento_id=None
         elif estado is not None:
             updates.append("estado = %s")
             params.append(_to_upper(estado))
+        
+        # Si es FCON Y hay fecha_recibo, establecer monto_abonado igual al valor_cuota
+        if (actualizar_fecha_recibo or fecha_recibo is not None):
+            # Obtener tipo actual si no se está actualizando
+            cur.execute("SELECT tipo, valor_cuota, valor FROM cuentas_a_recibir WHERE id = %s", (cuenta_id,))
+            actual = cur.fetchone()
+            tipo_actual = tipo if tipo is not None else actual['tipo']
+            
+            if tipo_actual == 'FCON' and fecha_recibo:
+                # Obtener valor_cuota actual o calcularlo
+                valor_cuota_actual = valor_cuota if valor_cuota is not None else actual['valor_cuota']
+                valor_actual = valor if valor is not None else actual['valor']
+                
+                # Usar valor_cuota si existe, sino usar valor
+                monto_abonado = valor_cuota_actual if valor_cuota_actual is not None else valor_actual
+                if monto_abonado is not None:
+                    monto_abonado = abs(monto_abonado)
+                    updates.append("monto_abonado = %s")
+                    params.append(monto_abonado)
+            elif tipo_actual == 'FCON' and not fecha_recibo:
+                # Si se borró fecha_recibo y es FCON, también borrar monto_abonado
+                updates.append("monto_abonado = NULL")
         
         # Recalcular status_recibo si se actualizó vencimiento o fecha_recibo
         if vencimiento is not None or actualizar_fecha_recibo or fecha_recibo is not None:
@@ -1760,6 +1815,16 @@ def obtener_cuentas_a_pagar(filtros=None, limite=None, offset=None):
             if filtros.get('banco_id'):
                 where_clauses.append("cap.banco_id = %s")
                 params.append(filtros['banco_id'])
+            
+            # Filtro de saldo (se aplicará después del cálculo del saldo)
+            saldo_filtro = filtros.get('saldo')
+            if saldo_filtro:
+                if saldo_filtro == '>0':
+                    # Saldo mayor a 0
+                    where_clauses.append("(COALESCE(cap.valor_cuota, cap.valor, 0) - COALESCE(cap.monto_abonado, 0)) > 0.01")
+                elif saldo_filtro == '=0':
+                    # Saldo igual a 0
+                    where_clauses.append("(COALESCE(cap.valor_cuota, cap.valor, 0) - COALESCE(cap.monto_abonado, 0)) <= 0.01")
         
         where_sql = ""
         if where_clauses:
@@ -1824,6 +1889,16 @@ def contar_cuentas_a_pagar(filtros=None):
             if filtros.get('banco_id'):
                 where_clauses.append("cap.banco_id = %s")
                 params.append(filtros['banco_id'])
+            
+            # Filtro de saldo (se aplicará después del cálculo del saldo)
+            saldo_filtro = filtros.get('saldo')
+            if saldo_filtro:
+                if saldo_filtro == '>0':
+                    # Saldo mayor a 0
+                    where_clauses.append("(COALESCE(cap.valor_cuota, cap.valor, 0) - COALESCE(cap.monto_abonado, 0)) > 0.01")
+                elif saldo_filtro == '=0':
+                    # Saldo igual a 0
+                    where_clauses.append("(COALESCE(cap.valor_cuota, cap.valor, 0) - COALESCE(cap.monto_abonado, 0)) <= 0.01")
         
         where_sql = ""
         if where_clauses:
@@ -1890,9 +1965,9 @@ def crear_cuenta_a_pagar(fecha_emision, documento_id=None, cuenta_id=None, plano
         if fecha_pago and vencimiento:
             status_pago = calcular_status_recibo(vencimiento, fecha_pago)  # Reutilizamos la misma función
         
-        # Si es FCON (al contado), establecer monto_abonado igual al valor_cuota (o valor si no hay valor_cuota)
+        # Si es FCON (al contado) Y hay fecha_pago, establecer monto_abonado igual al valor_cuota (o valor si no hay valor_cuota)
         monto_abonado = None
-        if tipo == 'FCON':
+        if tipo == 'FCON' and fecha_pago:
             # Si hay valor_cuota, usar ese valor; si no, usar el valor total
             monto_abonado = valor_cuota if valor_cuota is not None else valor
             # Asegurar que sea positivo (absoluto)
@@ -2004,6 +2079,28 @@ def actualizar_cuenta_a_pagar(cuenta_id, fecha_emision=None, documento_id=None, 
         elif estado is not None:
             updates.append("estado = %s")
             params.append(_to_upper(estado))
+        
+        # Si es FCON Y hay fecha_pago, establecer monto_abonado igual al valor_cuota
+        if (actualizar_fecha_pago or fecha_pago is not None):
+            # Obtener tipo actual si no se está actualizando
+            cur.execute("SELECT tipo, valor_cuota, valor FROM cuentas_a_pagar WHERE id = %s", (cuenta_id,))
+            actual = cur.fetchone()
+            tipo_actual = tipo if tipo is not None else actual['tipo']
+            
+            if tipo_actual == 'FCON' and fecha_pago:
+                # Obtener valor_cuota actual o calcularlo
+                valor_cuota_actual = valor_cuota if valor_cuota is not None else actual['valor_cuota']
+                valor_actual = valor if valor is not None else actual['valor']
+                
+                # Usar valor_cuota si existe, sino usar valor
+                monto_abonado = valor_cuota_actual if valor_cuota_actual is not None else valor_actual
+                if monto_abonado is not None:
+                    monto_abonado = abs(monto_abonado)
+                    updates.append("monto_abonado = %s")
+                    params.append(monto_abonado)
+            elif tipo_actual == 'FCON' and not fecha_pago:
+                # Si se borró fecha_pago y es FCON, también borrar monto_abonado
+                updates.append("monto_abonado = NULL")
         
         # Recalcular status_pago si se actualizó vencimiento o fecha_pago
         if vencimiento is not None or actualizar_fecha_pago or fecha_pago is not None:
