@@ -1003,14 +1003,16 @@ def obtener_receita_bruta_mensual(ano=None, proyecto_id=None, fecha_desde=None, 
     
     Args:
         tipo_reporte: 'proyectado' usa valor_cuota (o valor si es NULL), 'realizado' usa monto_abonado
+        Usa fecha_recibo para agrupar por mes (régimen de competencia)
     """
     conn, cur = conectar()
     try:
         where_clauses = []
         params = []
         
+        # Usar fecha_recibo para los filtros y agrupación (régimen de competencia)
         if ano:
-            where_clauses.append("EXTRACT(YEAR FROM car.fecha_emision) = %s")
+            where_clauses.append("EXTRACT(YEAR FROM COALESCE(car.fecha_recibo, car.fecha_emision)) = %s")
             params.append(ano)
         
         if proyecto_id:
@@ -1018,11 +1020,11 @@ def obtener_receita_bruta_mensual(ano=None, proyecto_id=None, fecha_desde=None, 
             params.append(proyecto_id)
         
         if fecha_desde:
-            where_clauses.append("car.fecha_emision >= %s")
+            where_clauses.append("COALESCE(car.fecha_recibo, car.fecha_emision) >= %s")
             params.append(fecha_desde)
         
         if fecha_hasta:
-            where_clauses.append("car.fecha_emision <= %s")
+            where_clauses.append("COALESCE(car.fecha_recibo, car.fecha_emision) <= %s")
             params.append(fecha_hasta)
         
         where_sql = ""
@@ -1039,12 +1041,12 @@ def obtener_receita_bruta_mensual(ano=None, proyecto_id=None, fecha_desde=None, 
         
         query = f"""
             SELECT 
-                EXTRACT(MONTH FROM car.fecha_emision) as mes,
-                EXTRACT(YEAR FROM car.fecha_emision) as ano,
+                EXTRACT(MONTH FROM COALESCE(car.fecha_recibo, car.fecha_emision)) as mes,
+                EXTRACT(YEAR FROM COALESCE(car.fecha_recibo, car.fecha_emision)) as ano,
                 SUM({campo_valor}) as receita_bruta
             FROM cuentas_a_recibir car
             {where_sql}
-            GROUP BY EXTRACT(MONTH FROM car.fecha_emision), EXTRACT(YEAR FROM car.fecha_emision)
+            GROUP BY EXTRACT(MONTH FROM COALESCE(car.fecha_recibo, car.fecha_emision)), EXTRACT(YEAR FROM COALESCE(car.fecha_recibo, car.fecha_emision))
             ORDER BY ano, mes
         """
         
@@ -1060,14 +1062,16 @@ def obtener_custos_despesas_mensual(ano=None, proyecto_id=None, fecha_desde=None
     
     Args:
         tipo_reporte: 'proyectado' usa valor_cuota (o valor si es NULL), 'realizado' usa monto_abonado
+        Usa fecha_pago para agrupar por mes (régimen de competencia)
     """
     conn, cur = conectar()
     try:
         where_clauses = []
         params = []
         
+        # Usar fecha_pago para los filtros y agrupación (régimen de competencia)
         if ano:
-            where_clauses.append("EXTRACT(YEAR FROM cap.fecha_emision) = %s")
+            where_clauses.append("EXTRACT(YEAR FROM COALESCE(cap.fecha_pago, cap.fecha_emision)) = %s")
             params.append(ano)
         
         if proyecto_id:
@@ -1075,11 +1079,11 @@ def obtener_custos_despesas_mensual(ano=None, proyecto_id=None, fecha_desde=None
             params.append(proyecto_id)
         
         if fecha_desde:
-            where_clauses.append("cap.fecha_emision >= %s")
+            where_clauses.append("COALESCE(cap.fecha_pago, cap.fecha_emision) >= %s")
             params.append(fecha_desde)
         
         if fecha_hasta:
-            where_clauses.append("cap.fecha_emision <= %s")
+            where_clauses.append("COALESCE(cap.fecha_pago, cap.fecha_emision) <= %s")
             params.append(fecha_hasta)
         
         where_sql = ""
@@ -1096,12 +1100,12 @@ def obtener_custos_despesas_mensual(ano=None, proyecto_id=None, fecha_desde=None
         
         query = f"""
             SELECT 
-                EXTRACT(MONTH FROM cap.fecha_emision) as mes,
-                EXTRACT(YEAR FROM cap.fecha_emision) as ano,
+                EXTRACT(MONTH FROM COALESCE(cap.fecha_pago, cap.fecha_emision)) as mes,
+                EXTRACT(YEAR FROM COALESCE(cap.fecha_pago, cap.fecha_emision)) as ano,
                 SUM({campo_valor}) as custos_despesas
             FROM cuentas_a_pagar cap
             {where_sql}
-            GROUP BY EXTRACT(MONTH FROM cap.fecha_emision), EXTRACT(YEAR FROM cap.fecha_emision)
+            GROUP BY EXTRACT(MONTH FROM COALESCE(cap.fecha_pago, cap.fecha_emision)), EXTRACT(YEAR FROM COALESCE(cap.fecha_pago, cap.fecha_emision))
             ORDER BY ano, mes
         """
         
