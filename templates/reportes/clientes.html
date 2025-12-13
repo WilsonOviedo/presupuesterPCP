@@ -3,7 +3,7 @@
 {% block head %}
   <style>
     .reportes-container {
-      max-width: 1400px;
+      max-width: 1450px;
       margin: 0 auto;
     }
     .filtros-section {
@@ -347,9 +347,9 @@
           <thead>
             <tr>
               <th>Tipo</th>
+              <th>Tipo Documento</th>
               <th>Nro. Factura</th>
               <th>Cliente</th>
-              <th>RUC</th>
               <th>Fecha Emisión</th>
               <th>Fecha Vencimiento</th>
               <th>Fecha Pago</th>
@@ -369,9 +369,15 @@
                     <span style="background: #2196F3; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85em; font-weight: 600;">FACTURA</span>
                   {% endif %}
                 </td>
+                <td>
+                  {% if reporte.tipo_documento %}
+                    <strong>{{ reporte.tipo_documento }}</strong>
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
                 <td><strong>{{ reporte.numero_factura }}</strong></td>
                 <td>{{ reporte.cliente }}</td>
-                <td>{{ reporte.ruc or '-' }}</td>
                 <td>
                   {% if reporte.fecha_emision %}
                     {% if reporte.fecha_emision is string %}

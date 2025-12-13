@@ -177,6 +177,13 @@ def obtener_reportes_cliente(cliente_nombre=None, fecha_desde=None, fecha_hasta=
                 'adelantado': 'Adelantado'
             }.get(estado, estado)
             
+            # Determinar tipo de documento basado en tipo_venta
+            tipo_doc = 'FCON'  # Por defecto
+            if factura['tipo_venta'] == 'Crédito':
+                tipo_doc = 'FCRE'
+            elif factura['tipo_venta'] == 'Contado':
+                tipo_doc = 'FCON'
+            
             reporte = {
                 'tipo': 'FACTURA',
                 'id': factura['id'],
@@ -191,7 +198,8 @@ def obtener_reportes_cliente(cliente_nombre=None, fecha_desde=None, fecha_hasta=
                 'fecha_pago': fecha_pago,
                 'estado_pago': estado_espanol,
                 'dias_atraso': dias_atraso,
-                'monto': float(factura['total_general']) if factura['total_general'] else 0
+                'monto': float(factura['total_general']) if factura['total_general'] else 0,
+                'tipo_documento': tipo_doc  # FCON o FCRE según tipo_venta
             }
             
             reportes.append(reporte)
@@ -231,6 +239,7 @@ def obtener_reportes_cliente(cliente_nombre=None, fecha_desde=None, fecha_hasta=
                 car.fecha_recibo,
                 car.estado,
                 car.status_recibo,
+                car.tipo,
                 td.nombre AS documento_nombre,
                 b.nombre AS banco_nombre,
                 ci.nombre AS cuenta_nombre,
@@ -305,6 +314,9 @@ def obtener_reportes_cliente(cliente_nombre=None, fecha_desde=None, fecha_hasta=
                 }
                 estado_pago_car = status_map.get(cuenta['status_recibo'], estado_pago_car)
             
+            # Obtener tipo de documento (FCON, FCRE, NCRE)
+            tipo_doc_car = cuenta.get('tipo', 'FCON') or 'FCON'
+            
             reporte_car = {
                 'tipo': 'CUENTA_A_RECIBIR',
                 'id': cuenta['id'],
@@ -313,13 +325,14 @@ def obtener_reportes_cliente(cliente_nombre=None, fecha_desde=None, fecha_hasta=
                 'cliente': cuenta['cliente'],
                 'ruc': None,  # Las cuentas a recibir no tienen RUC
                 'moneda': 'Gs',  # Por defecto
-                'tipo_venta': cuenta.get('tipo', 'FCON'),
+                'tipo_venta': tipo_doc_car,
                 'plazo_dias': None,
                 'fecha_vencimiento': fecha_vencimiento_car,
                 'fecha_pago': fecha_recibo_car,
                 'estado_pago': estado_pago_car,
                 'dias_atraso': dias_atraso_car,
                 'monto': float(cuenta['valor']) if cuenta['valor'] else 0,
+                'tipo_documento': tipo_doc_car,  # FCON, FCRE o NCRE
                 # Campos adicionales de cuentas a recibir
                 'documento_nombre': cuenta.get('documento_nombre'),
                 'banco_nombre': cuenta.get('banco_nombre'),
