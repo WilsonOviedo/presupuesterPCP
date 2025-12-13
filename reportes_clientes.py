@@ -1709,11 +1709,9 @@ def obtener_flujo_caja_mensual_detallado(ano=None, proyecto_id=None, tipo_report
         conn.close()
 
 
-def obtener_dre_mensual(ano=None, proyecto_id=None, tipo_reporte='realizado'):
+def obtener_dre_mensual(ano=None, proyecto_id=None):
     """Obtiene el DRE (Demonstrativo de Resultado) mensual
-    
-    Args:
-        tipo_reporte: 'proyectado' usa valor_cuota, 'realizado' usa monto_abonado
+    Siempre usa fecha de emisión y valor_cuota/valor (facturado, no cobrado)
     """
     conn, cur = conectar()
     try:
@@ -1764,12 +1762,9 @@ def obtener_dre_mensual(ano=None, proyecto_id=None, tipo_reporte='realizado'):
         params_gastos = []
         
         if ano:
-            if tipo_reporte == 'proyectado':
-                where_clauses_ingresos.append("EXTRACT(YEAR FROM car.fecha_emision) = %s")
-                where_clauses_gastos.append("EXTRACT(YEAR FROM cap.fecha_emision) = %s")
-            else:
-                where_clauses_ingresos.append("EXTRACT(YEAR FROM car.fecha_recibo) = %s")
-                where_clauses_gastos.append("EXTRACT(YEAR FROM cap.fecha_pago) = %s")
+            # Siempre usar fecha de emisión (facturado, no cobrado)
+            where_clauses_ingresos.append("EXTRACT(YEAR FROM car.fecha_emision) = %s")
+            where_clauses_gastos.append("EXTRACT(YEAR FROM cap.fecha_emision) = %s")
             params_ingresos.append(ano)
             params_gastos.append(ano)
         
@@ -1787,19 +1782,11 @@ def obtener_dre_mensual(ano=None, proyecto_id=None, tipo_reporte='realizado'):
         if where_clauses_gastos:
             where_sql_gastos = "AND " + " AND ".join(where_clauses_gastos)
         
-        # Determinar qué columna usar según el tipo de reporte
-        if tipo_reporte == 'proyectado':
-            campo_ingresos = "COALESCE(car.valor_cuota, car.valor, 0)"
-            campo_gastos = "COALESCE(cap.valor_cuota, cap.valor, 0)"
-            fecha_ingresos = "car.fecha_emision"
-            fecha_gastos = "cap.fecha_emision"
-        else:
-            campo_ingresos = "COALESCE(car.monto_abonado, 0)"
-            campo_gastos = "COALESCE(cap.monto_abonado, 0)"
-            fecha_ingresos = "car.fecha_recibo"
-            fecha_gastos = "cap.fecha_pago"
-            where_sql_ingresos += " AND car.fecha_recibo IS NOT NULL"
-            where_sql_gastos += " AND cap.fecha_pago IS NOT NULL"
+        # Siempre usar fecha de emisión y valor_cuota/valor (facturado, no cobrado)
+        campo_ingresos = "COALESCE(car.valor_cuota, car.valor, 0)"
+        campo_gastos = "COALESCE(cap.valor_cuota, cap.valor, 0)"
+        fecha_ingresos = "car.fecha_emision"
+        fecha_gastos = "cap.fecha_emision"
         
         # Obtener ingresos por categoría y mes
         ingresos_por_categoria = {}
@@ -1846,7 +1833,6 @@ def obtener_dre_mensual(ano=None, proyecto_id=None, tipo_reporte='realizado'):
         resultado = {
             'ano': ano,
             'proyecto_id': proyecto_id,
-            'tipo_reporte': tipo_reporte,
             'categorias_ingresos': [{'id': c['id'], 'nombre': c['nombre']} for c in categorias_ingresos],
             'categorias_gastos': [{'id': c['id'], 'nombre': c['nombre']} for c in categorias_gastos],
             'categoria_deducciones_id': categoria_deducciones_id,

@@ -3464,13 +3464,14 @@ def reportes_flujo_caja_mensual_index():
 @auth.login_required
 @auth.permission_required('/reportes/dre')
 def reportes_dre_index():
-    """Reporte DRE (Demonstrativo de Resultado) mensual"""
+    """Reporte DRE (Demonstrativo de Resultado) mensual
+    Siempre usa fecha de emisión (facturado, no cobrado)
+    """
     from datetime import datetime
     
     # Filtros
     ano = request.args.get('ano', type=int, default=datetime.now().year)
     proyecto_id = request.args.get('proyecto_id', type=int)
-    tipo_reporte = request.args.get('tipo_reporte', 'realizado')  # 'realizado' o 'proyectado'
     
     # Obtener datos para filtros
     proyectos = financiero.obtener_proyectos(activo=True)
@@ -3483,8 +3484,7 @@ def reportes_dre_index():
         try:
             dre = reportes_clientes.obtener_dre_mensual(
                 ano=ano,
-                proyecto_id=proyecto_id,
-                tipo_reporte=tipo_reporte
+                proyecto_id=proyecto_id
             )
         except Exception as e:
             error = f'Error al obtener DRE: {str(e)}'
@@ -3494,7 +3494,6 @@ def reportes_dre_index():
                          proyectos=proyectos,
                          ano=ano,
                          proyecto_id=proyecto_id,
-                         tipo_reporte=tipo_reporte,
                          error=error)
 
 

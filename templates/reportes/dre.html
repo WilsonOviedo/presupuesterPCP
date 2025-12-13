@@ -226,19 +226,6 @@
               {% endfor %}
             </select>
           </div>
-          <div class="form-group">
-            <label>Tipo de Reporte:</label>
-            <div class="radio-group">
-              <div class="radio-option">
-                <input type="radio" id="tipo_proyectado" name="tipo_reporte" value="proyectado" {% if tipo_reporte == 'proyectado' %}checked{% endif %}>
-                <label for="tipo_proyectado">Proyectado</label>
-              </div>
-              <div class="radio-option">
-                <input type="radio" id="tipo_realizado" name="tipo_reporte" value="realizado" {% if tipo_reporte == 'realizado' %}checked{% endif %}>
-                <label for="tipo_realizado">Realizado</label>
-              </div>
-            </div>
-          </div>
         </div>
         <div style="margin-top: 15px;">
           <button type="submit" class="button" style="background: #667eea;">🔍 Consultar</button>
