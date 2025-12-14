@@ -3169,40 +3169,6 @@ def facturacion_pdf(id):
         return f"Error: {str(e)}", 500
 
 
-@app.route("/reportes/clientes", methods=["GET"], endpoint="reportes_clientes_index")
-@auth.login_required
-@auth.permission_required('/reportes/clientes')
-def reportes_clientes_index():
-    """Página de reportes de clientes"""
-    cliente_nombre = request.args.get('cliente', '').strip() or None
-    fecha_desde = request.args.get('fecha_desde', '').strip() or None
-    fecha_hasta = request.args.get('fecha_hasta', '').strip() or None
-    estado_filtro = request.args.get('estado', '').strip() or None
-    
-    # Obtener lista de clientes para el filtro
-    clientes = reportes_clientes.obtener_clientes_con_facturas()
-    
-    # Obtener reportes
-    reportes = reportes_clientes.obtener_reportes_cliente(
-        cliente_nombre=cliente_nombre,
-        fecha_desde=fecha_desde,
-        fecha_hasta=fecha_hasta,
-        estado_pago_filtro=estado_filtro
-    )
-    
-    # Filtrar por estado si se especifica
-    if estado_filtro:
-        reportes = [r for r in reportes if r['estado_pago'].lower() == estado_filtro.lower()]
-    
-    return render_template('reportes/clientes.html',
-                         reportes=reportes,
-                         clientes=clientes,
-                         cliente_seleccionado=cliente_nombre or '',
-                         fecha_desde=fecha_desde or '',
-                         fecha_hasta=fecha_hasta or '',
-                         estado_seleccionado=estado_filtro or '')
-
-
 @app.route("/reportes/cuentas-a-pagar", methods=["GET"], endpoint="reportes_cuentas_a_pagar_index")
 @auth.login_required
 @auth.permission_required('/reportes/cuentas-a-pagar')

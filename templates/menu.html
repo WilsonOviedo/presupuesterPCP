@@ -179,19 +179,6 @@
         </div>
       </div>
 
-      <div class="menu-box gris">
-        <div class="menu-box-icon">
-          <i class="fas fa-chart-bar"></i>
-        </div>
-        <div class="menu-box-content">
-          <h3>Reportes de Clientes</h3>
-          <p>Ver reportes de facturas por cliente, estados de pago y días de atraso.</p>
-          <a href="{{ url_for('reportes_clientes_index') }}">
-            <button>Acceder</button>
-          </a>
-        </div>
-      </div>
-
       {% if usuario and usuario.es_admin %}
       <div class="menu-box naranja">
         <div class="menu-box-icon">
