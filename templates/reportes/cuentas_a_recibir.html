@@ -3,8 +3,11 @@
 {% block head %}
   <style>
     .reportes-container {
-      max-width: 1400px;
+      max-width: 100%;
+      width: 100%;
       margin: 0 auto;
+      padding: 0 20px;
+      box-sizing: border-box;
     }
     .filtros-section {
       background: #f9f9f9;
@@ -351,6 +354,7 @@
               <th>Fecha Emisión</th>
               <th>Fecha Vencimiento</th>
               <th>Fecha Recibo</th>
+              <th>Abonado</th>
               <th>Saldo</th>
               <th>Días Atraso</th>
               <th>Estado</th>
@@ -391,6 +395,13 @@
                     {% else %}
                       {{ reporte.fecha_pago.strftime('%d/%m/%Y') }}
                     {% endif %}
+                  {% else %}
+                    <span style="color: #999;">-</span>
+                  {% endif %}
+                </td>
+                <td class="monto">
+                  {% if reporte.monto_abonado %}
+                    {{ reporte.moneda }} {{ "{:,.0f}".format(reporte.monto_abonado) }}
                   {% else %}
                     <span style="color: #999;">-</span>
                   {% endif %}

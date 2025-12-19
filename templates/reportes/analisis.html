@@ -442,8 +442,18 @@
     const entradasValues = [];
     const salidasValues = [];
     
-    flujoData.forEach(f => {
-      flujoLabels.push(meses[f.mes - 1]);
+    // Ordenar los datos por año y mes antes de procesarlos
+    const flujoDataOrdenado = flujoData.slice().sort((a, b) => {
+      // Primero ordenar por año
+      if (a.ano !== b.ano) {
+        return a.ano - b.ano;
+      }
+      // Si el año es igual, ordenar por mes
+      return a.mes - b.mes;
+    });
+    
+    flujoDataOrdenado.forEach(f => {
+      flujoLabels.push(meses[f.mes - 1] + ' ' + f.ano);
       entradasValues.push(parseFloat(f.entradas || 0));
       salidasValues.push(parseFloat(f.salidas || 0));
     });
@@ -514,8 +524,18 @@
     const evolucionLabels = [];
     const saldoValues = [];
     
-    evolucionData.forEach(e => {
-      evolucionLabels.push(meses[e.mes - 1]);
+    // Ordenar los datos por año y mes antes de procesarlos
+    const evolucionDataOrdenado = evolucionData.slice().sort((a, b) => {
+      // Primero ordenar por año
+      if (a.ano !== b.ano) {
+        return a.ano - b.ano;
+      }
+      // Si el año es igual, ordenar por mes
+      return a.mes - b.mes;
+    });
+    
+    evolucionDataOrdenado.forEach(e => {
+      evolucionLabels.push(meses[e.mes - 1] + ' ' + e.ano);
       saldoValues.push(parseFloat(e.saldo || 0));
     });
     

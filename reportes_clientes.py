@@ -151,26 +151,23 @@ def obtener_reportes_cuentas_a_pagar(proveedor_nombre=None, fecha_desde=None, fe
             where_clauses.append("cap.tipo = %s")
             params.append(tipo_filtro)
         
+        # El filtro de estado se aplicará después de calcular el estado_pago en Python
+        # porque el estado depende de múltiples factores (fecha_vencimiento, status_pago, saldo, etc.)
+        # Solo filtramos "Pagado" en SQL porque es el único estado que es directo
         if estado_pago_filtro:
             if estado_pago_filtro.lower() == 'pagado':
                 where_clauses.append("cap.estado = 'PAGADO'")
-            elif estado_pago_filtro.lower() == 'pendiente':
+            # Para otros estados (pendiente, atrasado, adelantado), filtramos en Python
+            # después de calcular el estado real, pero pre-filtramos por ABIERTO para eficiencia
+            elif estado_pago_filtro.lower() in ['pendiente', 'atrasado', 'adelantado', 'en día', 'en dia']:
                 where_clauses.append("cap.estado = 'ABIERTO'")
-            elif estado_pago_filtro.lower() == 'atrasado':
-                where_clauses.append("(cap.estado = 'ABIERTO' AND cap.vencimiento < CURRENT_DATE) OR cap.status_pago = 'ATRASADO'")
         
         where_sql = ""
         if where_clauses:
             where_sql = "WHERE " + " AND ".join(where_clauses)
         
-        # Agregar LIMIT y OFFSET si se proporcionan
-        limit_sql = ""
-        if limite is not None:
-            limit_sql = f"LIMIT {limite}"
-            if offset is not None:
-                limit_sql += f" OFFSET {offset}"
-        
         # Query de cuentas a pagar
+        # NO aplicamos LIMIT/OFFSET aquí porque necesitamos filtrar por estado en Python primero
         query = f"""
             SELECT 
                 cap.id,
@@ -198,7 +195,6 @@ def obtener_reportes_cuentas_a_pagar(proveedor_nombre=None, fecha_desde=None, fe
             LEFT JOIN proyectos p ON cap.proyecto_id = p.id
             {where_sql}
             ORDER BY cap.fecha_emision DESC, cap.id DESC
-            {limit_sql}
         """
         
         cur.execute(query, params)
@@ -248,40 +244,7 @@ def obtener_reportes_cuentas_a_pagar(proveedor_nombre=None, fecha_desde=None, fe
                     if hoy > fecha_vencimiento:
                         dias_atraso = (hoy - fecha_vencimiento).days
             
-            # Determinar estado de pago
-            estado_pago = cuenta['estado'] or 'ABIERTO'
-            
-            # Si tiene fecha de pago, siempre es "Pagado" pero con detalle
-            if fecha_pago:
-                if estado_pago_detalle:
-                    estado_pago = f'Pagado ({estado_pago_detalle})'
-                else:
-                    estado_pago = 'Pagado'
-            elif estado_pago == 'PAGADO':
-                # Si está marcado como PAGADO pero no tiene fecha_pago, solo mostrar "Pagado"
-                estado_pago = 'Pagado'
-            elif estado_pago == 'ABIERTO':
-                if fecha_vencimiento:
-                    hoy = date.today()
-                    if hoy > fecha_vencimiento:
-                        estado_pago = 'Atrasado'
-                    elif hoy == fecha_vencimiento:
-                        estado_pago = 'En día'
-                    else:
-                        estado_pago = 'Pendiente'
-                else:
-                    estado_pago = 'Pendiente'
-            
-            # Usar status_pago si está disponible (solo si no tiene fecha_pago)
-            if cuenta['status_pago'] and not fecha_pago:
-                status_map = {
-                    'ADELANTADO': 'Adelantado',
-                    'ATRASADO': 'Atrasado',
-                    'EN DIA': 'En día'
-                }
-                estado_pago = status_map.get(cuenta['status_pago'], estado_pago)
-            
-            # Calcular saldo: (valor_cuota o valor) - monto_abonado
+            # Calcular saldo primero para determinar el estado
             valor_cuota = float(cuenta['valor_cuota']) if cuenta['valor_cuota'] else None
             valor = float(cuenta['valor']) if cuenta['valor'] else 0
             monto_abonado = float(cuenta.get('monto_abonado') or 0)
@@ -308,6 +271,43 @@ def obtener_reportes_cuentas_a_pagar(proveedor_nombre=None, fecha_desde=None, fe
             else:
                 saldo = 0
             
+            # Determinar estado de pago basándose en el saldo
+            estado_pago = cuenta['estado'] or 'ABIERTO'
+            
+            # Si el saldo es > 0, el estado debe ser "Pendiente" (a menos que ya sea "Pagado")
+            if saldo > 0.01 and estado_pago != 'PAGADO':
+                estado_pago = 'Pendiente'
+            # Si tiene fecha de pago, siempre es "Pagado" pero con detalle
+            elif fecha_pago:
+                if estado_pago_detalle:
+                    estado_pago = f'Pagado ({estado_pago_detalle})'
+                else:
+                    estado_pago = 'Pagado'
+            elif estado_pago == 'PAGADO':
+                # Si está marcado como PAGADO pero no tiene fecha_pago, solo mostrar "Pagado"
+                estado_pago = 'Pagado'
+            elif estado_pago == 'ABIERTO':
+                # Si no hay saldo, determinar estado según fecha de vencimiento
+                if fecha_vencimiento:
+                    hoy = date.today()
+                    if hoy > fecha_vencimiento:
+                        estado_pago = 'Atrasado'
+                    elif hoy == fecha_vencimiento:
+                        estado_pago = 'En día'
+                    else:
+                        estado_pago = 'Pendiente'
+                else:
+                    estado_pago = 'Pendiente'
+            
+            # Usar status_pago si está disponible (solo si no hay saldo pendiente y no tiene fecha_pago)
+            if saldo <= 0.01 and cuenta['status_pago'] and not fecha_pago:
+                status_map = {
+                    'ADELANTADO': 'Adelantado',
+                    'ATRASADO': 'Atrasado',
+                    'EN DIA': 'En día'
+                }
+                estado_pago = status_map.get(cuenta['status_pago'], estado_pago)
+            
             reporte = {
                 'tipo': 'CUENTA_A_PAGAR',
                 'id': cuenta['id'],
@@ -323,6 +323,7 @@ def obtener_reportes_cuentas_a_pagar(proveedor_nombre=None, fecha_desde=None, fe
                 'estado_pago': estado_pago,
                 'dias_atraso': dias_atraso,
                 'monto': saldo,  # Mostrar saldo en lugar del monto total
+                'monto_abonado': monto_abonado,  # Monto abonado
                 # Campos adicionales
                 'documento_nombre': cuenta.get('documento_nombre'),
                 'banco_nombre': cuenta.get('banco_nombre'),
@@ -333,10 +334,36 @@ def obtener_reportes_cuentas_a_pagar(proveedor_nombre=None, fecha_desde=None, fe
                 'valor_cuota': float(cuenta['valor_cuota']) if cuenta['valor_cuota'] else None
             }
             
+            # Aplicar filtro de estado después de calcular el estado_pago
+            if estado_pago_filtro:
+                estado_filtro_lower = estado_pago_filtro.lower()
+                if estado_filtro_lower == 'pagado':
+                    # Para "Pagado", aceptar cualquier variante que contenga "pagado"
+                    if 'pagado' not in estado_pago.lower():
+                        continue
+                elif estado_filtro_lower == 'pendiente':
+                    if estado_pago.lower() != 'pendiente':
+                        continue
+                elif estado_filtro_lower == 'atrasado':
+                    if estado_pago.lower() != 'atrasado' and 'atrasado' not in estado_pago.lower():
+                        continue
+                elif estado_filtro_lower == 'adelantado':
+                    if estado_pago.lower() != 'adelantado' and 'adelantado' not in estado_pago.lower():
+                        continue
+                elif estado_filtro_lower == 'en día' or estado_filtro_lower == 'en dia':
+                    if estado_pago.lower() != 'en día' and estado_pago.lower() != 'en dia' and 'en día' not in estado_pago.lower() and 'en dia' not in estado_pago.lower():
+                        continue
+            
             reportes.append(reporte)
         
         # Ordenar por fecha de emisión descendente
         reportes.sort(key=lambda x: x['fecha_emision'] if x['fecha_emision'] else date.min, reverse=True)
+        
+        # Aplicar paginación después del filtro de estado
+        if limite is not None:
+            inicio = offset if offset is not None else 0
+            fin = inicio + limite
+            reportes = reportes[inicio:fin]
         
         return reportes
     finally:
@@ -434,26 +461,23 @@ def obtener_reportes_cuentas_a_recibir(cliente_nombre=None, fecha_desde=None, fe
             where_clauses.append("car.tipo = %s")
             params.append(tipo_filtro)
         
+        # El filtro de estado se aplicará después de calcular el estado_pago en Python
+        # porque el estado depende de múltiples factores (fecha_vencimiento, status_recibo, etc.)
+        # Solo filtramos "Pagado" en SQL porque es el único estado que es directo
         if estado_pago_filtro:
             if estado_pago_filtro.lower() == 'pagado' or estado_pago_filtro.lower() == 'recibido':
                 where_clauses.append("car.estado = 'RECIBIDO'")
-            elif estado_pago_filtro.lower() == 'pendiente':
+            # Para otros estados (pendiente, atrasado, adelantado), filtramos en Python
+            # después de calcular el estado real, pero pre-filtramos por ABIERTO para eficiencia
+            elif estado_pago_filtro.lower() in ['pendiente', 'atrasado', 'adelantado', 'en día', 'en dia']:
                 where_clauses.append("car.estado = 'ABIERTO'")
-            elif estado_pago_filtro.lower() == 'atrasado':
-                where_clauses.append("(car.estado = 'ABIERTO' AND car.vencimiento < CURRENT_DATE) OR car.status_recibo = 'ATRASADO'")
         
         where_sql = ""
         if where_clauses:
             where_sql = "WHERE " + " AND ".join(where_clauses)
         
-        # Agregar LIMIT y OFFSET si se proporcionan
-        limit_sql = ""
-        if limite is not None:
-            limit_sql = f"LIMIT {limite}"
-            if offset is not None:
-                limit_sql += f" OFFSET {offset}"
-        
         # Query de cuentas a recibir
+        # NO aplicamos LIMIT/OFFSET aquí porque necesitamos filtrar por estado en Python primero
         query = f"""
             SELECT 
                 car.id,
@@ -481,7 +505,6 @@ def obtener_reportes_cuentas_a_recibir(cliente_nombre=None, fecha_desde=None, fe
             LEFT JOIN proyectos p ON car.proyecto_id = p.id
             {where_sql}
             ORDER BY car.fecha_emision DESC, car.id DESC
-            {limit_sql}
         """
         
         cur.execute(query, params)
@@ -520,32 +543,7 @@ def obtener_reportes_cuentas_a_recibir(cliente_nombre=None, fecha_desde=None, fe
                     if hoy > fecha_vencimiento:
                         dias_atraso = (hoy - fecha_vencimiento).days
             
-            # Determinar estado de pago
-            estado_pago = cuenta['estado'] or 'ABIERTO'
-            if estado_pago == 'RECIBIDO':
-                estado_pago = 'Pagado'
-            elif estado_pago == 'ABIERTO':
-                if fecha_vencimiento:
-                    hoy = date.today()
-                    if hoy > fecha_vencimiento:
-                        estado_pago = 'Atrasado'
-                    elif hoy == fecha_vencimiento:
-                        estado_pago = 'En día'
-                    else:
-                        estado_pago = 'Pendiente'
-                else:
-                    estado_pago = 'Pendiente'
-            
-            # Usar status_recibo si está disponible
-            if cuenta['status_recibo']:
-                status_map = {
-                    'ADELANTADO': 'Adelantado',
-                    'ATRASADO': 'Atrasado',
-                    'EN DIA': 'En día'
-                }
-                estado_pago = status_map.get(cuenta['status_recibo'], estado_pago)
-            
-            # Calcular saldo: (valor_cuota o valor) - monto_abonado
+            # Calcular saldo primero para determinar el estado
             valor_cuota = float(cuenta['valor_cuota']) if cuenta['valor_cuota'] else None
             valor = float(cuenta['valor']) if cuenta['valor'] else 0
             monto_abonado = float(cuenta.get('monto_abonado') or 0)
@@ -572,6 +570,35 @@ def obtener_reportes_cuentas_a_recibir(cliente_nombre=None, fecha_desde=None, fe
             else:
                 saldo = 0
             
+            # Determinar estado de pago basándose en el saldo
+            estado_pago = cuenta['estado'] or 'ABIERTO'
+            if estado_pago == 'RECIBIDO':
+                estado_pago = 'Pagado'
+            elif saldo > 0.01:
+                # Si hay saldo pendiente, siempre es "Pendiente"
+                estado_pago = 'Pendiente'
+            elif estado_pago == 'ABIERTO':
+                # Si no hay saldo, determinar estado según fecha de vencimiento
+                if fecha_vencimiento:
+                    hoy = date.today()
+                    if hoy > fecha_vencimiento:
+                        estado_pago = 'Atrasado'
+                    elif hoy == fecha_vencimiento:
+                        estado_pago = 'En día'
+                    else:
+                        estado_pago = 'Pendiente'
+                else:
+                    estado_pago = 'Pendiente'
+            
+            # Usar status_recibo si está disponible (solo si no hay saldo pendiente)
+            if saldo <= 0.01 and cuenta['status_recibo']:
+                status_map = {
+                    'ADELANTADO': 'Adelantado',
+                    'ATRASADO': 'Atrasado',
+                    'EN DIA': 'En día'
+                }
+                estado_pago = status_map.get(cuenta['status_recibo'], estado_pago)
+            
             reporte = {
                 'tipo': 'CUENTA_A_RECIBIR',
                 'id': cuenta['id'],
@@ -587,6 +614,7 @@ def obtener_reportes_cuentas_a_recibir(cliente_nombre=None, fecha_desde=None, fe
                 'estado_pago': estado_pago,
                 'dias_atraso': dias_atraso,
                 'monto': saldo,  # Mostrar saldo en lugar del monto total
+                'monto_abonado': monto_abonado,  # Monto abonado
                 # Campos adicionales
                 'documento_nombre': cuenta.get('documento_nombre'),
                 'banco_nombre': cuenta.get('banco_nombre'),
@@ -597,10 +625,35 @@ def obtener_reportes_cuentas_a_recibir(cliente_nombre=None, fecha_desde=None, fe
                 'valor_cuota': float(cuenta['valor_cuota']) if cuenta['valor_cuota'] else None
             }
             
+            # Aplicar filtro de estado después de calcular el estado_pago
+            if estado_pago_filtro:
+                estado_filtro_lower = estado_pago_filtro.lower()
+                if estado_filtro_lower == 'pagado' or estado_filtro_lower == 'recibido':
+                    if estado_pago.lower() != 'pagado':
+                        continue
+                elif estado_filtro_lower == 'pendiente':
+                    if estado_pago.lower() != 'pendiente':
+                        continue
+                elif estado_filtro_lower == 'atrasado':
+                    if estado_pago.lower() != 'atrasado':
+                        continue
+                elif estado_filtro_lower == 'adelantado':
+                    if estado_pago.lower() != 'adelantado':
+                        continue
+                elif estado_filtro_lower == 'en día' or estado_filtro_lower == 'en dia':
+                    if estado_pago.lower() != 'en día' and estado_pago.lower() != 'en dia':
+                        continue
+            
             reportes.append(reporte)
         
         # Ordenar por fecha de emisión descendente
         reportes.sort(key=lambda x: x['fecha_emision'] if x['fecha_emision'] else date.min, reverse=True)
+        
+        # Aplicar paginación después del filtro de estado
+        if limite is not None:
+            inicio = offset if offset is not None else 0
+            fin = inicio + limite
+            reportes = reportes[inicio:fin]
         
         return reportes
     finally:

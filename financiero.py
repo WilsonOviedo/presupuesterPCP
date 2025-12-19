@@ -1322,6 +1322,30 @@ def obtener_cuentas_a_recibir(filtros=None, limite=None, offset=None):
             if filtros.get('banco_id'):
                 where_clauses.append("car.banco_id = %s")
                 params.append(filtros['banco_id'])
+            
+            # Filtro de saldo (se aplicará después del cálculo del saldo)
+            saldo_filtro = filtros.get('saldo')
+            if saldo_filtro:
+                if saldo_filtro == '>0':
+                    # Saldo mayor a 0
+                    where_clauses.append("""
+                        (CASE 
+                            WHEN COALESCE(car.valor_cuota, car.valor, 0) < 0 THEN
+                                GREATEST(0, COALESCE(car.valor_cuota, car.valor, 0) + COALESCE(car.monto_abonado, 0))
+                            ELSE
+                                GREATEST(0, COALESCE(car.valor_cuota, car.valor, 0) - COALESCE(car.monto_abonado, 0))
+                        END) > 0.01
+                    """)
+                elif saldo_filtro == '=0':
+                    # Saldo igual a 0
+                    where_clauses.append("""
+                        (CASE 
+                            WHEN COALESCE(car.valor_cuota, car.valor, 0) < 0 THEN
+                                GREATEST(0, COALESCE(car.valor_cuota, car.valor, 0) + COALESCE(car.monto_abonado, 0))
+                            ELSE
+                                GREATEST(0, COALESCE(car.valor_cuota, car.valor, 0) - COALESCE(car.monto_abonado, 0))
+                        END) <= 0.01
+                    """)
         
         where_sql = ""
         if where_clauses:
