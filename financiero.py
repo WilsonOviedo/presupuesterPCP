@@ -1346,6 +1346,14 @@ def obtener_cuentas_a_recibir(filtros=None, limite=None, offset=None):
                                 GREATEST(0, COALESCE(car.valor_cuota, car.valor, 0) - COALESCE(car.monto_abonado, 0))
                         END) <= 0.01
                     """)
+            
+            if filtros.get('fecha_recibo_desde'):
+                where_clauses.append("car.fecha_recibo >= %s")
+                params.append(filtros['fecha_recibo_desde'])
+            
+            if filtros.get('fecha_recibo_hasta'):
+                where_clauses.append("car.fecha_recibo <= %s")
+                params.append(filtros['fecha_recibo_hasta'])
         
         where_sql = ""
         if where_clauses:
@@ -1463,6 +1471,14 @@ def contar_cuentas_a_recibir(filtros=None):
                                 GREATEST(0, COALESCE(car.valor_cuota, car.valor, 0) - COALESCE(car.monto_abonado, 0))
                         END) <= 0.01
                     """)
+            
+            if filtros.get('fecha_recibo_desde'):
+                where_clauses.append("car.fecha_recibo >= %s")
+                params.append(filtros['fecha_recibo_desde'])
+            
+            if filtros.get('fecha_recibo_hasta'):
+                where_clauses.append("car.fecha_recibo <= %s")
+                params.append(filtros['fecha_recibo_hasta'])
         
         where_sql = ""
         if where_clauses:
@@ -1849,6 +1865,14 @@ def obtener_cuentas_a_pagar(filtros=None, limite=None, offset=None):
                 elif saldo_filtro == '=0':
                     # Saldo igual a 0
                     where_clauses.append("(COALESCE(cap.valor_cuota, cap.valor, 0) - COALESCE(cap.monto_abonado, 0)) <= 0.01")
+            
+            if filtros.get('fecha_pago_desde'):
+                where_clauses.append("cap.fecha_pago >= %s")
+                params.append(filtros['fecha_pago_desde'])
+            
+            if filtros.get('fecha_pago_hasta'):
+                where_clauses.append("cap.fecha_pago <= %s")
+                params.append(filtros['fecha_pago_hasta'])
         
         where_sql = ""
         if where_clauses:
@@ -1923,6 +1947,14 @@ def contar_cuentas_a_pagar(filtros=None):
                 elif saldo_filtro == '=0':
                     # Saldo igual a 0
                     where_clauses.append("(COALESCE(cap.valor_cuota, cap.valor, 0) - COALESCE(cap.monto_abonado, 0)) <= 0.01")
+            
+            if filtros.get('fecha_pago_desde'):
+                where_clauses.append("cap.fecha_pago >= %s")
+                params.append(filtros['fecha_pago_desde'])
+            
+            if filtros.get('fecha_pago_hasta'):
+                where_clauses.append("cap.fecha_pago <= %s")
+                params.append(filtros['fecha_pago_hasta'])
         
         where_sql = ""
         if where_clauses:

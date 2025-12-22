@@ -234,6 +234,14 @@
               <option value="=0" {% if saldo_filtro == '=0' %}selected{% endif %}>Sin saldo (=0)</option>
             </select>
           </div>
+          <div class="form-group">
+            <label for="fecha_pago_desde">Fecha Pago desde:</label>
+            <input type="date" id="fecha_pago_desde" name="fecha_pago_desde" value="{{ fecha_pago_desde }}">
+          </div>
+          <div class="form-group">
+            <label for="fecha_pago_hasta">Fecha Pago hasta:</label>
+            <input type="date" id="fecha_pago_hasta" name="fecha_pago_hasta" value="{{ fecha_pago_hasta }}">
+          </div>
         </div>
         <div style="margin-top: 15px;">
           <button type="submit" class="button" style="background: #f44336;">🔍 Buscar</button>
@@ -383,6 +391,12 @@
             {% if request.args.get('saldo_filtro') %}
               <input type="hidden" name="saldo_filtro" value="{{ request.args.get('saldo_filtro') }}">
             {% endif %}
+            {% if request.args.get('fecha_pago_desde') %}
+              <input type="hidden" name="fecha_pago_desde" value="{{ request.args.get('fecha_pago_desde') }}">
+            {% endif %}
+            {% if request.args.get('fecha_pago_hasta') %}
+              <input type="hidden" name="fecha_pago_hasta" value="{{ request.args.get('fecha_pago_hasta') }}">
+            {% endif %}
             <label style="font-size: 0.9em; font-weight: 600;">Filas por página:</label>
             <select name="limite" onchange="this.form.submit()" style="padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.9em;">
               <option value="25" {% if limite == 25 %}selected{% endif %}>25</option>
@@ -395,7 +409,7 @@
         </div>
         <div class="paginacion-buttons">
           {% if pagina > 1 %}
-            <a href="{{ url_for('cuentas_a_pagar_index', pagina=pagina-1, limite=limite, fecha_desde=request.args.get('fecha_desde', ''), fecha_hasta=request.args.get('fecha_hasta', ''), proveedor=request.args.get('proveedor', ''), estado=request.args.get('estado', ''), banco_id=request.args.get('banco_id', ''), saldo_filtro=request.args.get('saldo_filtro', '')) }}">
+            <a href="{{ url_for('cuentas_a_pagar_index', pagina=pagina-1, limite=limite, fecha_desde=request.args.get('fecha_desde', ''), fecha_hasta=request.args.get('fecha_hasta', ''), proveedor=request.args.get('proveedor', ''), estado=request.args.get('estado', ''), banco_id=request.args.get('banco_id', ''), saldo_filtro=request.args.get('saldo_filtro', ''), fecha_pago_desde=request.args.get('fecha_pago_desde', ''), fecha_pago_hasta=request.args.get('fecha_pago_hasta', '')) }}">
               ← Anterior
             </a>
           {% else %}
@@ -403,7 +417,7 @@
           {% endif %}
           
           {% if pagina < total_paginas %}
-            <a href="{{ url_for('cuentas_a_pagar_index', pagina=pagina+1, limite=limite, fecha_desde=request.args.get('fecha_desde', ''), fecha_hasta=request.args.get('fecha_hasta', ''), proveedor=request.args.get('proveedor', ''), estado=request.args.get('estado', ''), banco_id=request.args.get('banco_id', ''), saldo_filtro=request.args.get('saldo_filtro', '')) }}">
+            <a href="{{ url_for('cuentas_a_pagar_index', pagina=pagina+1, limite=limite, fecha_desde=request.args.get('fecha_desde', ''), fecha_hasta=request.args.get('fecha_hasta', ''), proveedor=request.args.get('proveedor', ''), estado=request.args.get('estado', ''), banco_id=request.args.get('banco_id', ''), saldo_filtro=request.args.get('saldo_filtro', ''), fecha_pago_desde=request.args.get('fecha_pago_desde', ''), fecha_pago_hasta=request.args.get('fecha_pago_hasta', '')) }}">
               Siguiente →
             </a>
           {% else %}

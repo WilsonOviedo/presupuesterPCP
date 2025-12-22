@@ -4056,9 +4056,13 @@ def saldos_iniciales_index():
     error = request.args.get('error')
     mensaje = request.args.get('mensaje')
     
+    # Calcular el total de saldos iniciales
+    total_saldos_iniciales = sum(float(banco.get('saldo_inicial') or 0) for banco in bancos)
+    
     return render_template('financiero/saldos_iniciales/index.html',
                          bancos=bancos,
                          fecha_saldo_inicial=fecha_saldo_inicial,
+                         total_saldos_iniciales=total_saldos_iniciales,
                          error=error,
                          mensaje=mensaje)
 
@@ -4184,6 +4188,8 @@ def cuentas_a_recibir_index():
     estado_filtro = request.args.get('estado', '').strip()
     banco_filtro = request.args.get('banco_id', type=int)
     saldo_filtro = request.args.get('saldo_filtro', '').strip()
+    fecha_recibo_desde = request.args.get('fecha_recibo_desde', '').strip()
+    fecha_recibo_hasta = request.args.get('fecha_recibo_hasta', '').strip()
     
     if fecha_desde:
         filtros['fecha_desde'] = fecha_desde
@@ -4197,6 +4203,10 @@ def cuentas_a_recibir_index():
         filtros['banco_id'] = banco_filtro
     if saldo_filtro:
         filtros['saldo'] = saldo_filtro
+    if fecha_recibo_desde:
+        filtros['fecha_recibo_desde'] = fecha_recibo_desde
+    if fecha_recibo_hasta:
+        filtros['fecha_recibo_hasta'] = fecha_recibo_hasta
     
     # Paginación
     pagina = request.args.get('pagina', type=int, default=1)
@@ -4254,6 +4264,8 @@ def cuentas_a_recibir_index():
                          estado_filtro=estado_filtro,
                          banco_filtro=banco_filtro,
                          saldo_filtro=saldo_filtro,
+                         fecha_recibo_desde=fecha_recibo_desde,
+                         fecha_recibo_hasta=fecha_recibo_hasta,
                          error=error,
                          mensaje=mensaje)
 
@@ -4634,6 +4646,8 @@ def cuentas_a_pagar_index():
     estado_filtro = request.args.get('estado', '')
     banco_filtro = request.args.get('banco_id', '')
     saldo_filtro = request.args.get('saldo_filtro', '').strip()
+    fecha_pago_desde = request.args.get('fecha_pago_desde', '').strip()
+    fecha_pago_hasta = request.args.get('fecha_pago_hasta', '').strip()
     
     if fecha_desde:
         filtros['fecha_desde'] = fecha_desde
@@ -4647,6 +4661,10 @@ def cuentas_a_pagar_index():
         filtros['banco_id'] = banco_filtro
     if saldo_filtro:
         filtros['saldo'] = saldo_filtro
+    if fecha_pago_desde:
+        filtros['fecha_pago_desde'] = fecha_pago_desde
+    if fecha_pago_hasta:
+        filtros['fecha_pago_hasta'] = fecha_pago_hasta
     
     # Paginación
     pagina = request.args.get('pagina', type=int, default=1)
@@ -4704,6 +4722,8 @@ def cuentas_a_pagar_index():
                          estado_filtro=estado_filtro,
                          banco_filtro=banco_filtro,
                          saldo_filtro=saldo_filtro,
+                         fecha_pago_desde=fecha_pago_desde,
+                         fecha_pago_hasta=fecha_pago_hasta,
                          error=error,
                          mensaje=mensaje)
 

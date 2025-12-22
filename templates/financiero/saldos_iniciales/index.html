@@ -114,6 +114,17 @@
       </div>
     {% endif %}
 
+    <div style="background: #2196F3; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <h3 style="margin: 0; font-size: 1.2em; font-weight: 600;">Total de Saldos Iniciales</h3>
+        </div>
+        <div style="font-size: 2em; font-weight: bold;">
+          {{ "{:,.2f}".format(total_saldos_iniciales) }}
+        </div>
+      </div>
+    </div>
+
     <div style="overflow-x: auto;">
       <table class="bancos-table">
         <thead>
