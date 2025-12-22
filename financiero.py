@@ -1323,6 +1323,14 @@ def obtener_cuentas_a_recibir(filtros=None, limite=None, offset=None):
                 where_clauses.append("car.banco_id = %s")
                 params.append(filtros['banco_id'])
             
+            if filtros.get('cuenta_id'):
+                where_clauses.append("car.cuenta_id = %s")
+                params.append(filtros['cuenta_id'])
+            
+            if filtros.get('plano_cuenta'):
+                where_clauses.append("UPPER(car.plano_cuenta) LIKE UPPER(%s)")
+                params.append(f"%{filtros['plano_cuenta']}%")
+            
             # Filtro de saldo (se aplicará después del cálculo del saldo)
             saldo_filtro = filtros.get('saldo')
             if saldo_filtro:
@@ -1447,6 +1455,14 @@ def contar_cuentas_a_recibir(filtros=None):
             if filtros.get('banco_id'):
                 where_clauses.append("car.banco_id = %s")
                 params.append(filtros['banco_id'])
+            
+            if filtros.get('cuenta_id'):
+                where_clauses.append("car.cuenta_id = %s")
+                params.append(filtros['cuenta_id'])
+            
+            if filtros.get('plano_cuenta'):
+                where_clauses.append("UPPER(car.plano_cuenta) LIKE UPPER(%s)")
+                params.append(f"%{filtros['plano_cuenta']}%")
             
             # Filtro de saldo (se aplicará después del cálculo del saldo)
             saldo_filtro = filtros.get('saldo')
@@ -1856,6 +1872,14 @@ def obtener_cuentas_a_pagar(filtros=None, limite=None, offset=None):
                 where_clauses.append("cap.banco_id = %s")
                 params.append(filtros['banco_id'])
             
+            if filtros.get('cuenta_id'):
+                where_clauses.append("cap.cuenta_id = %s")
+                params.append(filtros['cuenta_id'])
+            
+            if filtros.get('plano_cuenta'):
+                where_clauses.append("UPPER(cap.plano_cuenta) LIKE UPPER(%s)")
+                params.append(f"%{filtros['plano_cuenta']}%")
+            
             # Filtro de saldo (se aplicará después del cálculo del saldo)
             saldo_filtro = filtros.get('saldo')
             if saldo_filtro:
@@ -1937,6 +1961,14 @@ def contar_cuentas_a_pagar(filtros=None):
             if filtros.get('banco_id'):
                 where_clauses.append("cap.banco_id = %s")
                 params.append(filtros['banco_id'])
+            
+            if filtros.get('cuenta_id'):
+                where_clauses.append("cap.cuenta_id = %s")
+                params.append(filtros['cuenta_id'])
+            
+            if filtros.get('plano_cuenta'):
+                where_clauses.append("UPPER(cap.plano_cuenta) LIKE UPPER(%s)")
+                params.append(f"%{filtros['plano_cuenta']}%")
             
             # Filtro de saldo (se aplicará después del cálculo del saldo)
             saldo_filtro = filtros.get('saldo')

@@ -227,6 +227,15 @@
             </select>
           </div>
           <div class="form-group">
+            <label for="cuenta_id">Cuenta:</label>
+            <select id="cuenta_id" name="cuenta_id">
+              <option value="">Todas</option>
+              {% for cuenta in categorias_gastos %}
+                <option value="{{ cuenta.id }}" {% if cuenta_filtro == cuenta.id %}selected{% endif %}>{{ cuenta.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
             <label for="saldo_filtro">Saldo:</label>
             <select id="saldo_filtro" name="saldo_filtro">
               <option value="" {% if not saldo_filtro %}selected{% endif %}>Todos</option>
@@ -241,6 +250,10 @@
           <div class="form-group">
             <label for="fecha_pago_hasta">Fecha Pago hasta:</label>
             <input type="date" id="fecha_pago_hasta" name="fecha_pago_hasta" value="{{ fecha_pago_hasta }}">
+          </div>
+          <div class="form-group">
+            <label for="plano_cuenta">Plano de Cuenta:</label>
+            <input type="text" id="plano_cuenta" name="plano_cuenta" value="{{ plano_cuenta_filtro }}" placeholder="Buscar plano de cuenta...">
           </div>
         </div>
         <div style="margin-top: 15px;">
@@ -388,6 +401,9 @@
             {% if request.args.get('banco_id') %}
               <input type="hidden" name="banco_id" value="{{ request.args.get('banco_id') }}">
             {% endif %}
+            {% if request.args.get('cuenta_id') %}
+              <input type="hidden" name="cuenta_id" value="{{ request.args.get('cuenta_id') }}">
+            {% endif %}
             {% if request.args.get('saldo_filtro') %}
               <input type="hidden" name="saldo_filtro" value="{{ request.args.get('saldo_filtro') }}">
             {% endif %}
@@ -396,6 +412,9 @@
             {% endif %}
             {% if request.args.get('fecha_pago_hasta') %}
               <input type="hidden" name="fecha_pago_hasta" value="{{ request.args.get('fecha_pago_hasta') }}">
+            {% endif %}
+            {% if request.args.get('plano_cuenta') %}
+              <input type="hidden" name="plano_cuenta" value="{{ request.args.get('plano_cuenta') }}">
             {% endif %}
             <label style="font-size: 0.9em; font-weight: 600;">Filas por página:</label>
             <select name="limite" onchange="this.form.submit()" style="padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.9em;">
@@ -409,7 +428,7 @@
         </div>
         <div class="paginacion-buttons">
           {% if pagina > 1 %}
-            <a href="{{ url_for('cuentas_a_pagar_index', pagina=pagina-1, limite=limite, fecha_desde=request.args.get('fecha_desde', ''), fecha_hasta=request.args.get('fecha_hasta', ''), proveedor=request.args.get('proveedor', ''), estado=request.args.get('estado', ''), banco_id=request.args.get('banco_id', ''), saldo_filtro=request.args.get('saldo_filtro', ''), fecha_pago_desde=request.args.get('fecha_pago_desde', ''), fecha_pago_hasta=request.args.get('fecha_pago_hasta', '')) }}">
+            <a href="{{ url_for('cuentas_a_pagar_index', pagina=pagina-1, limite=limite, fecha_desde=request.args.get('fecha_desde', ''), fecha_hasta=request.args.get('fecha_hasta', ''), proveedor=request.args.get('proveedor', ''), estado=request.args.get('estado', ''), banco_id=request.args.get('banco_id', ''), cuenta_id=request.args.get('cuenta_id', ''), saldo_filtro=request.args.get('saldo_filtro', ''), fecha_pago_desde=request.args.get('fecha_pago_desde', ''), fecha_pago_hasta=request.args.get('fecha_pago_hasta', ''), plano_cuenta=request.args.get('plano_cuenta', '')) }}">
               ← Anterior
             </a>
           {% else %}
@@ -417,7 +436,7 @@
           {% endif %}
           
           {% if pagina < total_paginas %}
-            <a href="{{ url_for('cuentas_a_pagar_index', pagina=pagina+1, limite=limite, fecha_desde=request.args.get('fecha_desde', ''), fecha_hasta=request.args.get('fecha_hasta', ''), proveedor=request.args.get('proveedor', ''), estado=request.args.get('estado', ''), banco_id=request.args.get('banco_id', ''), saldo_filtro=request.args.get('saldo_filtro', ''), fecha_pago_desde=request.args.get('fecha_pago_desde', ''), fecha_pago_hasta=request.args.get('fecha_pago_hasta', '')) }}">
+            <a href="{{ url_for('cuentas_a_pagar_index', pagina=pagina+1, limite=limite, fecha_desde=request.args.get('fecha_desde', ''), fecha_hasta=request.args.get('fecha_hasta', ''), proveedor=request.args.get('proveedor', ''), estado=request.args.get('estado', ''), banco_id=request.args.get('banco_id', ''), cuenta_id=request.args.get('cuenta_id', ''), saldo_filtro=request.args.get('saldo_filtro', ''), fecha_pago_desde=request.args.get('fecha_pago_desde', ''), fecha_pago_hasta=request.args.get('fecha_pago_hasta', ''), plano_cuenta=request.args.get('plano_cuenta', '')) }}">
               Siguiente →
             </a>
           {% else %}
