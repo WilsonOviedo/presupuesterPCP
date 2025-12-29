@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block title %}Plantillas de Subgrupos{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('listas_materiales_index') }}">← Volver</a>
+  </div>
+  <h2>Plantillas de Subgrupos</h2>
+
+  {% if error %}
+    <div class="error" style="background:#fee; color:#c33; padding:10px; border-radius:4px; margin-bottom:15px;">
+      {{ error }}
+    </div>
+  {% endif %}
+
+  {% if mensaje %}
+    <div class="mensaje" style="background:#efe; color:#3c3; padding:10px; border-radius:4px; margin-bottom:15px;">
+      {{ mensaje }}
+    </div>
+  {% endif %}
+
+  {% if plantillas %}
+    <table>
+      <tr>
+        <th style="width:40%; text-align:left;">Nombre</th>
+        <th style="width:20%; text-align:center;">Items</th>
+        <th style="width:30%; text-align:left;">Fecha de Creación</th>
+        <th style="width:30%; text-align:left;">Acciones</th>
+      </tr>
+      {% for plantilla in plantillas %}
+        <tr>
+          <td style="text-align:left;"><strong>{{ plantilla.nombre }}</strong></td>
+          <td style="text-align:center;">{{ plantilla.num_items }}</td>
+          <td style="text-align:left;">{{ plantilla.fecha_creacion.strftime('%d/%m/%Y %H:%M') if plantilla.fecha_creacion else '-' }}</td>
+          <td style="white-space:nowrap; text-align:left;">
+            <a href="{{ url_for('listas_materiales_ver_plantilla', plantilla_id=plantilla.id) }}" class="button" style="padding:4px 8px; font-size:0.85em; margin-right:5px;">Ver</a>
+            <a href="{{ url_for('listas_materiales_editar_plantilla', plantilla_id=plantilla.id) }}" class="button" style="padding:4px 8px; font-size:0.85em; margin-right:5px; background:#FF9800;">Editar</a>
+            <form method="post" action="{{ url_for('listas_materiales_eliminar_plantilla', plantilla_id=plantilla.id) }}" style="display:inline;">
+              <button type="submit" class="button button-secondary" style="padding:4px 8px; font-size:0.85em; background:#dc3545;" onclick="return confirm('¿Eliminar esta plantilla?')">Eliminar</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p>No hay plantillas guardadas. Guarda un subgrupo como plantilla desde la página de listas de materiales.</p>
+  {% endif %}
+{% endblock %}
+

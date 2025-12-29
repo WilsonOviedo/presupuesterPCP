@@ -2,7 +2,7 @@
 {% block title %}Template: {{ template.nombre }}{% endblock %}
 {% block content %}
   <div class="actions" style="margin-bottom:10px;">
-    <a class="button button-secondary" href="{{ url_for('templates_index') }}">← Volver</a>
+    <a class="button button-secondary" href="{{ url_for('listas_materiales_plantillas_index') }}">← Volver</a>
     <a class="button" href="{{ url_for('templates_editar', id=template.id) }}">Editar</a>
   </div>
   <h2>Template: {{ template.nombre }}</h2>

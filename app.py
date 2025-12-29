@@ -1221,6 +1221,9 @@ def listas_materiales_ver(id):
     templates_disponibles = [dict(t) for t in templates_raw]
 
     marcas_materiales = [dict(m) for m in presupuestos.obtener_marcas_materiales(activo=True)]
+    
+    # Obtener plantillas disponibles
+    plantillas_disponibles = presupuestos.obtener_plantillas()
 
     return render_template('listas_materiales/ver.html', 
                          presupuesto=presupuesto, 
@@ -1230,6 +1233,7 @@ def listas_materiales_ver(id):
                          tipos_items=tipos_items,
                          templates_disponibles=templates_disponibles,
                          marcas_materiales=marcas_materiales,
+                         plantillas_disponibles=plantillas_disponibles,
                          request=request)
 
 @app.route("/listas-materiales/<int:id>/editar", methods=["GET", "POST"], endpoint="listas_materiales_editar")
@@ -1553,6 +1557,143 @@ def listas_materiales_actualizar_subgrupo(subgrupo_id):
     ):
         return redirect(url_for('listas_materiales_ver', id=lista_id))
     return "Error al actualizar subgrupo", 400
+
+@app.route("/listas-materiales/subgrupos/<int:subgrupo_id>/duplicar", methods=["POST"], endpoint="listas_materiales_duplicar_subgrupo")
+@app.route("/listas-materiales/subgrupos/<int:subgrupo_id>/duplicar", methods=["POST"], endpoint="listas_materiales_duplicar_subgrupo")
+def listas_materiales_duplicar_subgrupo(subgrupo_id):
+    """Duplicar subgrupo con todos sus items"""
+    lista_id = request.form.get("lista_id") or request.form.get("presupuesto_id")
+    try:
+        lista_id = int(lista_id) if lista_id else None
+    except ValueError:
+        return "Lista ID inválido", 400
+    
+    try:
+        nuevo_subgrupo_id = presupuestos.duplicar_subgrupo(subgrupo_id)
+        if nuevo_subgrupo_id:
+            return redirect(url_for('listas_materiales_ver', id=lista_id))
+        return "Error al duplicar subgrupo", 400
+    except Exception as e:
+        return f"Error al duplicar subgrupo: {str(e)}", 400
+
+@app.route("/listas-materiales/subgrupos/<int:subgrupo_id>/guardar-plantilla", methods=["POST"], endpoint="listas_materiales_guardar_plantilla")
+@auth.login_required
+@auth.permission_required('/listas-materiales')
+def listas_materiales_guardar_plantilla(subgrupo_id):
+    """Guardar un subgrupo como plantilla"""
+    nombre_plantilla = request.form.get("nombre_plantilla")
+    if not nombre_plantilla or not nombre_plantilla.strip():
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': False, 'error': 'El nombre de la plantilla es requerido'}), 400
+        return "El nombre de la plantilla es requerido", 400
+    
+    # Convertir el nombre a mayúsculas
+    nombre_plantilla = _to_upper(nombre_plantilla.strip())
+    
+    try:
+        plantilla_id = presupuestos.guardar_plantilla_subgrupo(subgrupo_id, nombre_plantilla)
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': True, 'plantilla_id': plantilla_id})
+        lista_id = request.form.get("lista_id")
+        return redirect(url_for('listas_materiales_ver', id=lista_id, mensaje='Plantilla guardada correctamente'))
+    except Exception as e:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': False, 'error': str(e)}), 400
+        lista_id = request.form.get("lista_id")
+        return redirect(url_for('listas_materiales_ver', id=lista_id, error=f'Error al guardar plantilla: {str(e)}'))
+
+@app.route("/listas-materiales/plantillas/<int:plantilla_id>/insertar", methods=["POST"], endpoint="listas_materiales_insertar_plantilla")
+@auth.login_required
+@auth.permission_required('/listas-materiales')
+def listas_materiales_insertar_plantilla(plantilla_id):
+    """Insertar una plantilla en un subgrupo"""
+    subgrupo_id = request.form.get("subgrupo_id")
+    lista_id = request.form.get("lista_id")
+    
+    try:
+        subgrupo_id = int(subgrupo_id) if subgrupo_id else None
+        lista_id = int(lista_id) if lista_id else None
+    except ValueError:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': False, 'error': 'IDs inválidos'}), 400
+        return "IDs inválidos", 400
+    
+    if not subgrupo_id or not lista_id:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': False, 'error': 'Subgrupo ID y Lista ID son requeridos'}), 400
+        return "Subgrupo ID y Lista ID son requeridos", 400
+    
+    try:
+        items_insertados = presupuestos.insertar_plantilla_en_subgrupo(plantilla_id, subgrupo_id, lista_id)
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': True, 'items_insertados': len(items_insertados)})
+        return redirect(url_for('listas_materiales_ver', id=lista_id, mensaje=f'Plantilla insertada correctamente. {len(items_insertados)} items agregados.'))
+    except Exception as e:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': False, 'error': str(e)}), 400
+        return redirect(url_for('listas_materiales_ver', id=lista_id, error=f'Error al insertar plantilla: {str(e)}'))
+
+@app.route("/listas-materiales/plantillas/<int:plantilla_id>", methods=["GET"], endpoint="listas_materiales_ver_plantilla")
+@auth.login_required
+@auth.permission_required('/listas-materiales')
+def listas_materiales_ver_plantilla(plantilla_id):
+    """Ver una plantilla con sus items"""
+    plantilla = presupuestos.obtener_plantilla_por_id(plantilla_id)
+    if not plantilla:
+        return redirect(url_for('listas_materiales_plantillas_index', error='Plantilla no encontrada'))
+    
+    items = presupuestos.obtener_items_plantilla(plantilla_id)
+    return render_template(
+        'listas_materiales/plantillas/ver.html',
+        plantilla=plantilla,
+        items=items,
+        request=request
+    )
+
+@app.route("/listas-materiales/plantillas/<int:plantilla_id>/editar", methods=["GET", "POST"], endpoint="listas_materiales_editar_plantilla")
+@auth.login_required
+@auth.permission_required('/listas-materiales')
+def listas_materiales_editar_plantilla(plantilla_id):
+    """Editar el nombre de una plantilla"""
+    plantilla = presupuestos.obtener_plantilla_por_id(plantilla_id)
+    if not plantilla:
+        return redirect(url_for('listas_materiales_plantillas_index', error='Plantilla no encontrada'))
+    
+    if request.method == "POST":
+        nuevo_nombre = request.form.get("nombre")
+        if not nuevo_nombre or not nuevo_nombre.strip():
+            return render_template(
+                'listas_materiales/plantillas/editar.html',
+                plantilla=plantilla,
+                error='El nombre es requerido'
+            )
+        
+        try:
+            presupuestos.actualizar_nombre_plantilla(plantilla_id, nuevo_nombre.strip())
+            return redirect(url_for('listas_materiales_plantillas_index', mensaje='Plantilla actualizada correctamente'))
+        except Exception as e:
+            return render_template(
+                'listas_materiales/plantillas/editar.html',
+                plantilla=plantilla,
+                error=str(e)
+            )
+    
+    return render_template(
+        'listas_materiales/plantillas/editar.html',
+        plantilla=plantilla,
+        request=request
+    )
+
+@app.route("/listas-materiales/plantillas/<int:plantilla_id>/eliminar", methods=["POST"], endpoint="listas_materiales_eliminar_plantilla")
+@auth.login_required
+@auth.permission_required('/listas-materiales')
+def listas_materiales_eliminar_plantilla(plantilla_id):
+    """Eliminar una plantilla"""
+    try:
+        presupuestos.eliminar_plantilla(plantilla_id)
+        return redirect(url_for('listas_materiales_plantillas_index', mensaje='Plantilla eliminada correctamente'))
+    except Exception as e:
+        return redirect(url_for('listas_materiales_plantillas_index', error=f'Error al eliminar plantilla: {str(e)}'))
 
 @app.route("/listas-materiales/subgrupos/<int:subgrupo_id>/eliminar", methods=["POST"], endpoint="listas_materiales_eliminar_subgrupo")
 @app.route("/listas-materiales/subgrupos/<int:subgrupo_id>/eliminar", methods=["POST"], endpoint="listas_materiales_eliminar_subgrupo")
@@ -2086,6 +2227,21 @@ def materiales_genericos_nuevo():
                                  error=f"Error al crear material: {str(e)}", mostrar_salir=False)
     return render_template('listas_materiales/materiales_genericos/form.html', 
                          material=None, request=request, mostrar_salir=False)
+
+@app.route("/api/listas-materiales/materiales-genericos", methods=["GET"])
+@auth.login_required
+def api_materiales_genericos():
+    """API para obtener materiales genéricos en JSON"""
+    materiales_raw = presupuestos.obtener_materiales_genericos()
+    materiales = []
+    for material in materiales_raw:
+        material_dict = dict(material)
+        materiales.append({
+            'id': material_dict.get('id'),
+            'descripcion': material_dict.get('descripcion'),
+            'tiempo_instalacion': float(material_dict.get('tiempo_instalacion') or 0)
+        })
+    return jsonify(materiales)
 
 @app.route("/listas-materiales/materiales_genericos/<int:id>/editar", methods=["GET", "POST"])
 def materiales_genericos_editar(id):
@@ -2630,14 +2786,26 @@ def api_buscar_precio():
 
 # ==================== RUTAS DE TEMPLATES DE PRESUPUESTOS ====================
 
-@app.route("/listas-materiales/templates", methods=["GET"])
-def templates_index():
-    """Lista de templates de presupuestos"""
-    templates_lista = presupuestos.obtener_templates_listas_materiales()
-    templates_list = [dict(t) for t in templates_lista]
+@app.route("/listas-materiales/plantillas", methods=["GET"], endpoint="listas_materiales_plantillas_index")
+@auth.login_required
+@auth.permission_required('/listas-materiales')
+def listas_materiales_plantillas_index():
+    """Lista de plantillas de subgrupos"""
+    error = request.args.get('error')
+    mensaje = request.args.get('mensaje')
+    plantillas_lista = presupuestos.obtener_plantillas()
+    # Obtener el número de items de cada plantilla
+    plantillas_con_items = []
+    for plantilla in plantillas_lista:
+        plantilla_dict = dict(plantilla)
+        items = presupuestos.obtener_items_plantilla(plantilla['id'])
+        plantilla_dict['num_items'] = len(items)
+        plantillas_con_items.append(plantilla_dict)
     return render_template(
-        'listas_materiales/templates/index.html',
-        templates=templates_list,
+        'listas_materiales/plantillas/index.html',
+        plantillas=plantillas_con_items,
+        error=error,
+        mensaje=mensaje,
         request=request
     )
 

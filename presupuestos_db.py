@@ -1712,6 +1712,105 @@ def obtener_siguiente_numero_subgrupo(lista_material_id):
         cur.close()
         conn.close()
 
+def duplicar_subgrupo(subgrupo_id):
+    """Duplica un subgrupo con todos sus items"""
+    conn, cur = conectar()
+    try:
+        # Obtener el subgrupo original
+        cur.execute(
+            "SELECT * FROM lista_materiales_subgrupos WHERE id = %s",
+            (subgrupo_id,)
+        )
+        subgrupo_original = cur.fetchone()
+        if not subgrupo_original:
+            return None
+        
+        lista_material_id = subgrupo_original['lista_material_id']
+        numero_original = subgrupo_original['numero']
+        nombre_original = subgrupo_original['nombre']
+        orden_original = subgrupo_original.get('orden', 0)
+        
+        # Crear el nuevo subgrupo con el siguiente número disponible (no puede ser el mismo por restricción única)
+        nuevo_numero = obtener_siguiente_numero_subgrupo(lista_material_id)
+        nuevo_nombre = nombre_original  # Mismo nombre, el usuario lo cambiará
+        
+        cur.execute(
+            """INSERT INTO lista_materiales_subgrupos (lista_material_id, numero, nombre, orden)
+               VALUES (%s, %s, %s, %s) RETURNING id""",
+            (lista_material_id, nuevo_numero, nuevo_nombre, orden_original)
+        )
+        nuevo_subgrupo_id = cur.fetchone()['id']
+        
+        # Obtener todos los items del subgrupo original
+        cur.execute(
+            """SELECT * FROM lista_materiales_items 
+               WHERE subgrupo_id = %s 
+               ORDER BY orden, id""",
+            (subgrupo_id,)
+        )
+        items_originales = cur.fetchall()
+        
+        # Duplicar cada item y actualizar numero_subitem para que corresponda al nuevo número del subgrupo
+        for item in items_originales:
+            numero_subitem_original = item.get('numero_subitem')
+            nuevo_numero_subitem = None
+            
+            # Si el item tiene numero_subitem, actualizarlo para que use el nuevo número del subgrupo
+            if numero_subitem_original:
+                # El formato es "numero_subgrupo.numero_item" (ej: "3.1", "3.2")
+                # Extraer solo la parte después del punto
+                if '.' in str(numero_subitem_original):
+                    parte_item = str(numero_subitem_original).split('.', 1)[1]
+                    nuevo_numero_subitem = f"{nuevo_numero}.{parte_item}"
+                else:
+                    # Si no tiene punto, usar el nuevo número directamente
+                    nuevo_numero_subitem = str(nuevo_numero)
+            else:
+                # Si no tiene numero_subitem, generar uno nuevo
+                cur.execute(
+                    "SELECT COUNT(*) as count FROM lista_materiales_items WHERE subgrupo_id = %s",
+                    (nuevo_subgrupo_id,)
+                )
+                count_row = cur.fetchone()
+                item_count = count_row['count'] if count_row else 0
+                nuevo_numero_subitem = f"{nuevo_numero}.{item_count + 1}"
+            
+            cur.execute(
+                """INSERT INTO lista_materiales_items 
+                   (lista_material_id, subgrupo_id, item_id, material_id, marca_id, codigo_item, descripcion, marca, tipo, unidad, 
+                    cantidad, precio_unitario, numero_subitem, tiempo_ejecucion_horas, orden, notas)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                   RETURNING id""",
+                (
+                    item['lista_material_id'],
+                    nuevo_subgrupo_id,
+                    item.get('item_id'),
+                    item.get('material_id'),
+                    item.get('marca_id'),
+                    item.get('codigo_item'),
+                    item.get('descripcion'),
+                    item.get('marca'),
+                    item.get('tipo'),
+                    item.get('unidad'),
+                    item.get('cantidad', 0),
+                    item.get('precio_unitario', 0),
+                    nuevo_numero_subitem,
+                    item.get('tiempo_ejecucion_horas', 0),
+                    item.get('orden', 0),
+                    item.get('notas')
+                )
+            )
+        
+        conn.commit()
+        return nuevo_subgrupo_id
+    except Exception as e:
+        conn.rollback()
+        print(f"Error al duplicar subgrupo: {e}")
+        raise
+    finally:
+        cur.close()
+        conn.close()
+
 def buscar_materiales(descripcion=None, marca=None, marca_id=None):
     """Busca materiales con filtros opcionales"""
     conn, cur = conectar()
@@ -1763,14 +1862,38 @@ def crear_material_generico(descripcion, tiempo_instalacion=0, unidad='UND'):
         # Convertir descripción a mayúsculas
         descripcion_upper = descripcion.upper().strip() if descripcion else ""
         unidad_normalizada = simplificar_unidad(unidad)
-        cur.execute(
-            """INSERT INTO materiales_genericos (descripcion, tiempo_instalacion, unidad)
-               VALUES (%s, %s, %s) RETURNING id""",
-            (descripcion_upper, tiempo_instalacion, unidad_normalizada)
-        )
-        material_id = cur.fetchone()['id']
-        conn.commit()
-        return material_id
+        
+        try:
+            cur.execute(
+                """INSERT INTO materiales_genericos (descripcion, tiempo_instalacion, unidad)
+                   VALUES (%s, %s, %s) RETURNING id""",
+                (descripcion_upper, tiempo_instalacion, unidad_normalizada)
+            )
+            material_id = cur.fetchone()['id']
+            conn.commit()
+            return material_id
+        except psycopg2.IntegrityError as e:
+            conn.rollback()
+            # Si es un error de clave primaria duplicada, resetear la secuencia
+            if 'materiales_genericos_pkey' in str(e) or 'duplicate key' in str(e).lower():
+                # Obtener el máximo ID actual
+                cur.execute("SELECT COALESCE(MAX(id), 0) FROM materiales_genericos")
+                max_id = cur.fetchone()[0]
+                # Resetear la secuencia al siguiente valor disponible
+                cur.execute(f"SELECT setval('materiales_genericos_id_seq', {max_id}, true)")
+                conn.commit()
+                # Reintentar la inserción
+                cur.execute(
+                    """INSERT INTO materiales_genericos (descripcion, tiempo_instalacion, unidad)
+                       VALUES (%s, %s, %s) RETURNING id""",
+                    (descripcion_upper, tiempo_instalacion, unidad_normalizada)
+                )
+                material_id = cur.fetchone()['id']
+                conn.commit()
+                return material_id
+            else:
+                # Si es otro tipo de error de integridad (ej: descripción duplicada), relanzarlo
+                raise
     finally:
         cur.close()
         conn.close()
@@ -2018,4 +2141,296 @@ def aplicar_template_a_lista_material(lista_material_id, template_id, subgrupo_i
 def aplicar_template_a_presupuesto(presupuesto_id, *args, **kwargs):
     """Alias retro-compatible"""
     return aplicar_template_a_lista_material(presupuesto_id, *args, **kwargs)
+
+
+def crear_tabla_plantillas():
+    """Crea la tabla de plantillas si no existe"""
+    conn, cur = conectar()
+    try:
+        # Tabla principal de plantillas
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS lista_materiales_plantillas (
+                id SERIAL PRIMARY KEY,
+                nombre TEXT NOT NULL,
+                subgrupo_id INTEGER REFERENCES lista_materiales_subgrupos(id) ON DELETE CASCADE,
+                fecha_creacion TIMESTAMP DEFAULT NOW(),
+                UNIQUE(nombre)
+            )
+        """)
+        
+        # Tabla de items de plantillas
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS lista_materiales_plantillas_items (
+                id SERIAL PRIMARY KEY,
+                plantilla_id INTEGER REFERENCES lista_materiales_plantillas(id) ON DELETE CASCADE,
+                item_id INTEGER,
+                material_id INTEGER,
+                marca_id INTEGER,
+                codigo_item TEXT,
+                descripcion TEXT,
+                marca TEXT,
+                tipo TEXT,
+                unidad TEXT,
+                cantidad NUMERIC,
+                precio_unitario NUMERIC,
+                tiempo_ejecucion_horas NUMERIC,
+                orden INTEGER,
+                notas TEXT
+            )
+        """)
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def guardar_plantilla_subgrupo(subgrupo_id, nombre_plantilla):
+    """Guarda un subgrupo con todos sus items como plantilla"""
+    conn, cur = conectar()
+    try:
+        crear_tabla_plantillas()
+        
+        # Convertir el nombre a mayúsculas
+        nombre_plantilla = _texto_mayusculas(nombre_plantilla)
+        if not nombre_plantilla or not nombre_plantilla.strip():
+            raise Exception("El nombre de la plantilla no puede estar vacío")
+        
+        nombre_plantilla = nombre_plantilla.strip()
+        
+        # Verificar que el subgrupo existe
+        cur.execute(
+            "SELECT * FROM lista_materiales_subgrupos WHERE id = %s",
+            (subgrupo_id,)
+        )
+        subgrupo = cur.fetchone()
+        if not subgrupo:
+            raise Exception("Subgrupo no encontrado")
+        
+        # Verificar que el nombre no esté duplicado
+        cur.execute(
+            "SELECT id FROM lista_materiales_plantillas WHERE nombre = %s",
+            (nombre_plantilla,)
+        )
+        if cur.fetchone():
+            raise Exception("Ya existe una plantilla con ese nombre")
+        
+        # Crear la plantilla
+        cur.execute(
+            """INSERT INTO lista_materiales_plantillas (nombre, subgrupo_id)
+               VALUES (%s, %s) RETURNING id""",
+            (nombre_plantilla, subgrupo_id)
+        )
+        plantilla_id = cur.fetchone()['id']
+        
+        # Obtener todos los items del subgrupo
+        cur.execute(
+            """SELECT * FROM lista_materiales_items 
+               WHERE subgrupo_id = %s 
+               ORDER BY orden, id""",
+            (subgrupo_id,)
+        )
+        items = cur.fetchall()
+        
+        # Guardar cada item en la plantilla
+        for item in items:
+            cur.execute(
+                """INSERT INTO lista_materiales_plantillas_items 
+                   (plantilla_id, item_id, material_id, marca_id, codigo_item, descripcion, marca, tipo, unidad,
+                    cantidad, precio_unitario, tiempo_ejecucion_horas, orden, notas)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                (
+                    plantilla_id,
+                    item.get('item_id'),
+                    item.get('material_id'),
+                    item.get('marca_id'),
+                    item.get('codigo_item'),
+                    item.get('descripcion'),
+                    item.get('marca'),
+                    item.get('tipo'),
+                    item.get('unidad'),
+                    item.get('cantidad', 0),
+                    item.get('precio_unitario', 0),
+                    item.get('tiempo_ejecucion_horas', 0),
+                    item.get('orden', 0),
+                    item.get('notas')
+                )
+            )
+        
+        conn.commit()
+        return plantilla_id
+    except Exception as e:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
+
+
+def obtener_plantillas():
+    """Obtiene todas las plantillas disponibles"""
+    conn, cur = conectar()
+    try:
+        crear_tabla_plantillas()
+        cur.execute(
+            "SELECT * FROM lista_materiales_plantillas ORDER BY nombre"
+        )
+        plantillas = cur.fetchall()
+        return [dict(p) for p in plantillas]
+    finally:
+        cur.close()
+        conn.close()
+
+
+def obtener_plantilla_por_id(plantilla_id):
+    """Obtiene una plantilla por su ID"""
+    conn, cur = conectar()
+    try:
+        crear_tabla_plantillas()
+        cur.execute(
+            "SELECT * FROM lista_materiales_plantillas WHERE id = %s",
+            (plantilla_id,)
+        )
+        plantilla = cur.fetchone()
+        return dict(plantilla) if plantilla else None
+    finally:
+        cur.close()
+        conn.close()
+
+
+def actualizar_nombre_plantilla(plantilla_id, nuevo_nombre):
+    """Actualiza el nombre de una plantilla"""
+    conn, cur = conectar()
+    try:
+        nuevo_nombre = _texto_mayusculas(nuevo_nombre)
+        if not nuevo_nombre or not nuevo_nombre.strip():
+            raise Exception("El nombre de la plantilla no puede estar vacío")
+        
+        nuevo_nombre = nuevo_nombre.strip()
+        
+        # Verificar que el nombre no esté duplicado (excepto para la plantilla actual)
+        cur.execute(
+            "SELECT id FROM lista_materiales_plantillas WHERE nombre = %s AND id != %s",
+            (nuevo_nombre, plantilla_id)
+        )
+        if cur.fetchone():
+            raise Exception("Ya existe una plantilla con ese nombre")
+        
+        cur.execute(
+            "UPDATE lista_materiales_plantillas SET nombre = %s WHERE id = %s",
+            (nuevo_nombre, plantilla_id)
+        )
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
+
+
+def obtener_items_plantilla(plantilla_id):
+    """Obtiene todos los items de una plantilla"""
+    conn, cur = conectar()
+    try:
+        cur.execute(
+            """SELECT * FROM lista_materiales_plantillas_items 
+               WHERE plantilla_id = %s 
+               ORDER BY orden, id""",
+            (plantilla_id,)
+        )
+        items = cur.fetchall()
+        return [dict(item) for item in items]
+    finally:
+        cur.close()
+        conn.close()
+
+
+def insertar_plantilla_en_subgrupo(plantilla_id, subgrupo_id, lista_material_id):
+    """Inserta todos los items de una plantilla en un subgrupo"""
+    conn, cur = conectar()
+    try:
+        # Obtener los items de la plantilla
+        items_plantilla = obtener_items_plantilla(plantilla_id)
+        
+        if not items_plantilla:
+            raise Exception("La plantilla no tiene items")
+        
+        # Obtener el número del subgrupo para generar numero_subitem
+        cur.execute(
+            "SELECT numero FROM lista_materiales_subgrupos WHERE id = %s",
+            (subgrupo_id,)
+        )
+        subgrupo_row = cur.fetchone()
+        if not subgrupo_row:
+            raise Exception("Subgrupo no encontrado")
+        
+        numero_subgrupo = subgrupo_row['numero']
+        
+        # Obtener el siguiente orden disponible
+        cur.execute(
+            "SELECT COALESCE(MAX(orden), 0) + 1 FROM lista_materiales_items WHERE subgrupo_id = %s",
+            (subgrupo_id,)
+        )
+        orden_base = cur.fetchone()[0] or 1
+        
+        # Insertar cada item
+        items_insertados = []
+        for i, item_plantilla in enumerate(items_plantilla):
+            # Generar numero_subitem basado en el número del subgrupo
+            numero_subitem = f"{numero_subgrupo}.{i + 1}"
+            
+            cur.execute(
+                """INSERT INTO lista_materiales_items 
+                   (lista_material_id, subgrupo_id, item_id, material_id, marca_id, codigo_item, descripcion, marca, tipo, unidad,
+                    cantidad, precio_unitario, numero_subitem, tiempo_ejecucion_horas, orden, notas)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                   RETURNING id""",
+                (
+                    lista_material_id,
+                    subgrupo_id,
+                    item_plantilla.get('item_id'),
+                    item_plantilla.get('material_id'),
+                    item_plantilla.get('marca_id'),
+                    item_plantilla.get('codigo_item'),
+                    item_plantilla.get('descripcion'),
+                    item_plantilla.get('marca'),
+                    item_plantilla.get('tipo'),
+                    item_plantilla.get('unidad'),
+                    item_plantilla.get('cantidad', 0),
+                    item_plantilla.get('precio_unitario', 0),
+                    numero_subitem,
+                    item_plantilla.get('tiempo_ejecucion_horas', 0),
+                    orden_base + i,
+                    item_plantilla.get('notas')
+                )
+            )
+            items_insertados.append(item_plantilla.get('descripcion', 'Item sin descripción'))
+        
+        conn.commit()
+        return items_insertados
+    except Exception as e:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
+
+
+def eliminar_plantilla(plantilla_id):
+    """Elimina una plantilla y todos sus items (CASCADE se encarga de los items)"""
+    conn, cur = conectar()
+    try:
+        cur.execute(
+            "DELETE FROM lista_materiales_plantillas WHERE id = %s",
+            (plantilla_id,)
+        )
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
 

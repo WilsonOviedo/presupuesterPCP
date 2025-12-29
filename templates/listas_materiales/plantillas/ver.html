@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}Plantilla: {{ plantilla.nombre }}{% endblock %}
+{% block content %}
+  <div class="actions" style="margin-bottom:10px;">
+    <a class="button button-secondary" href="{{ url_for('listas_materiales_plantillas_index') }}">← Volver</a>
+    <a class="button" href="{{ url_for('listas_materiales_editar_plantilla', plantilla_id=plantilla.id) }}" style="background:#FF9800;">Editar</a>
+  </div>
+  <h2>Plantilla: {{ plantilla.nombre }}</h2>
+
+  <div style="background:#f9f9f9; padding:12px; border-radius:6px; margin-bottom:20px;">
+    <p><strong>Fecha de Creación:</strong> {{ plantilla.fecha_creacion.strftime('%d/%m/%Y %H:%M') if plantilla.fecha_creacion else '-' }}</p>
+    <p><strong>Total de Items:</strong> {{ items|length }}</p>
+  </div>
+
+  {% if items %}
+    <h3>Items de la Plantilla</h3>
+    <table>
+      <tr>
+        <th style="width:60px;">Nº</th>
+        <th style="width:45%;">Descripción</th>
+        <th style="width:150px;">Marca</th>
+        <th>Unidad</th>
+        <th style="width:80px;">Cantidad</th>
+        <th style="width:100px;">Precio Unit.</th>
+        <th style="width:100px;">Tiempo (h)</th>
+      </tr>
+      {% for item in items %}
+        <tr>
+          <td style="text-align:center;">{{ loop.index }}</td>
+          <td style="text-align:left;">{{ item.descripcion or '-' }}</td>
+          <td style="text-align:left;">{{ item.marca or '-' }}</td>
+          <td style="text-align:center;">{{ item.unidad or 'UND' }}</td>
+          <td style="text-align:right;">{{ "{:,.2f}".format(item.cantidad) if item.cantidad else '0.00' }}</td>
+          <td style="text-align:right;">{{ "${:,.2f}".format(item.precio_unitario) if item.precio_unitario else '$0.00' }}</td>
+          <td style="text-align:right;">{{ "{:,.2f}".format(item.tiempo_ejecucion_horas) if item.tiempo_ejecucion_horas else '0.00' }}</td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p>Esta plantilla no tiene items.</p>
+  {% endif %}
+{% endblock %}
+

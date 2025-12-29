@@ -40,9 +40,10 @@
     <div style="margin-top:20px; display:flex; gap:10px;">
       <button type="submit" class="button">Guardar y agregar otro</button>
       {% if mostrar_salir %}
-        <a href="{{ url_for('materiales_genericos_index') }}" class="button button-secondary">Salir</a>
+        <button type="button" onclick="window.close()" class="button button-secondary">Cerrar pestaña</button>
+        <a href="{{ url_for('materiales_genericos_index') }}" class="button button-secondary">Ir a lista</a>
       {% else %}
-        <a href="{{ url_for('materiales_genericos_index') }}" class="button button-secondary">Cancelar</a>
+        <button type="button" onclick="window.close()" class="button button-secondary">Cerrar</button>
       {% endif %}
     </div>
   </form>

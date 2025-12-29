@@ -2,6 +2,16 @@
 {% block title %}Presupuesto {{ presupuesto.numero_presupuesto }}{% endblock %}
 {% block content %}
 <style>
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .container {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
   .wizard-steps {display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:15px;}
   .wizard-step {border:2px solid #000;border-radius:4px;padding:10px;position:relative;background:#fff;cursor:pointer;transition:all 0.3s ease;min-height:60px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;}
   .wizard-step:hover {transform:translateY(-1px);box-shadow:0 2px 6px rgba(0,0,0,0.15);}
@@ -111,8 +121,14 @@
     {% endfor %}
   </datalist>
   <datalist id="datalist-materiales-genericos">
+    <option value="➕ Agregar nuevo material genérico" data-action="nuevo-material-generico"></option>
     {% for item in items_materiales %}
       <option value="{{ item.descripcion }}" data-id="{{ item.id }}" data-precio="0" data-tiempo="{{ item.tiempo_instalacion or 0 }}"></option>
+    {% endfor %}
+  </datalist>
+  <datalist id="datalist-plantillas">
+    {% for plantilla in plantillas_disponibles %}
+      <option value="{{ plantilla.nombre }}" data-id="{{ plantilla.id }}"></option>
     {% endfor %}
   </datalist>
   <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;">
@@ -151,7 +167,7 @@
         </div>
       </form>
       <small style="color:#666; display:block; margin-top:8px;">
-        <a href="{{ url_for('templates_index') }}" target="_blank">Gestionar templates →</a>
+        <a href="{{ url_for('listas_materiales_plantillas_index') }}" target="_blank">Gestionar plantillas →</a>
       </small>
     </div>
   </div>
@@ -172,7 +188,14 @@
           </div>
           <div style="text-align:right;">
             <small class="tiempo-subgrupo" data-subgrupo-id="{{ subgrupo.id }}">Tiempo: {{ "{:,.2f}".format(subgrupo.tiempo_ejecucion_horas) if subgrupo.tiempo_ejecucion_horas else '0.00' }} horas</small>
-            <form method="post" action="{{ url_for('listas_materiales_eliminar_subgrupo', subgrupo_id=subgrupo.id) }}" style="display:inline; margin-left:10px;">
+            <button type="button" onclick="mostrarDialogoGuardarPlantilla({{ subgrupo.id }})" 
+                    style="padding:4px 8px; background:#FF9800; color:white; border:none; border-radius:4px; cursor:pointer; font-size:0.85em; margin-left:10px;">💾 Guardar plantilla</button>
+            <form method="post" action="{{ url_for('listas_materiales_duplicar_subgrupo', subgrupo_id=subgrupo.id) }}" style="display:inline; margin-left:5px;">
+              <input type="hidden" name="lista_id" value="{{ presupuesto.id }}">
+              <button type="submit" onclick="return confirm('¿Duplicar este subgrupo con todos sus items?')" 
+                      style="padding:4px 8px; background:#4CAF50; color:white; border:none; border-radius:4px; cursor:pointer; font-size:0.85em;">📋 Duplicar</button>
+            </form>
+            <form method="post" action="{{ url_for('listas_materiales_eliminar_subgrupo', subgrupo_id=subgrupo.id) }}" style="display:inline; margin-left:5px;">
               <input type="hidden" name="lista_id" value="{{ presupuesto.id }}">
               <button type="submit" onclick="return confirm('¿Eliminar este subgrupo? Los items quedarán sin subgrupo.')" 
                       style="padding:4px 8px; background:#dc3545; color:white; border:none; border-radius:4px; cursor:pointer; font-size:0.85em;">Eliminar</button>
@@ -184,7 +207,7 @@
           <table style="width:100%; background:white; border-radius:4px;">
             <tr style="background:#f0f0f0;">
               <th style="width:60px;">Nº</th>
-              <th style="width:45%;">Descripción</th>
+              <th style="width:60%;">Descripción</th>
               <th style="width:150px;">Marca</th>
               <th>Unidad</th>
               <th style="width:80px;">Cant.</th>
@@ -245,6 +268,8 @@
                   </form>
                 </td>
                 <td>
+                  <a href="{{ url_for('listas_materiales_ver', id=presupuesto.id, editar_item=item.id) }}" 
+                     style="padding:4px 8px; background:#2196F3; color:white; border:none; border-radius:4px; cursor:pointer; font-size:0.85em; text-decoration:none; display:inline-block; margin-right:5px;">Editar</a>
                   <form method="post" action="{{ url_for('listas_materiales_eliminar_item', item_id=item.id) }}" style="display:inline;">
                     <input type="hidden" name="lista_id" value="{{ presupuesto.id }}">
                     <button type="submit" onclick="return confirm('¿Eliminar este item?')" 
@@ -281,6 +306,7 @@
               <div>
                 <label style="display:block; margin-bottom:5px; font-weight:600; font-size:0.9em;">Tipo:</label>
                 <select class="item-source" style="width:100%; padding:8px; height:38px; font-size:0.9em; box-sizing:border-box;">
+                  <option value="plantilla">Insertar plantilla</option>
                   <option value="material_generico" {% if not items_materiales %}disabled{% else %}selected{% endif %}>Materiales genéricos</option>
                   <option value="servicio" {% if not items_servicio %}disabled{% endif %} {% if not items_materiales and items_servicio %}selected{% endif %}>Mano de obra / servicios</option>
                 </select>
@@ -288,6 +314,7 @@
               <div>
                 <label style="display:block; margin-bottom:5px; font-weight:600; font-size:0.9em;">Item:</label>
                 <div class="item-select-wrapper">
+                  <input type="text" class="item-input item-input-plantilla" list="datalist-plantillas" placeholder="Buscar plantilla..." style="width:100%; padding:8px; height:38px; font-size:0.9em; box-sizing:border-box; display:none;">
                   <input type="text" class="item-input item-input-servicio" list="datalist-servicios" placeholder="Buscar servicio..." style="width:100%; padding:8px; height:38px; font-size:0.9em; box-sizing:border-box; {% if not items_servicio %}display:none;{% endif %}">
                   <input type="text" class="item-input item-input-material-generico" list="datalist-materiales-genericos" placeholder="Buscar material genérico..." {% if items_materiales %}style="width:100%; padding:8px; height:38px; font-size:0.9em; box-sizing:border-box; display:block;"{% else %}style="width:100%; padding:8px; height:38px; font-size:0.9em; box-sizing:border-box; display:none;" disabled{% endif %}>
                 </div>
@@ -329,6 +356,7 @@
       const sourceSelect = form.querySelector('.item-source');
       const servicioInput = form.querySelector('.item-input-servicio');
       const materialGenericoInput = form.querySelector('.item-input-material-generico');
+      const plantillaInput = form.querySelector('.item-input-plantilla');
       const hiddenItem = form.querySelector('.hidden-item-id');
       const hiddenMaterialGenerico = form.querySelector('.hidden-material-generico-id');
       const hiddenMarcaId = form.querySelector('.hidden-marca-id');
@@ -384,7 +412,34 @@
       function setActivo(tipoDeseado) {
         const servicioValido = tieneOpciones(servicioInput);
         const materialGenericoValido = tieneOpciones(materialGenericoInput);
+        const plantillaValido = tieneOpciones(plantillaInput);
         let tipoActual = tipoDeseado;
+
+        if (tipoActual === 'plantilla') {
+          // Mostrar solo el input de plantillas
+          if (servicioInput) {
+            servicioInput.style.display = 'none';
+            servicioInput.disabled = true;
+            servicioInput.required = false;
+            servicioInput.value = '';
+          }
+          if (materialGenericoInput) {
+            materialGenericoInput.style.display = 'none';
+            materialGenericoInput.disabled = true;
+            materialGenericoInput.required = false;
+            materialGenericoInput.value = '';
+          }
+          if (plantillaInput) {
+            plantillaInput.style.display = 'block';
+            plantillaInput.disabled = false;
+            plantillaInput.required = true;
+          }
+          if (hiddenItem) hiddenItem.value = '';
+          if (hiddenMaterialGenerico) hiddenMaterialGenerico.value = '';
+          form.dataset.activo = 'plantilla';
+          if (sourceSelect) sourceSelect.value = 'plantilla';
+          return;
+        }
 
         if (tipoActual === 'material_generico' && !materialGenericoValido && servicioValido) {
           tipoActual = 'servicio';
@@ -395,6 +450,12 @@
         }
 
         if (tipoActual === 'material_generico') {
+          if (plantillaInput) {
+            plantillaInput.style.display = 'none';
+            plantillaInput.disabled = true;
+            plantillaInput.required = false;
+            plantillaInput.value = '';
+          }
           if (servicioInput) {
             servicioInput.style.display = 'none';
             servicioInput.disabled = true;
@@ -412,6 +473,12 @@
           if (sourceSelect) sourceSelect.value = 'material_generico';
           actualizarDesdeInput(materialGenericoInput, hiddenMaterialGenerico);
         } else if (tipoActual === 'servicio') {
+          if (plantillaInput) {
+            plantillaInput.style.display = 'none';
+            plantillaInput.disabled = true;
+            plantillaInput.required = false;
+            plantillaInput.value = '';
+          }
           if (materialGenericoInput) {
             materialGenericoInput.style.display = 'none';
             materialGenericoInput.disabled = true;
@@ -430,6 +497,12 @@
           actualizarDesdeInput(servicioInput, hiddenItem);
         } else {
           form.dataset.activo = '';
+          if (plantillaInput) {
+            plantillaInput.style.display = 'none';
+            plantillaInput.disabled = true;
+            plantillaInput.required = false;
+            plantillaInput.value = '';
+          }
           if (servicioInput) {
             servicioInput.style.display = 'none';
             servicioInput.disabled = true;
@@ -467,9 +540,47 @@
 
       if (materialGenericoInput && hiddenMaterialGenerico) {
         materialGenericoInput.addEventListener('input', function() {
+          const opcion = encontrarOpcion(materialGenericoInput);
+          if (opcion && opcion.getAttribute('data-action') === 'nuevo-material-generico') {
+            // Abrir formulario de nuevo material genérico en nueva pestaña
+            // Usar window.open con características específicas para asegurar nueva pestaña
+            const nuevaPestana = window.open('/listas-materiales/materiales_genericos/nuevo', '_blank', 'noopener,noreferrer');
+            if (nuevaPestana) {
+              nuevaPestana.focus();
+            }
+            materialGenericoInput.value = '';
+            hiddenMaterialGenerico.value = '';
+            return;
+          }
           actualizarDesdeInput(materialGenericoInput, hiddenMaterialGenerico);
         });
+        let ventanaMaterialForm = null;
+        
         materialGenericoInput.addEventListener('change', function() {
+          const opcion = encontrarOpcion(materialGenericoInput);
+          if (opcion && opcion.getAttribute('data-action') === 'nuevo-material-generico') {
+            // Abrir formulario de nuevo material genérico en nueva pestaña
+            // Usar window.open con características específicas para asegurar nueva pestaña
+            ventanaMaterialForm = window.open('/listas-materiales/materiales_genericos/nuevo', '_blank', 'noopener,noreferrer');
+            if (ventanaMaterialForm) {
+              ventanaMaterialForm.focus();
+              
+              // Verificar periódicamente si la ventana se cerró para actualizar el datalist
+              const checkClosed = setInterval(function() {
+                if (ventanaMaterialForm && ventanaMaterialForm.closed) {
+                  clearInterval(checkClosed);
+                  // Actualizar el datalist cuando se cierra la ventana
+                  setTimeout(function() {
+                    actualizarDatalistMaterialesGenericos();
+                  }, 500);
+                  ventanaMaterialForm = null;
+                }
+              }, 500);
+            }
+            materialGenericoInput.value = '';
+            hiddenMaterialGenerico.value = '';
+            return;
+          }
           actualizarDesdeInput(materialGenericoInput, hiddenMaterialGenerico);
         });
       }
@@ -860,6 +971,8 @@
             </form>
           </td>
           <td>
+            <a href="/listas-materiales/${listaId}?editar_item=${item.id}" 
+               style="padding:4px 8px; background:#2196F3; color:white; border:none; border-radius:4px; cursor:pointer; font-size:0.85em; text-decoration:none; display:inline-block; margin-right:5px;">Editar</a>
             <form method="post" action="/listas-materiales/items/${item.id}/eliminar" style="display:inline;">
               <input type="hidden" name="lista_id" value="${listaId}">
               <button type="submit" onclick="return confirm('¿Eliminar este item?')" 
@@ -998,6 +1111,8 @@
           </form>
         </td>
         <td>
+          <a href="/listas-materiales/${listaId}?editar_item=${item.id}" 
+             style="padding:4px 8px; background:#2196F3; color:white; border:none; border-radius:4px; cursor:pointer; font-size:0.85em; text-decoration:none; display:inline-block; margin-right:5px;">Editar</a>
           <form method="post" action="/listas-materiales/items/${item.id}/eliminar" style="display:inline;">
             <input type="hidden" name="lista_id" value="${listaId}">
             <button type="submit" onclick="return confirm('¿Eliminar este item?')" 
@@ -1037,13 +1152,206 @@
       }
     }
 
+    // Función auxiliar para encontrar opción en datalist (debe estar en scope global)
+    function encontrarOpcionGlobal(input) {
+      if (!input) return null;
+      const listId = input.getAttribute('list');
+      if (!listId) return null;
+      const datalist = document.getElementById(listId);
+      if (!datalist) return null;
+      return Array.from(datalist.options).find(function(opt) {
+        return opt.value === input.value;
+      }) || null;
+    }
+    
     // Interceptar el submit de los formularios de agregar item
     document.querySelectorAll('.form-agregar-item-rapido').forEach(function(form) {
+      const plantillaInput = form.querySelector('.item-input-plantilla');
+      
+      // Listener para el input de plantillas
+      if (plantillaInput) {
+        plantillaInput.addEventListener('change', function() {
+          const opcion = encontrarOpcionGlobal(plantillaInput);
+          if (opcion && opcion.getAttribute('data-id')) {
+            const plantillaId = opcion.getAttribute('data-id');
+            const subgrupoId = form.getAttribute('data-subgrupo-id') || form.querySelector('input[name="subgrupo_id"]').value;
+            const listaId = form.querySelector('input[name="lista_id"]')?.value || window.location.pathname.split('/').pop();
+            insertarPlantilla(plantillaId, subgrupoId, listaId, form);
+          }
+        });
+      }
+      
       form.addEventListener('submit', function(e) {
         e.preventDefault();
+        const tipoActivo = form.dataset.activo;
+        
+        // Si es plantilla, no hacer submit normal
+        if (tipoActivo === 'plantilla') {
+          const plantillaInput = form.querySelector('.item-input-plantilla');
+          if (plantillaInput && plantillaInput.value) {
+            const opcion = encontrarOpcionGlobal(plantillaInput);
+            if (opcion && opcion.getAttribute('data-id')) {
+              const plantillaId = opcion.getAttribute('data-id');
+              const subgrupoId = form.getAttribute('data-subgrupo-id') || form.querySelector('input[name="subgrupo_id"]').value;
+              const listaId = form.querySelector('input[name="lista_id"]')?.value || window.location.pathname.split('/').pop();
+              insertarPlantilla(plantillaId, subgrupoId, listaId, form);
+            }
+          }
+          return false;
+        }
+        
         const subgrupoId = form.getAttribute('data-subgrupo-id') || form.querySelector('input[name="subgrupo_id"]').value;
         agregarItemAsincrono(form, subgrupoId);
         return false;
+      });
+    });
+    
+    // Función para insertar una plantilla
+    function insertarPlantilla(plantillaId, subgrupoId, listaId, form) {
+      fetch(`/listas-materiales/plantillas/${plantillaId}/insertar`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `subgrupo_id=${subgrupoId}&lista_id=${listaId}`
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          // Recargar la página para mostrar los items insertados
+          window.location.reload();
+        } else {
+          alert('Error al insertar plantilla: ' + (data.error || 'Error desconocido'));
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Error al insertar plantilla. Por favor, recarga la página.');
+      });
+    }
+    
+    // Función para mostrar el diálogo de guardar plantilla
+    function mostrarDialogoGuardarPlantilla(subgrupoId) {
+      const nombrePlantilla = prompt('Ingrese el nombre de la plantilla:');
+      if (!nombrePlantilla || !nombrePlantilla.trim()) {
+        return;
+      }
+      
+      const listaId = window.location.pathname.split('/').pop();
+      
+      fetch(`/listas-materiales/subgrupos/${subgrupoId}/guardar-plantilla`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `nombre_plantilla=${encodeURIComponent(nombrePlantilla.trim())}&lista_id=${listaId}`
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          alert('Plantilla guardada correctamente');
+          // Recargar la página para actualizar el datalist
+          window.location.reload();
+        } else {
+          alert('Error al guardar plantilla: ' + (data.error || 'Error desconocido'));
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Error al guardar plantilla. Por favor, recarga la página.');
+      });
+    }
+
+    // Función para actualizar el datalist de materiales genéricos
+    function actualizarDatalistMaterialesGenericos() {
+      fetch('/api/listas-materiales/materiales-genericos')
+        .then(response => response.json())
+        .then(materiales => {
+          const datalist = document.getElementById('datalist-materiales-genericos');
+          if (!datalist) return;
+          
+          // Guardar la opción de "Agregar nuevo" si existe
+          const opcionAgregar = datalist.querySelector('option[data-action="nuevo-material-generico"]');
+          
+          // Limpiar el datalist (excepto la opción de agregar)
+          datalist.innerHTML = '';
+          
+          // Agregar de nuevo la opción de "Agregar nuevo"
+          if (opcionAgregar) {
+            datalist.appendChild(opcionAgregar.cloneNode(true));
+          } else {
+            const nuevaOpcion = document.createElement('option');
+            nuevaOpcion.value = '➕ Agregar nuevo material genérico';
+            nuevaOpcion.setAttribute('data-action', 'nuevo-material-generico');
+            datalist.appendChild(nuevaOpcion);
+          }
+          
+          // Agregar todos los materiales genéricos
+          materiales.forEach(function(material) {
+            const option = document.createElement('option');
+            option.value = material.descripcion;
+            option.setAttribute('data-id', material.id);
+            option.setAttribute('data-precio', '0');
+            option.setAttribute('data-tiempo', material.tiempo_instalacion || '0');
+            datalist.appendChild(option);
+          });
+        })
+        .catch(error => {
+          console.error('Error al actualizar materiales genéricos:', error);
+        });
+    }
+
+    // Detectar cuando la ventana recupera el foco (cuando vuelves de otra pestaña)
+    let ultimoFoco = Date.now();
+    window.addEventListener('focus', function() {
+      const ahora = Date.now();
+      // Solo actualizar si han pasado al menos 1 segundo desde el último foco
+      // Esto evita múltiples actualizaciones innecesarias
+      if (ahora - ultimoFoco > 1000) {
+        actualizarDatalistMaterialesGenericos();
+        ultimoFoco = ahora;
+      }
+    });
+
+    // También actualizar cuando la página se vuelve visible (útil para pestañas en background)
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden) {
+        actualizarDatalistMaterialesGenericos();
+      }
+    });
+
+    // Actualizar cuando se detecta que una ventana relacionada se cerró
+    // Esto se puede detectar almacenando una referencia a la ventana abierta
+    let ventanaMaterialForm = null;
+    
+    // Modificar el código que abre la nueva pestaña para guardar la referencia
+    document.querySelectorAll('.item-input-material-generico').forEach(function(input) {
+      const form = input.closest('form');
+      if (!form) return;
+      
+      const sourceSelect = form.querySelector('.item-source');
+      if (!sourceSelect) return;
+      
+      // Interceptar cuando se abre la ventana
+      const originalOpen = window.open;
+      
+      // Observar cuando se selecciona la opción de agregar nuevo
+      input.addEventListener('change', function() {
+        const datalist = document.getElementById('datalist-materiales-genericos');
+        const opcion = Array.from(datalist.options).find(opt => opt.value === input.value);
+        if (opcion && opcion.getAttribute('data-action') === 'nuevo-material-generico') {
+          ventanaMaterialForm = window.open('/listas-materiales/materiales_genericos/nuevo', '_blank', 'noopener,noreferrer');
+          
+          // Verificar periódicamente si la ventana se cerró
+          const checkClosed = setInterval(function() {
+            if (ventanaMaterialForm && ventanaMaterialForm.closed) {
+              clearInterval(checkClosed);
+              // Actualizar el datalist cuando se cierra la ventana
+              setTimeout(actualizarDatalistMaterialesGenericos, 500);
+              ventanaMaterialForm = null;
+            }
+          }, 500);
+        }
       });
     });
   </script>
