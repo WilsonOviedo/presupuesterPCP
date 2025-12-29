@@ -256,9 +256,9 @@
             <input type="text" id="plano_cuenta" name="plano_cuenta" value="{{ plano_cuenta_filtro }}" placeholder="Buscar plano de cuenta...">
           </div>
         </div>
-        <div style="margin-top: 15px;">
+        <div style="margin-top: 15px; display: flex; gap: 10px; align-items: center;">
           <button type="submit" class="button" style="background: #f44336;">🔍 Buscar</button>
-          <a href="{{ url_for('cuentas_a_pagar_index') }}" class="button button-secondary">Limpiar filtros</a>
+          <a href="{{ url_for('cuentas_a_pagar_index') }}" class="button button-secondary" style="background: #757575; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; display: inline-block;">🗑️ Limpiar Filtros</a>
         </div>
       </form>
     </div>
@@ -347,12 +347,15 @@
               </td>
               <td>
                 <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-                  <a href="{{ url_for('cuenta_a_pagar_editar', id=cuenta.id) }}" 
+                  <a href="{{ url_for('cuenta_a_pagar_editar', id=cuenta.id, **request.args) }}" 
                      style="padding: 4px 8px; background: #f44336; color: white; text-decoration: none; border-radius: 4px; font-size: 0.8em;">✏️ Editar</a>
                   <button type="button" onclick="abrirModalPago({{ cuenta.id }}, '{{ cuenta.factura or cuenta.id }}', {{ cuenta.monto_abonado or 0 }}, '{{ url_for("cuenta_a_pagar_agregar_pago", id=cuenta.id) }}')" 
                           style="padding: 4px 8px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em;">💰 Agregar Pago</button>
                   <form method="POST" action="{{ url_for('cuenta_a_pagar_eliminar', id=cuenta.id) }}" 
                         style="display: inline;" onsubmit="return confirm('¿Está seguro de eliminar esta cuenta a pagar?');">
+                    {% for key, value in request.args.items() %}
+                      <input type="hidden" name="{{ key }}" value="{{ value }}">
+                    {% endfor %}
                     <button type="submit" style="padding: 4px 8px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em;">🗑️</button>
                   </form>
                 </div>
@@ -592,8 +595,9 @@
         if (data.success) {
           alert('Pago agregado correctamente');
           cerrarModalPago();
-          // Recargar la página para mostrar los cambios
-          window.location.reload();
+          // Recargar la página manteniendo los filtros
+          const urlParams = new URLSearchParams(window.location.search);
+          window.location.href = window.location.pathname + '?' + urlParams.toString();
         } else {
           alert('Error: ' + (data.error || 'No se pudo agregar el pago'));
           submitBtn.disabled = false;

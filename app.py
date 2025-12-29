@@ -4656,11 +4656,29 @@ def cuenta_a_recibir_editar(id):
                 proyecto_id=proyecto_id,
                 actualizar_fecha_recibo=True  # Siempre actualizar fecha_recibo cuando se edita desde el formulario
             )
-            return redirect(url_for('cuentas_a_recibir_index', mensaje='Cuenta a recibir actualizada correctamente'))
+            # Preservar filtros al redirigir
+            filtros = {}
+            for key in ['fecha_desde', 'fecha_hasta', 'cliente', 'estado', 'banco_id', 'cuenta_id', 'saldo_filtro', 'fecha_recibo_desde', 'fecha_recibo_hasta', 'plano_cuenta', 'pagina', 'limite']:
+                if request.args.get(key):
+                    filtros[key] = request.args.get(key)
+            filtros['mensaje'] = 'Cuenta a recibir actualizada correctamente'
+            return redirect(url_for('cuentas_a_recibir_index', **filtros))
         except ValueError as e:
-            return redirect(url_for('cuentas_a_recibir_index', error=f'Error en los datos: {str(e)}'))
+            # Preservar filtros al redirigir con error
+            filtros = {}
+            for key in ['fecha_desde', 'fecha_hasta', 'cliente', 'estado', 'banco_id', 'cuenta_id', 'saldo_filtro', 'fecha_recibo_desde', 'fecha_recibo_hasta', 'plano_cuenta', 'pagina', 'limite']:
+                if request.args.get(key):
+                    filtros[key] = request.args.get(key)
+            filtros['error'] = f'Error en los datos: {str(e)}'
+            return redirect(url_for('cuentas_a_recibir_index', **filtros))
         except Exception as e:
-            return redirect(url_for('cuentas_a_recibir_index', error=f'Error al actualizar cuenta a recibir: {str(e)}'))
+            # Preservar filtros al redirigir con error
+            filtros = {}
+            for key in ['fecha_desde', 'fecha_hasta', 'cliente', 'estado', 'banco_id', 'cuenta_id', 'saldo_filtro', 'fecha_recibo_desde', 'fecha_recibo_hasta', 'plano_cuenta', 'pagina', 'limite']:
+                if request.args.get(key):
+                    filtros[key] = request.args.get(key)
+            filtros['error'] = f'Error al actualizar cuenta a recibir: {str(e)}'
+            return redirect(url_for('cuentas_a_recibir_index', **filtros))
     
     # GET: mostrar formulario
     documentos = financiero.obtener_tipos_documentos(activo=True)
@@ -4696,9 +4714,25 @@ def cuenta_a_recibir_eliminar(id):
     """Eliminar cuenta a recibir"""
     try:
         financiero.eliminar_cuenta_a_recibir(id)
-        return redirect(url_for('cuentas_a_recibir_index', mensaje='Cuenta a recibir eliminada correctamente'))
+        # Preservar filtros al redirigir (de request.form porque vienen del POST)
+        filtros = {}
+        for key in ['fecha_desde', 'fecha_hasta', 'cliente', 'estado', 'banco_id', 'cuenta_id', 'saldo_filtro', 'fecha_recibo_desde', 'fecha_recibo_hasta', 'plano_cuenta', 'pagina', 'limite']:
+            if request.form.get(key):
+                filtros[key] = request.form.get(key)
+            elif request.args.get(key):
+                filtros[key] = request.args.get(key)
+        filtros['mensaje'] = 'Cuenta a recibir eliminada correctamente'
+        return redirect(url_for('cuentas_a_recibir_index', **filtros))
     except Exception as e:
-        return redirect(url_for('cuentas_a_recibir_index', error=f'Error al eliminar cuenta a recibir: {str(e)}'))
+        # Preservar filtros al redirigir con error
+        filtros = {}
+        for key in ['fecha_desde', 'fecha_hasta', 'cliente', 'estado', 'banco_id', 'cuenta_id', 'saldo_filtro', 'fecha_recibo_desde', 'fecha_recibo_hasta', 'plano_cuenta', 'pagina', 'limite']:
+            if request.form.get(key):
+                filtros[key] = request.form.get(key)
+            elif request.args.get(key):
+                filtros[key] = request.args.get(key)
+        filtros['error'] = f'Error al eliminar cuenta a recibir: {str(e)}'
+        return redirect(url_for('cuentas_a_recibir_index', **filtros))
 
 
 @app.route("/financiero/cuentas-a-recibir/<int:id>/agregar-pago", methods=["POST"], endpoint="cuenta_a_recibir_agregar_pago")
@@ -5117,11 +5151,29 @@ def cuenta_a_pagar_editar(id):
                 proyecto_id=proyecto_id,
                 actualizar_fecha_pago=True  # Siempre actualizar fecha_pago cuando se edita desde el formulario
             )
-            return redirect(url_for('cuentas_a_pagar_index', mensaje='Cuenta a pagar actualizada correctamente'))
+            # Preservar filtros al redirigir
+            filtros = {}
+            for key in ['fecha_desde', 'fecha_hasta', 'proveedor', 'estado', 'banco_id', 'cuenta_id', 'saldo_filtro', 'fecha_pago_desde', 'fecha_pago_hasta', 'plano_cuenta', 'pagina', 'limite']:
+                if request.args.get(key):
+                    filtros[key] = request.args.get(key)
+            filtros['mensaje'] = 'Cuenta a pagar actualizada correctamente'
+            return redirect(url_for('cuentas_a_pagar_index', **filtros))
         except ValueError as e:
-            return redirect(url_for('cuentas_a_pagar_index', error=f'Error en los datos: {str(e)}'))
+            # Preservar filtros al redirigir con error
+            filtros = {}
+            for key in ['fecha_desde', 'fecha_hasta', 'proveedor', 'estado', 'banco_id', 'cuenta_id', 'saldo_filtro', 'fecha_pago_desde', 'fecha_pago_hasta', 'plano_cuenta', 'pagina', 'limite']:
+                if request.args.get(key):
+                    filtros[key] = request.args.get(key)
+            filtros['error'] = f'Error en los datos: {str(e)}'
+            return redirect(url_for('cuentas_a_pagar_index', **filtros))
         except Exception as e:
-            return redirect(url_for('cuentas_a_pagar_index', error=f'Error al actualizar cuenta a pagar: {str(e)}'))
+            # Preservar filtros al redirigir con error
+            filtros = {}
+            for key in ['fecha_desde', 'fecha_hasta', 'proveedor', 'estado', 'banco_id', 'cuenta_id', 'saldo_filtro', 'fecha_pago_desde', 'fecha_pago_hasta', 'plano_cuenta', 'pagina', 'limite']:
+                if request.args.get(key):
+                    filtros[key] = request.args.get(key)
+            filtros['error'] = f'Error al actualizar cuenta a pagar: {str(e)}'
+            return redirect(url_for('cuentas_a_pagar_index', **filtros))
     
     # GET: mostrar formulario
     documentos = financiero.obtener_tipos_documentos(activo=True)
@@ -5152,9 +5204,25 @@ def cuenta_a_pagar_eliminar(id):
     """Eliminar cuenta a pagar"""
     try:
         financiero.eliminar_cuenta_a_pagar(id)
-        return redirect(url_for('cuentas_a_pagar_index', mensaje='Cuenta a pagar eliminada correctamente'))
+        # Preservar filtros al redirigir (de request.form porque vienen del POST)
+        filtros = {}
+        for key in ['fecha_desde', 'fecha_hasta', 'proveedor', 'estado', 'banco_id', 'cuenta_id', 'saldo_filtro', 'fecha_pago_desde', 'fecha_pago_hasta', 'plano_cuenta', 'pagina', 'limite']:
+            if request.form.get(key):
+                filtros[key] = request.form.get(key)
+            elif request.args.get(key):
+                filtros[key] = request.args.get(key)
+        filtros['mensaje'] = 'Cuenta a pagar eliminada correctamente'
+        return redirect(url_for('cuentas_a_pagar_index', **filtros))
     except Exception as e:
-        return redirect(url_for('cuentas_a_pagar_index', error=f'Error al eliminar cuenta a pagar: {str(e)}'))
+        # Preservar filtros al redirigir con error
+        filtros = {}
+        for key in ['fecha_desde', 'fecha_hasta', 'proveedor', 'estado', 'banco_id', 'cuenta_id', 'saldo_filtro', 'fecha_pago_desde', 'fecha_pago_hasta', 'plano_cuenta', 'pagina', 'limite']:
+            if request.form.get(key):
+                filtros[key] = request.form.get(key)
+            elif request.args.get(key):
+                filtros[key] = request.args.get(key)
+        filtros['error'] = f'Error al eliminar cuenta a pagar: {str(e)}'
+        return redirect(url_for('cuentas_a_pagar_index', **filtros))
 
 
 @app.route("/financiero/cuentas-a-pagar/<int:id>/agregar-pago", methods=["POST"], endpoint="cuenta_a_pagar_agregar_pago")
