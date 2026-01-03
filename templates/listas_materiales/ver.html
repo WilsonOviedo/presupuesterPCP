@@ -174,7 +174,7 @@
   
   {% if presupuesto.get('subgrupos') %}
     {% for subgrupo in presupuesto.get('subgrupos', []) %}
-      <div style="background:#e8f4f8; padding:15px; border-radius:6px; margin-bottom:15px; border-left:4px solid #1976d2;" data-subgrupo-container="{{ subgrupo.id }}">
+      <div style="background:#90caf9; padding:15px; border-radius:6px; margin-bottom:15px; border-left:4px solid #1976d2;" data-subgrupo-container="{{ subgrupo.id }}">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
           <div>
             <h4 style="margin:0;">
@@ -209,7 +209,7 @@
               <th style="width:60px;">Nº</th>
               <th style="width:60%;">Descripción</th>
               <th style="width:150px;">Marca</th>
-              <th>Unidad</th>
+              <th style="width:60px;">Unidad</th>
               <th style="width:80px;">Cant.</th>
               <th style="width:80px;">Tiempo (h)</th>
               <th style="width:100px;">Acciones</th>
@@ -246,7 +246,7 @@
                     <small class="marca-status" style="font-size:0.75em; color:#666; visibility:hidden;"> </small>
                   </form>
                 </td>
-                <td>{{ item.unidad or 'UND' }}</td>
+                <td style="width:60px; text-align:center;">{{ item.unidad or 'UND' }}</td>
                 <td style="text-align:right;">
                   <form method="post" action="{{ url_for('listas_materiales_actualizar_item', item_id=item.id) }}" style="display:inline;">
                     <input type="hidden" name="lista_id" value="{{ presupuesto.id }}">

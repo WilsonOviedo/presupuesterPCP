@@ -352,25 +352,60 @@ def crear_marca_material(nombre, descripcion=None, fabricante=None, pais_origen=
         sitio_web = _texto_mayusculas(sitio_web)
         contacto = _texto_mayusculas(contacto)
         notas = _texto_mayusculas(notas)
-        cur.execute(
-            """INSERT INTO materiales_marcas 
-               (nombre, descripcion, fabricante, pais_origen, sitio_web, contacto, notas, activo)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-               ON CONFLICT (nombre) DO UPDATE SET
-                   descripcion = EXCLUDED.descripcion,
-                   fabricante = EXCLUDED.fabricante,
-                   pais_origen = EXCLUDED.pais_origen,
-                   sitio_web = EXCLUDED.sitio_web,
-                   contacto = EXCLUDED.contacto,
-                   notas = EXCLUDED.notas,
-                   activo = EXCLUDED.activo,
-                   actualizado_en = CURRENT_TIMESTAMP
-               RETURNING id""",
-            (nombre, descripcion, fabricante, pais_origen, sitio_web, contacto, notas, activo)
-        )
-        marca_id = cur.fetchone()['id']
-        conn.commit()
-        return marca_id
+        
+        try:
+            cur.execute(
+                """INSERT INTO materiales_marcas 
+                   (nombre, descripcion, fabricante, pais_origen, sitio_web, contacto, notas, activo)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                   ON CONFLICT (nombre) DO UPDATE SET
+                       descripcion = EXCLUDED.descripcion,
+                       fabricante = EXCLUDED.fabricante,
+                       pais_origen = EXCLUDED.pais_origen,
+                       sitio_web = EXCLUDED.sitio_web,
+                       contacto = EXCLUDED.contacto,
+                       notas = EXCLUDED.notas,
+                       activo = EXCLUDED.activo,
+                       actualizado_en = CURRENT_TIMESTAMP
+                   RETURNING id""",
+                (nombre, descripcion, fabricante, pais_origen, sitio_web, contacto, notas, activo)
+            )
+            marca_id = cur.fetchone()['id']
+            conn.commit()
+            return marca_id
+        except psycopg2.IntegrityError as e:
+            conn.rollback()
+            # Si es un error de clave primaria duplicada, resetear la secuencia
+            if 'materiales_marcas_pkey' in str(e) or 'duplicate key' in str(e).lower():
+                # Obtener el máximo ID actual
+                cur.execute("SELECT COALESCE(MAX(id), 0) FROM materiales_marcas")
+                max_id = cur.fetchone()[0]
+                # Resetear la secuencia al siguiente valor disponible
+                cur.execute(f"SELECT setval('materiales_marcas_id_seq', {max_id}, true)")
+                conn.commit()
+                # Reintentar la inserción
+                cur.execute(
+                    """INSERT INTO materiales_marcas 
+                       (nombre, descripcion, fabricante, pais_origen, sitio_web, contacto, notas, activo)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                       ON CONFLICT (nombre) DO UPDATE SET
+                           descripcion = EXCLUDED.descripcion,
+                           fabricante = EXCLUDED.fabricante,
+                           pais_origen = EXCLUDED.pais_origen,
+                           sitio_web = EXCLUDED.sitio_web,
+                           contacto = EXCLUDED.contacto,
+                           notas = EXCLUDED.notas,
+                           activo = EXCLUDED.activo,
+                           actualizado_en = CURRENT_TIMESTAMP
+                       RETURNING id""",
+                    (nombre, descripcion, fabricante, pais_origen, sitio_web, contacto, notas, activo)
+                )
+                marca_id = cur.fetchone()['id']
+                conn.commit()
+                return marca_id
+            else:
+                # Si es otro tipo de error de integridad, relanzarlo
+                raise
     finally:
         cur.close()
         conn.close()
